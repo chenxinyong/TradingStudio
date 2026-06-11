@@ -1,4 +1,6 @@
-# CTP 封装设计
+> ⚠️ **已废弃** — 本文档描述纯 P/Invoke 方案。实际代码采用「C++ 原生桥接 → C 导出 → P/Invoke」混合方案。替代文档：[09-ctp-interface-analysis.md](09-ctp-interface-analysis.md)（CTP 字段分析）、[11-implementation-roadmap-v2.md](11-implementation-roadmap-v2.md)（当前代码状态）
+
+# CTP 封装设计（已废弃）
 
 > 将 C++ DLL 的回调式接口封装为 C# 的异步管道。这是系统与外部世界的唯一桥梁。
 

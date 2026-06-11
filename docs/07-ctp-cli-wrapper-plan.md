@@ -1,4 +1,6 @@
-# C++/CLI CTP 封装执行方案
+> ⚠️ **已废弃** — 本文档描述 C++/CLI 方案，实际代码采用更简单的「C++ 原生桥接 → C 导出 → P/Invoke」路线。C++/CLI 实验代码保留在 `src/CTP/CTPWrapper.CLI/` 作为备选参考。替代文档：[11-implementation-roadmap-v2.md](11-implementation-roadmap-v2.md)（当前代码状态）
+
+# C++/CLI CTP 封装执行方案（已废弃）
 
 > 用 C++/CLI 直接链接最新 CTP DLL，生成 .NET 10 可引用的托管 DLL。
 

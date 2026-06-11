@@ -1,4 +1,6 @@
-# 数据层架构设计
+> ⚠️ **已过时** — 本文档的项目结构（3 项目：Core/Data/Ctp）写于代码重构前，与实际代码不符。请以 [TradingStudio架构设计-精简版.md](TradingStudio架构设计-精简版.md)（5 项目架构）和 [11-implementation-roadmap-v2.md](11-implementation-roadmap-v2.md)（当前状态）为准。
+
+# 数据层架构设计（过时）
 
 > Tick 实时接收 + 历史导入 → 统一的 Bar 产出管道
 
