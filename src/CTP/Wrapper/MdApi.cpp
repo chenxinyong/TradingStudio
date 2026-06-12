@@ -1,7 +1,7 @@
 #include "MdApi.h"
 #include "Native/MdSpi.h"
 #include "StringHelper.h"
-#include "DTO/Tick.h"
+#include "DTO/Quote.h"
 #include "DTO/LoginInfo.h"
 #include <string>
 
@@ -23,7 +23,7 @@ MdApi::MdApi()
     Directory::CreateDirectory(flowDir);
 
     auto flowNative = StringHelper::ToNative(flowDir);
-    _api = CThostFtdcMdApi::CreateFtdcMdApi(flowNative.c_str(), false, false, false);
+    _api = CThostFtdcMdApi::CreateFtdcMdApi(flowNative.c_str(), false, false, true); // bIsProduction=true → TLS enc
 }
 
 MdApi::~MdApi()
@@ -140,7 +140,7 @@ void MdApi::RaiseLogin(CtpError^ err, LoginInfo^ info)        { OnLogin(err, inf
 void MdApi::RaiseLogout(CtpError^ err)                        { OnLogout(err); }
 void MdApi::RaiseSubscribeRsp(String^ id, CtpError^ e, bool l){ OnSubscribeRsp(id, e, l); }
 void MdApi::RaiseUnsubscribeRsp(String^ id, CtpError^ e, bool l){ OnUnsubscribeRsp(id, e, l); }
-void MdApi::RaiseTick(Tick^ tick)                             { OnTick(tick); }
+void MdApi::RaiseQuote(Quote^ tick)                             { OnQuote(tick); }
 void MdApi::RaiseError(CtpError^ err, int reqId)              { OnError(err, reqId); }
 
 } // namespace CTP

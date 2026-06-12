@@ -5,7 +5,7 @@ using TradingStudio.Core.Models;
 namespace TradingStudio.Ctp;
 
 /// <summary>
-/// Adapts C++/CLI MdApi Tick → internal Channel{TickRecord} pipeline.
+/// Adapts C++/CLI MdApi Quote → internal Channel{TickRecord} pipeline.
 /// Routes by InstrumentID — one Channel per contract.
 /// Thread-safe: event handlers are called from CTP callback thread.
 /// </summary>
@@ -39,7 +39,7 @@ public class CtpMdAdapter : IDisposable
             else
                 OnError?.Invoke(err);
         };
-        _mdApi.OnTick += OnTick;
+        _mdApi.OnQuote += OnQuote;
         _mdApi.OnError += (err, _) => OnError?.Invoke(err);
     }
 
@@ -69,51 +69,48 @@ public class CtpMdAdapter : IDisposable
     /// </summary>
     public IEnumerable<string> SubscribedInstruments => _channels.Keys;
 
-    private void OnTick(CTP.Tick tick)
+    private void OnQuote(CTP.Quote q)
     {
         if (_disposed) return;
         Interlocked.Increment(ref _tickCount);
 
-        var record = Convert(tick);
+        var record = Convert(q);
 
         // Route to instrument-specific channel, fallback to global channel
-        if (tick.InstrumentID is not null && _channels.TryGetValue(tick.InstrumentID, out var ch))
+        if (q.InstrumentID is not null && _channels.TryGetValue(q.InstrumentID, out var ch))
         {
             ch.Writer.TryWrite(record);
         }
         _fallbackChannel.Writer.TryWrite(record);
     }
 
-    private static TickRecord Convert(CTP.Tick t)
+    private static TickRecord Convert(CTP.Quote q)
     {
         return new TickRecord
         {
-            ExchangeTimestamp = t.ExchangeTimestamp,
-            LocalTimestamp    = t.LocalTimestamp,
-            LastPrice  = (long)(t.LastPrice * TickRecord.PriceScale),
-            Volume     = t.Volume,
-            Turnover   = t.Turnover,
-            OpenInterest = t.OpenInterest,
-            BidPrice1  = (long)(t.BidPrice1 * TickRecord.PriceScale),
-            BidVolume1 = t.BidVolume1,
-            AskPrice1  = (long)(t.AskPrice1 * TickRecord.PriceScale),
-            AskVolume1 = t.AskVolume1,
-            Flags = BuildFlags(t)
+            ExchangeTimestamp = q.ExchangeTimestamp,
+            LocalTimestamp    = q.LocalTimestamp,
+            LastPrice  = (long)(q.LastPrice * TickRecord.PriceScale),
+            Volume     = q.Volume,
+            Turnover   = q.Turnover,
+            OpenInterest = q.OpenInterest,
+            BidPrice1  = (long)(q.BidPrice1 * TickRecord.PriceScale),
+            BidVolume1 = q.BidVolume1,
+            AskPrice1  = (long)(q.AskPrice1 * TickRecord.PriceScale),
+            AskVolume1 = q.AskVolume1,
+            Flags = BuildFlags(q)
         };
     }
 
-    private static int BuildFlags(CTP.Tick t)
+    private static int BuildFlags(CTP.Quote q)
     {
         int flags = 0;
-        if (t.LastPrice >= t.UpperLimitPrice && t.UpperLimitPrice > 0)
-            flags |= TickRecord.FLAG_UPPER_LIMIT;
-        if (t.LastPrice <= t.LowerLimitPrice && t.LowerLimitPrice > 0)
-            flags |= TickRecord.FLAG_LOWER_LIMIT;
-        // Detect auction period: Volume == 0 but prices are updating
-        if (t.Volume == 0)
-            flags |= TickRecord.FLAG_AUCTION;
-        // Open instant: first non-zero volume after auction
-        // (detected by caller comparing previous state)
+        if (q.LastPrice >= q.UpperLimitPrice && q.UpperLimitPrice > 0)
+            flags |= TickRecord.FlagUpperLimit;
+        if (q.LastPrice <= q.LowerLimitPrice && q.LowerLimitPrice > 0)
+            flags |= TickRecord.FlagLowerLimit;
+        if (q.Volume == 0)
+            flags |= TickRecord.FlagAuction;
         return flags;
     }
 
@@ -122,7 +119,7 @@ public class CtpMdAdapter : IDisposable
         if (_disposed) return;
         _disposed = true;
 
-        _mdApi.OnTick -= OnTick;
+        _mdApi.OnQuote -= OnQuote;
         _mdApi.Dispose();
 
         _fallbackChannel.Writer.Complete();

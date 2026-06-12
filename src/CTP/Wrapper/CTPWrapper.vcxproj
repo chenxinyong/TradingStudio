@@ -54,7 +54,7 @@
     <!-- String helper -->
     <ClInclude Include="StringHelper.h" />
     <!-- DTOs -->
-    <ClInclude Include="DTO\Tick.h" />
+    <ClInclude Include="DTO\Quote.h" />
     <ClInclude Include="DTO\LoginInfo.h" />
     <ClInclude Include="DTO\OrderRequest.h" />
     <ClInclude Include="DTO\Trade.h" />

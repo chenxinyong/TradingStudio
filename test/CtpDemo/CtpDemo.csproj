@@ -8,11 +8,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\CTP\Wrapper\CTPWrapper.vcxproj" />
     <ProjectReference Include="..\..\src\TradingStudio.Core\TradingStudio.Core.csproj" />
   </ItemGroup>
 
-  <!-- C++/CLI managed DLL -->
+  <!-- C++/CLI managed DLL (built separately via src\CTP\Wrapper\build.bat) -->
+  <ItemGroup>
+    <Reference Include="CTPWrapper">
+      <HintPath>..\..\src\CTP\Wrapper\bin\Debug\CTPWrapper.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 
   <!-- Copy native CTP DLLs to output (required by CTPWrapper) -->
   <ItemGroup>

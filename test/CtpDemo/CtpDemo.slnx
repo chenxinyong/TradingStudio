@@ -1,8 +1,4 @@
 <Solution>
-  <Configurations>
-    <Platform Name="Any CPU" />
-    <Platform Name="x64" />
-  </Configurations>
-  <Project Path="../../src/CTP/Wrapper/CTPWrapper.vcxproj" />
+  <Project Path="../CtpBarDemo/CtpBarDemo.csproj" />
   <Project Path="CtpDemo.csproj" />
 </Solution>

@@ -13,17 +13,14 @@ using CTP;
 var mode = args.Length > 0 && args[0] is "md" or "td" or "all" ? args[0] : "md";
 var offset = mode is "md" or "td" or "all" ? 1 : 0;
 
-var mdFront  = Arg(args, offset + 0, "tcp://180.168.146.187:10211");  // SimNow 行情
+var mdFront  = Arg(args, offset + 0, "tcp://182.254.243.31:30011");  // SimNow 行情
 var tdfront  = Arg(args, offset + 1, "tcp://180.168.146.187:10212");  // SimNow 交易
 var broker   = Arg(args, offset + 2, "9999");
 var user     = Arg(args, offset + 3, "13961193449");
-var password = Arg(args, offset + 4, Env("CTP_PASSWORD"));
-var symbols  = args.Length > offset + 5 ? args[(offset + 5)..] : new[] { "cu2607", "ag2608", "rb2610" };
+var password = Arg(args, offset + 4, "Chenxy@20240218!");
+var symbols  = args.Length > offset + 5 ? args[(offset + 5)..] : new[] { "ag2608" };
 
 PrintBanner(mode);
-
-if (string.IsNullOrEmpty(password))
-    password = ReadPassword("Password: ");
 
 Console.WriteLine($"MD Front : {mdFront}");
 Console.WriteLine($"TD Front : {tdfront}");
@@ -71,23 +68,11 @@ static async Task RunMdDemo(string front, string broker, string user, string pas
     md.OnError += (err, req) => Console.WriteLine($"[Md] Error req={req}: [{err.ErrorID}] {err.ErrorMsg}");
 
     var tickCount = 0L;
-    var bySymbol = new Dictionary<string, int>();
-    var t0 = DateTime.UtcNow;
-    var lastPrint = t0;
 
-    md.OnTick += tick =>
+    md.OnQuote += q =>
     {
         var n = Interlocked.Increment(ref tickCount);
-        var sym = tick.InstrumentID ?? "?";
-        lock (bySymbol) { bySymbol.TryGetValue(sym, out var c); bySymbol[sym] = c + 1; }
-
-        if ((DateTime.UtcNow - lastPrint).TotalMilliseconds > 500)
-        {
-            lastPrint = DateTime.UtcNow;
-            var rate = n / (DateTime.UtcNow - t0).TotalSeconds;
-            Console.Write($"\r  Ticks: {n} ({rate:F0}/s)  ");
-            foreach (var kv in bySymbol) Console.Write($"{kv.Key}:{kv.Value} ");
-        }
+        Console.WriteLine($"{q.UpdateTime}.{q.UpdateMillisec:D3} {q.InstrumentID} P={q.LastPrice:F2} V={q.Volume} OI={q.OpenInterest:F0} B={q.BidPrice1:F2}x{q.BidVolume1} A={q.AskPrice1:F2}x{q.AskVolume1} {(n % 10 == 0 ? n.ToString() : "")}");
     };
 
     md.Connect(front);
@@ -102,8 +87,7 @@ static async Task RunMdDemo(string front, string broker, string user, string pas
     catch (OperationCanceledException) { }
 
     md.Unsubscribe(symbols);
-    var elapsed = (DateTime.UtcNow - t0).TotalSeconds;
-    Console.WriteLine($"\n[Md] {tickCount} ticks in {elapsed:F1}s ({tickCount / elapsed:F0}/s)");
+    Console.WriteLine($"\n[Md] Total: {tickCount} ticks");
 }
 
 // ================================================================

@@ -1,7 +1,7 @@
 #include "MdSpi.h"
 #include "MdApi.h"
 #include "StringHelper.h"
-#include "DTO/Tick.h"
+#include "DTO/Quote.h"
 #include "DTO/LoginInfo.h"
 #include <chrono>
 
@@ -141,7 +141,7 @@ void MdSpi::OnRtnDepthMarketData(CThostFtdcDepthMarketDataField* pData)
 {
     if (!pData) return;
 
-    auto tick = gcnew CTP::Tick();
+    auto tick = gcnew CTP::Quote();
 
     // === 标识字段 (Gap 1 & 2 FIXED — now passed to C#!) ===
     // NOTE: CTP 6.7.13 uses reserve1 (not InstrumentID) for the instrument code field
@@ -185,7 +185,7 @@ void MdSpi::OnRtnDepthMarketData(CThostFtdcDepthMarketDataField* pData)
     tick->ExchangeTimestamp = ParseTimestamp(pData->TradingDay, pData->UpdateTime, pData->UpdateMillisec);
     tick->LocalTimestamp    = GetCurrentUnixMs();
 
-    _wrapper->RaiseTick(tick);
+    _wrapper->RaiseQuote(tick);
 }
 
 // ==================== Error ====================

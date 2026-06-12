@@ -12,7 +12,7 @@ namespace CTP
 {
     ref class CtpError;
     ref class LoginInfo;
-    ref class Tick;
+    ref class Quote;
 
     // === Delegate types (public for C# visibility) ===
     public delegate void MdConnectedHandler();
@@ -22,7 +22,7 @@ namespace CTP
     public delegate void MdLogoutHandler(CtpError^ error);
     public delegate void MdSubscribeRspHandler(System::String^ instrumentId, CtpError^ error, bool isLast);
     public delegate void MdUnsubscribeRspHandler(System::String^ instrumentId, CtpError^ error, bool isLast);
-    public delegate void MdTickHandler(Tick^ tick);
+    public delegate void MdQuoteHandler(Quote^ tick);
     public delegate void MdErrorHandler(CtpError^ error, int requestId);
 
     /// Managed Market Data API — C# direct reference
@@ -47,7 +47,7 @@ namespace CTP
         event MdLogoutHandler^         OnLogout;
         event MdSubscribeRspHandler^   OnSubscribeRsp;
         event MdUnsubscribeRspHandler^ OnUnsubscribeRsp;
-        event MdTickHandler^           OnTick;
+        event MdQuoteHandler^           OnQuote;
         event MdErrorHandler^          OnError;
 
     internal:
@@ -58,7 +58,7 @@ namespace CTP
         void RaiseLogout(CtpError^ err);
         void RaiseSubscribeRsp(System::String^ instrumentId, CtpError^ err, bool isLast);
         void RaiseUnsubscribeRsp(System::String^ instrumentId, CtpError^ err, bool isLast);
-        void RaiseTick(Tick^ tick);
+        void RaiseQuote(Quote^ tick);
         void RaiseError(CtpError^ err, int requestId);
 
     private:

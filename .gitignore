@@ -427,3 +427,11 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+# Runtime / temp
+ctp_flow/
+
+# Deploy output (regenerate with deploy.bat)
+dist/
+
+# Raw data downloads
+data/ticks/
