@@ -9,52 +9,100 @@ using TradingStudio.Services;
 // ================================================================
 // TradingStudio — 量化交易工作室
 //
-// === collect — 行情采集 ===
-//   TradingStudio [exchange] [symbol] [options]
-//
-//   位置参数:
-//     exchange   交易所过滤  SHFE|DCE|CZCE|CFFEX|INE|GFEX
-//     symbol     品种或合约  ag(品种) | ag2608(合约)
-//
-//   可选参数:
-//     --db PATH      数据库路径      默认 bars.db
-//     --tick PATH    Tick输出目录    默认 TickData
-//     --front ADDR   CTP行情前端     默认 appsettings.json
-//     --broker ID    期货公司代码     默认 appsettings.json
-//     --user ID      用户代码         默认 appsettings.json
-//     --pwd PASS     密码             默认 appsettings.json
-//
-//   示例:
-//     TradingStudio                                       # 全市场
-//     TradingStudio SHFE ag                               # 上期所白银
-//     TradingStudio SHFE ag2608 --db silver.db            # 指定库
-//     TradingStudio DCE i --tick IronTicks --db iron.db   # 铁矿石
-//
-// === import — 金数源 CSV 历史数据导入 ===
-//   TradingStudio import --input <file|dir> [--db bars.db]
-//
-//   示例:
-//     TradingStudio import --input data\ticks\cu1603.csv
-//     TradingStudio import --input data\ticks\             # 批量导入目录下所有 CSV
-//     TradingStudio import --input data\ticks\ --db cu.db
-//
-// === import-jinshuyuan — 金数源 RAR 历史数据导入 ===
-//   TradingStudio import-jinshuyuan --layer <main|active|all> [options]
-//
-//   示例:
-//     TradingStudio import-jinshuyuan --layer main --dry-run
-//     TradingStudio import-jinshuyuan --layer main --db bars_history.db
-//     TradingStudio import-jinshuyuan --layer active --symbol ag --symbol cu
+// 模式:
+//   TradingStudio                       启动实盘引擎 (Windows Service / 控制台)
+//   TradingStudio collect [args]        行情采集 (Phase 1)
+//   TradingStudio import [args]         金数源 CSV 导入
+//   TradingStudio import-jinshuyuan     金数源 RAR 导入
+//   TradingStudio backtest [args]       回测 (Phase 2)
 // ================================================================
 
-// ── import-jinshuyuan 子命令 — 金数源 RAR 历史数据导入 ─────
-if (args.Length > 0 && args[0] == "import-jinshuyuan")
+var mode = args.Length > 0 ? args[0] : "live";
+
+if (mode is "live")
+{
+    await RunLiveAsync(args);
+    return;
+}
+
+if (mode is "backtest")
+{
+    await RunBacktestAsync(args[1..]);
+    return;
+}
+
+// ── 以下为 Phase 1 命令 (不变) ────────────────────────
+
+if (mode is "import-jinshuyuan") { await RunImportJinshuyuanAsync(args); return; }
+if (mode is "import") { await RunImportAsync(args); return; }
+
+// 默认: collect 模式
+await RunCollectAsync(args);
+return;
+
+
+// ═══════════════════════════════════════════════════════════════
+// live — 实盘引擎 (Windows Service + REST API + SignalR Hub)
+// ═══════════════════════════════════════════════════════════════
+static async Task RunLiveAsync(string[] args)
+{
+    var builder = WebApplication.CreateBuilder(args);
+
+    // Windows Service
+    builder.Host.UseWindowsService(o => o.ServiceName = "TradingStudio");
+
+    // SignalR
+    builder.Services.AddSignalR();
+    builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+        p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+
+    // Serilog
+    builder.Services.AddSerilog((_, cfg) =>
+        cfg.ReadFrom.Configuration(builder.Configuration));
+
+    // 引擎组件 (Phase 3 注入)
+    // builder.Services.AddSingleton<IDataFeed, CtpLiveFeed>();
+    // builder.Services.AddSingleton<PortfolioManager>();
+    // builder.Services.AddSingleton<StrategyContainer>();
+    // builder.Services.AddSingleton<IndicatorManager>();
+    // builder.Services.AddSingleton<ExecutionHandler>();
+    // builder.Services.AddSingleton<FeedbackMonitor>();
+    // builder.Services.AddSingleton<TradingEngine>();
+
+    var app = builder.Build();
+    app.UseCors();
+
+    // REST API
+    TradingStudio.EngineMonitorApi.MapEndpoints(app);
+
+    // SignalR Hub
+    app.MapHub<TradingStudio.EngineHub>("/hubs/engine");
+
+    await app.RunAsync();
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// backtest — 回测引擎
+// ═══════════════════════════════════════════════════════════════
+static async Task RunBacktestAsync(string[] args)
+{
+    Console.WriteLine("TradingStudio Backtest — Phase 2a (待实现)");
+    Console.WriteLine("Usage: TradingStudio backtest --config <strategy.json> [--mode bar|tick]");
+    await Task.CompletedTask;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 1 命令 (从原 Program.cs 迁移, 逻辑不变)
+// ═══════════════════════════════════════════════════════════════
+
+static async Task RunImportJinshuyuanAsync(string[] args)
 {
     var layer = "";
     var symbols = new List<string>();
     string? exchangeStr = null;
-    var fromMonth = "202101";
-    var toMonth = "202212";
+    var fromMonth = "202101"; var toMonth = "202212";
     var dataDir = @"C:\Works\Datas\Jinshuyuan";
     var dbPath = "bars_history.db";
     var dryRun = false;
@@ -66,8 +114,8 @@ if (args.Length > 0 && args[0] == "import-jinshuyuan")
             case "--layer" when j + 1 < args.Length:    layer = args[++j]; break;
             case "--symbol" when j + 1 < args.Length:   symbols.Add(args[++j].ToLowerInvariant()); break;
             case "--exchange" when j + 1 < args.Length: exchangeStr = args[++j].ToUpperInvariant(); break;
-            case "--from" when j + 1 < args.Length:     fromMonth = args[++j]; break;
-            case "--to" when j + 1 < args.Length:       toMonth = args[++j]; break;
+            case "--from" or "--from-month" when j + 1 < args.Length: fromMonth = args[++j]; break;
+            case "--to" or "--to-month" when j + 1 < args.Length:     toMonth = args[++j]; break;
             case "--data-dir" when j + 1 < args.Length: dataDir = args[++j]; break;
             case "--db" when j + 1 < args.Length:       dbPath = args[++j]; break;
             case "--dry-run": dryRun = true; break;
@@ -77,11 +125,9 @@ if (args.Length > 0 && args[0] == "import-jinshuyuan")
     if (layer is not ("main" or "active" or "all"))
     {
         Console.WriteLine("Error: --layer is required and must be 'main', 'active', or 'all'");
-        Console.WriteLine("Usage: TradingStudio import-jinshuyuan --layer <main|active|all> [options]");
         Environment.Exit(1);
     }
 
-    // 加载 symbols.json → 提取所有品种代码 (--layer active 用)
     var symbolsJson = FindSymbolsJson();
     var registry = FutureRegistry.Load(symbolsJson);
     var knownProducts = new HashSet<string>(
@@ -90,39 +136,90 @@ if (args.Length > 0 && args[0] == "import-jinshuyuan")
 
     var opts = new JinshuyuanOptions
     {
-        DataDir = dataDir,
-        DbPath = dbPath,
-        Layer = layer,
+        DataDir = dataDir, DbPath = dbPath, Layer = layer,
         Symbols = new HashSet<string>(symbols, StringComparer.OrdinalIgnoreCase),
-        ExchangeCode = exchangeStr,
-        FromMonth = fromMonth,
-        ToMonth = toMonth,
-        DryRun = dryRun,
-        KnownProducts = knownProducts,
+        ExchangeCode = exchangeStr, FromMonth = fromMonth, ToMonth = toMonth,
+        DryRun = dryRun, KnownProducts = knownProducts,
     };
 
-    var service = new JinshuyuanImportService(opts);
     var cts = new CancellationTokenSource();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-
     try
     {
-        await service.ImportAsync(cts.Token);
+        await new JinshuyuanImportService(opts).ImportAsync(cts.Token);
         Environment.Exit(0);
     }
-    catch (OperationCanceledException)
-    {
-        Console.WriteLine("\nImport cancelled.");
-        Environment.Exit(1);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Import failed: {ex.Message}");
-        Environment.Exit(1);
-    }
+    catch (OperationCanceledException) { Console.WriteLine("\nImport cancelled."); Environment.Exit(1); }
+    catch (Exception ex) { Console.WriteLine($"Import failed: {ex.Message}"); Environment.Exit(1); }
 }
 
-/// <summary>查找 symbols.json: 先找 exe 目录，再找当前目录</summary>
+static async Task RunImportAsync(string[] args)
+{
+    var input = ""; var dbPath = "bars.db";
+    for (int j = 1; j < args.Length; j++)
+    {
+        if (args[j] == "--input" && j + 1 < args.Length) { input = args[++j]; }
+        else if (args[j] == "--db" && j + 1 < args.Length) { dbPath = args[++j]; }
+    }
+    if (string.IsNullOrEmpty(input)) { Console.WriteLine("Usage: TradingStudio import --input <file|dir> [--db bars.db]"); Environment.Exit(1); }
+
+    var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+    try
+    {
+        if (Directory.Exists(input)) await TickImportService.ImportDirectoryAsync(input, dbPath, ct: cts.Token);
+        else if (File.Exists(input)) await TickImportService.ImportFileAsync(input, dbPath, cts.Token);
+        else { Console.WriteLine($"Error: path not found — {input}"); Environment.Exit(1); }
+        Console.WriteLine("Import complete."); Environment.Exit(0);
+    }
+    catch (OperationCanceledException) { Console.WriteLine("\nImport cancelled."); Environment.Exit(1); }
+    catch (Exception ex) { Console.WriteLine($"Import failed: {ex.Message}"); Environment.Exit(1); }
+}
+
+static async Task RunCollectAsync(string[] args)
+{
+    // 全局崩溃日志
+    AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+    {
+        var ex = e.ExceptionObject as Exception;
+        var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] FATAL: {ex?.GetType().Name}: {ex?.Message}\n{ex?.StackTrace}\n";
+        try { File.AppendAllText("crash.log", msg); } catch { }
+        Environment.Exit(1);
+    };
+    TaskScheduler.UnobservedTaskException += (_, e) =>
+    {
+        var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] UNOBSERVED: {e.Exception.GetType().Name}: {e.Exception.Message}\n{e.Exception.StackTrace}\n";
+        try { File.AppendAllText("crash.log", msg); } catch { }
+        e.SetObserved();
+    };
+
+    string? exchange = null, symbol = null;
+    var i = 0;
+    var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    while (i < args.Length)
+    {
+        if (args[i].StartsWith("--") && i + 1 < args.Length) { overrides[args[i]] = args[i + 1]; i += 2; }
+        else if (!args[i].StartsWith("--")) { if (exchange is null) exchange = args[i]; else if (symbol is null) symbol = args[i]; i++; }
+        else { i++; }
+    }
+
+    var cliArgs = new List<string>();
+    if (overrides.TryGetValue("--db",    out var db))    cliArgs.Add($"Collect:Database={db}");
+    if (overrides.TryGetValue("--tick",  out var tick))  cliArgs.Add($"Collect:TickData={tick}");
+    if (overrides.TryGetValue("--front", out var front)) cliArgs.Add($"Collect:MdFront={front}");
+    if (overrides.TryGetValue("--user",  out var user))  cliArgs.Add($"Collect:UserId={user}");
+    if (overrides.TryGetValue("--pwd",   out var pwd))   cliArgs.Add($"Collect:Password={pwd}");
+    if (overrides.TryGetValue("--broker", out var broker)) cliArgs.Add($"Collect:BrokerId={broker}");
+
+    var builder = Host.CreateApplicationBuilder([..cliArgs, ..args]);
+    builder.Services.AddSerilog((_, cfg) => cfg.ReadFrom.Configuration(builder.Configuration));
+    var cfgSection = builder.Configuration.GetSection(CollectOptions.Section);
+    builder.Services.Configure<CollectOptions>(cfgSection);
+    builder.Services.PostConfigure<CollectOptions>(opts => { opts.ExchangeFilter = exchange; opts.SymbolFilter = symbol; });
+    builder.Services.AddHostedService<CollectService>();
+    await builder.Build().RunAsync();
+}
+
 static string FindSymbolsJson()
 {
     var exeDir = AppContext.BaseDirectory;
@@ -132,114 +229,3 @@ static string FindSymbolsJson()
     if (File.Exists(cwd)) return cwd;
     throw new FileNotFoundException("symbols.json not found in exe dir or current dir");
 }
-
-// ── import 子命令 ──────────────────────────────────────────
-if (args.Length > 0 && args[0] == "import")
-{
-    var input = "";
-    var dbPath = "bars.db";
-    for (int j = 1; j < args.Length; j++)
-    {
-        if (args[j] == "--input" && j + 1 < args.Length) { input = args[++j]; }
-        else if (args[j] == "--db" && j + 1 < args.Length) { dbPath = args[++j]; }
-    }
-
-    if (string.IsNullOrEmpty(input))
-    {
-        Console.WriteLine("Usage: TradingStudio import --input <file|dir> [--db bars.db]");
-        Environment.Exit(1);
-    }
-
-    var cts = new CancellationTokenSource();
-    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-
-    try
-    {
-        if (Directory.Exists(input))
-            await TickImportService.ImportDirectoryAsync(input, dbPath, ct: cts.Token);
-        else if (File.Exists(input))
-            await TickImportService.ImportFileAsync(input, dbPath, cts.Token);
-        else
-        {
-            Console.WriteLine($"Error: path not found — {input}");
-            Environment.Exit(1);
-        }
-        Console.WriteLine("Import complete.");
-        Environment.Exit(0);
-    }
-    catch (OperationCanceledException)
-    {
-        Console.WriteLine("\nImport cancelled.");
-        Environment.Exit(1);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Import failed: {ex.Message}");
-        Environment.Exit(1);
-    }
-}
-
-// 全局崩溃日志 — 在 Serilog 初始化之前兜底
-// CTP 原生回调中的未处理异常可能绕过 Serilog，写 crash.log 确保有痕迹
-AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-{
-    var ex = e.ExceptionObject as Exception;
-    var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] FATAL: {ex?.GetType().Name}: {ex?.Message}\n{ex?.StackTrace}\n";
-    try { File.AppendAllText("crash.log", msg); } catch { }
-    Environment.Exit(1); // 确保进程退出，不留僵尸
-};
-
-TaskScheduler.UnobservedTaskException += (_, e) =>
-{
-    var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] UNOBSERVED: {e.Exception.GetType().Name}: {e.Exception.Message}\n{e.Exception.StackTrace}\n";
-    try { File.AppendAllText("crash.log", msg); } catch { }
-    e.SetObserved();
-};
-
-// 1. 位置参数
-string? exchange = null, symbol = null;
-var i = 0;
-
-// 2. 可选参数
-var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-while (i < args.Length)
-{
-    if (args[i].StartsWith("--") && i + 1 < args.Length)
-    {
-        overrides[args[i]] = args[i + 1];
-        i += 2;
-    }
-    else if (!args[i].StartsWith("--"))
-    {
-        if (exchange is null) exchange = args[i];
-        else if (symbol is null) symbol = args[i];
-        i++;
-    }
-    else { i++; }
-}
-
-// 注入命令行覆盖到 IConfiguration（优先级高于 appsettings.json）
-var cliArgs = new List<string>();
-if (overrides.TryGetValue("--db",    out var db))    cliArgs.Add($"Collect:Database={db}");
-if (overrides.TryGetValue("--tick",  out var tick))  cliArgs.Add($"Collect:TickData={tick}");
-if (overrides.TryGetValue("--front", out var front)) cliArgs.Add($"Collect:MdFront={front}");
-if (overrides.TryGetValue("--user",  out var user))  cliArgs.Add($"Collect:UserId={user}");
-if (overrides.TryGetValue("--pwd",   out var pwd))   cliArgs.Add($"Collect:Password={pwd}");
-if (overrides.TryGetValue("--broker", out var broker)) cliArgs.Add($"Collect:BrokerId={broker}");
-
-var builder = Host.CreateApplicationBuilder([..cliArgs, ..args]);
-
-builder.Services.AddSerilog((_, cfg) =>
-    cfg.ReadFrom.Configuration(builder.Configuration));
-
-var cfgSection = builder.Configuration.GetSection(CollectOptions.Section);
-builder.Services.Configure<CollectOptions>(cfgSection);
-builder.Services.PostConfigure<CollectOptions>(opts =>
-{
-    opts.ExchangeFilter = exchange;
-    opts.SymbolFilter   = symbol;
-});
-
-builder.Services.AddHostedService<CollectService>();
-
-await builder.Build().RunAsync();

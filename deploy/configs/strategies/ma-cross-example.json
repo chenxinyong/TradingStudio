@@ -1,0 +1,36 @@
+{
+  "strategyId": "ma-cross-rb",
+  "strategyType": "MaCross",
+  "description": "双均线突破策略 — 螺纹钢主力合约",
+  "version": 1,
+
+  "subscription": {
+    "instruments": ["rb2605"],
+    "primaryBarType": "1min"
+  },
+
+  "allocation": {
+    "capital": 100000,
+    "maxDrawdownPct": 0.20,
+    "maxPositionPerInstrument": 5
+  },
+
+  "priority": 1,
+
+  "parameters": {
+    "FastPeriod": 5,
+    "SlowPeriod": 20,
+    "Quantity": 2,
+    "MaxLossPct": 0.05
+  },
+
+  "riskRules": [
+    { "type": "MaxPositionRule", "parameters": { "maxLots": 5 } },
+    { "type": "DailyMaxLossRule", "parameters": { "maxLossRatio": 0.05 } }
+  ],
+
+  "schedule": {
+    "sessionFilter": "All",
+    "skipAuction": true
+  }
+}

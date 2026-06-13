@@ -1,0 +1,112 @@
+#!meta
+{
+  "kernelInfo": {
+    "name": "csharp",
+    "languageName": "C#",
+    "displayName": ".NET (C#)"
+  }
+}
+
+#!markdown
+
+# 双均线策略研究 — rb2605
+
+加载 2025 年上半年 1-min Bar 数据，分析双均线交叉策略可行性。
+
+#!code
+
+// Cell 1: 加载环境 + 数据
+
+#r "nuget: ../TradingStudio.Research.dll"
+
+using TradingStudio.Research;
+using TradingStudio.Research.Stats;
+using TradingStudio.Research.Viz;
+
+var ctx = new ResearchContext(@"D:\FuturesData");
+var bars = ctx.LoadBars("rb2605",
+    new DateTime(2025, 1, 2),
+    new DateTime(2025, 6, 30));
+
+Console.WriteLine($"加载 {bars.Count:N0} 根 1-min Bar");
+Console.WriteLine($"范围: {bars.StartTime:yyyy-MM-dd HH:mm} ~ {bars.EndTime:yyyy-MM-dd HH:mm}");
+
+#!code
+
+// Cell 2: 收益率分布
+
+var rets = bars.AnalyzeReturns();
+rets.Describe();
+
+#!code
+
+// Cell 3: 收益率直方图
+
+rets.Returns.PlotHistogram("rb2605 1-min Returns", bins: 80);
+
+#!code
+
+// Cell 4: 双均线交叉信号
+
+int fastPeriod = 5;
+int slowPeriod = 20;
+
+var fastMA = bars.SMA(fastPeriod);
+var slowMA = bars.SMA(slowPeriod);
+
+bars.PlotDualSignal(fastMA, slowMA, $"SMA({fastPeriod})", $"SMA({slowPeriod})", "rb2605 双均线");
+
+#!code
+
+// Cell 5: 信号 → PnL
+
+var returns = bars.Returns();
+var signals = new double[returns.Length];
+
+for (int i = 1; i < returns.Length; i++)
+{
+    // 金叉做多，死叉做空
+    if (fastMA[i] > slowMA[i] && fastMA[i-1] <= slowMA[i-1])
+        signals[i] = 1;
+    else if (fastMA[i] < slowMA[i] && fastMA[i-1] >= slowMA[i-1])
+        signals[i] = -1;
+    else
+        signals[i] = signals[i-1];  // 持仓不动
+}
+
+var strategyReturns = new double[returns.Length];
+for (int i = 0; i < returns.Length; i++)
+    strategyReturns[i] = (double.IsNaN(signals[i]) ? 0 : signals[i]) * returns[i];
+
+var equity = strategyReturns.CumulativePnL();
+equity.PlotEquityCurve("MA Cross 净值曲线");
+
+#!code
+
+// Cell 6: 回撤分析
+
+var dd = new DrawdownAnalyzer(equity);
+dd.Describe();
+dd.DrawdownCurve.PlotDrawdown("MA Cross 回撤曲线");
+
+#!code
+
+// Cell 7: 参数遍历 (快速)
+
+var results = new List<(int fast, int slow, double sharpe)>();
+for (int f = 3; f <= 20; f += 2)
+{
+    for (int s = f + 5; s <= 60; s += 5)
+    {
+        var fma = bars.SMA(f);
+        var sma = bars.SMA(s);
+        var sig = GenerateSignals(fma, sma, returns.Length);
+        var r = EvaluateStrategy(sig, returns);
+        results.Add((f, s, r.sharpe));
+    }
+}
+
+var best = results.OrderByDescending(r => r.sharpe).Take(5);
+Console.WriteLine("Top 5 参数组合:");
+foreach (var r in best)
+    Console.WriteLine($"  SMA({r.fast,2}, {r.slow,2}) → Sharpe {r.sharpe:F2}");
