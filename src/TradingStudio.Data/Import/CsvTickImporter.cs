@@ -46,18 +46,26 @@ public static class CsvTickImporter
     public static IEnumerable<ParseResult> Parse(string filePath,
         IProgress<int>? progress = null)
     {
-        // Register GBK provider (safe to call multiple times)
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         var gbk = Encoding.GetEncoding(936);
-
         using var reader = new StreamReader(filePath, gbk, detectEncodingFromByteOrderMarks: false);
+        var (symbol, tradingDay) = ParseFileName(filePath);
+        foreach (var r in Parse(reader, symbol, tradingDay, progress))
+            yield return r;
+    }
 
+    /// <summary>
+    /// 从 TextReader 流式解析金数源 CSV。
+    /// 用于 RAR 内嵌 CSV、内存流等场景。
+    /// 调用方提供 symbol 和 tradingDay，跳过文件名解析。
+    /// </summary>
+    public static IEnumerable<ParseResult> Parse(TextReader reader,
+        string symbol, DateOnly tradingDay, IProgress<int>? progress = null)
+    {
         // 跳过表头
         var header = reader.ReadLine();
         if (header is null) yield break;
 
-        var (symbol, tradingDay) = ParseFileName(filePath);
-        DateOnly tradingDayLocal = tradingDay; // capture for lambda
         int row = 1, good = 0, bad = 0;
 
         while (reader.ReadLine() is { } line)
@@ -72,7 +80,7 @@ public static class CsvTickImporter
                 continue;
             }
 
-            var result = TryParseRow(fields, symbol, tradingDayLocal, row, ref bad);
+            var result = TryParseRow(fields, symbol, tradingDay, row, ref bad);
             if (result is not null)
             {
                 good++;

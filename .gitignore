@@ -435,3 +435,6 @@ dist/
 
 # Raw data downloads
 data/ticks/
+
+# Tools and scripts
+tools/

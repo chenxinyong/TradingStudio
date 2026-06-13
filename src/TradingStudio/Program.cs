@@ -1,3 +1,4 @@
+using TradingStudio.Core.Models;
 using TradingStudio.Data.Import;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -36,7 +37,101 @@ using TradingStudio.Services;
 //     TradingStudio import --input data\ticks\cu1603.csv
 //     TradingStudio import --input data\ticks\             # 批量导入目录下所有 CSV
 //     TradingStudio import --input data\ticks\ --db cu.db
+//
+// === import-jinshuyuan — 金数源 RAR 历史数据导入 ===
+//   TradingStudio import-jinshuyuan --layer <main|active|all> [options]
+//
+//   示例:
+//     TradingStudio import-jinshuyuan --layer main --dry-run
+//     TradingStudio import-jinshuyuan --layer main --db bars_history.db
+//     TradingStudio import-jinshuyuan --layer active --symbol ag --symbol cu
 // ================================================================
+
+// ── import-jinshuyuan 子命令 — 金数源 RAR 历史数据导入 ─────
+if (args.Length > 0 && args[0] == "import-jinshuyuan")
+{
+    var layer = "";
+    var symbols = new List<string>();
+    string? exchangeStr = null;
+    var fromMonth = "202101";
+    var toMonth = "202212";
+    var dataDir = @"C:\Works\Datas\Jinshuyuan";
+    var dbPath = "bars_history.db";
+    var dryRun = false;
+
+    for (int j = 1; j < args.Length; j++)
+    {
+        switch (args[j])
+        {
+            case "--layer" when j + 1 < args.Length:    layer = args[++j]; break;
+            case "--symbol" when j + 1 < args.Length:   symbols.Add(args[++j].ToLowerInvariant()); break;
+            case "--exchange" when j + 1 < args.Length: exchangeStr = args[++j].ToUpperInvariant(); break;
+            case "--from" when j + 1 < args.Length:     fromMonth = args[++j]; break;
+            case "--to" when j + 1 < args.Length:       toMonth = args[++j]; break;
+            case "--data-dir" when j + 1 < args.Length: dataDir = args[++j]; break;
+            case "--db" when j + 1 < args.Length:       dbPath = args[++j]; break;
+            case "--dry-run": dryRun = true; break;
+        }
+    }
+
+    if (layer is not ("main" or "active" or "all"))
+    {
+        Console.WriteLine("Error: --layer is required and must be 'main', 'active', or 'all'");
+        Console.WriteLine("Usage: TradingStudio import-jinshuyuan --layer <main|active|all> [options]");
+        Environment.Exit(1);
+    }
+
+    // 加载 symbols.json → 提取所有品种代码 (--layer active 用)
+    var symbolsJson = FindSymbolsJson();
+    var registry = FutureRegistry.Load(symbolsJson);
+    var knownProducts = new HashSet<string>(
+        registry.All.Values.Select(p => p.Code.ToLowerInvariant()),
+        StringComparer.OrdinalIgnoreCase);
+
+    var opts = new JinshuyuanOptions
+    {
+        DataDir = dataDir,
+        DbPath = dbPath,
+        Layer = layer,
+        Symbols = new HashSet<string>(symbols, StringComparer.OrdinalIgnoreCase),
+        ExchangeCode = exchangeStr,
+        FromMonth = fromMonth,
+        ToMonth = toMonth,
+        DryRun = dryRun,
+        KnownProducts = knownProducts,
+    };
+
+    var service = new JinshuyuanImportService(opts);
+    var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+
+    try
+    {
+        await service.ImportAsync(cts.Token);
+        Environment.Exit(0);
+    }
+    catch (OperationCanceledException)
+    {
+        Console.WriteLine("\nImport cancelled.");
+        Environment.Exit(1);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Import failed: {ex.Message}");
+        Environment.Exit(1);
+    }
+}
+
+/// <summary>查找 symbols.json: 先找 exe 目录，再找当前目录</summary>
+static string FindSymbolsJson()
+{
+    var exeDir = AppContext.BaseDirectory;
+    var path = Path.Combine(exeDir, "symbols.json");
+    if (File.Exists(path)) return path;
+    var cwd = Path.Combine(Directory.GetCurrentDirectory(), "symbols.json");
+    if (File.Exists(cwd)) return cwd;
+    throw new FileNotFoundException("symbols.json not found in exe dir or current dir");
+}
 
 // ── import 子命令 ──────────────────────────────────────────
 if (args.Length > 0 && args[0] == "import")
