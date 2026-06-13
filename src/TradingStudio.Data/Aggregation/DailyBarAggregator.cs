@@ -57,6 +57,9 @@ public class DailyBarAggregator : IDisposable
 
             bar.OpenInterest = tick.OpenInterest;
             bar.TickCount++;
+
+            // ⚠️ Bar 是 record struct，TryGetValue 返回副本，修改后必须写回
+            _bars[key] = bar;
         }
     }
 

@@ -1,3 +1,4 @@
+using TradingStudio.Data.Import;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -5,9 +6,9 @@ using TradingStudio.Options;
 using TradingStudio.Services;
 
 // ================================================================
-// TradingStudio collect — 行情采集
+// TradingStudio — 量化交易工作室
 //
-// 用法:
+// === collect — 行情采集 ===
 //   TradingStudio [exchange] [symbol] [options]
 //
 //   位置参数:
@@ -27,7 +28,61 @@ using TradingStudio.Services;
 //     TradingStudio SHFE ag                               # 上期所白银
 //     TradingStudio SHFE ag2608 --db silver.db            # 指定库
 //     TradingStudio DCE i --tick IronTicks --db iron.db   # 铁矿石
+//
+// === import — 金数源 CSV 历史数据导入 ===
+//   TradingStudio import --input <file|dir> [--db bars.db]
+//
+//   示例:
+//     TradingStudio import --input data\ticks\cu1603.csv
+//     TradingStudio import --input data\ticks\             # 批量导入目录下所有 CSV
+//     TradingStudio import --input data\ticks\ --db cu.db
 // ================================================================
+
+// ── import 子命令 ──────────────────────────────────────────
+if (args.Length > 0 && args[0] == "import")
+{
+    var input = "";
+    var dbPath = "bars.db";
+    for (int j = 1; j < args.Length; j++)
+    {
+        if (args[j] == "--input" && j + 1 < args.Length) { input = args[++j]; }
+        else if (args[j] == "--db" && j + 1 < args.Length) { dbPath = args[++j]; }
+    }
+
+    if (string.IsNullOrEmpty(input))
+    {
+        Console.WriteLine("Usage: TradingStudio import --input <file|dir> [--db bars.db]");
+        Environment.Exit(1);
+    }
+
+    var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+
+    try
+    {
+        if (Directory.Exists(input))
+            await TickImportService.ImportDirectoryAsync(input, dbPath, ct: cts.Token);
+        else if (File.Exists(input))
+            await TickImportService.ImportFileAsync(input, dbPath, cts.Token);
+        else
+        {
+            Console.WriteLine($"Error: path not found — {input}");
+            Environment.Exit(1);
+        }
+        Console.WriteLine("Import complete.");
+        Environment.Exit(0);
+    }
+    catch (OperationCanceledException)
+    {
+        Console.WriteLine("\nImport cancelled.");
+        Environment.Exit(1);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Import failed: {ex.Message}");
+        Environment.Exit(1);
+    }
+}
 
 // 全局崩溃日志 — 在 Serilog 初始化之前兜底
 // CTP 原生回调中的未处理异常可能绕过 Serilog，写 crash.log 确保有痕迹
