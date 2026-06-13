@@ -125,6 +125,10 @@ public class CollectService : BackgroundService
         var loggedIn = new TaskCompletionSource<bool>();
         var session = _scheduler.SessionName();
 
+        // 断线标志 — 用 lock 保护，CTP 回调来自原生线程
+        var discLock = new object();
+        var disconnected = false;
+
         md.OnFrontConnected += () =>
         {
             _log.Information("[{Session}] Connected → Login", session);
@@ -134,7 +138,7 @@ public class CollectService : BackgroundService
         md.OnFrontDisconnected += r =>
         {
             _log.Warning("[{Session}] Disconnected (0x{Reason:X})", session, r);
-            connected.TrySetResult(false); loggedIn.TrySetResult(false);
+            lock (discLock) { disconnected = true; }
         };
         md.OnLogin += (err, info) =>
         {
@@ -163,8 +167,9 @@ public class CollectService : BackgroundService
         while (_scheduler.IsInSession() && !ct.IsCancellationRequested)
         {
             await Task.Delay(1000, ct);
-            if (connected.Task.IsCompleted && !connected.Task.Result) break;
-            if (loggedIn.Task.IsCompleted && !loggedIn.Task.Result) break;
+            var disc = false;
+            lock (discLock) { disc = disconnected; }
+            if (disc) { _log.Warning("[{Session}] Session broken (disconnect detected)", session); break; }
         }
     }
 

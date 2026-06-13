@@ -29,6 +29,23 @@ using TradingStudio.Services;
 //     TradingStudio DCE i --tick IronTicks --db iron.db   # 铁矿石
 // ================================================================
 
+// 全局崩溃日志 — 在 Serilog 初始化之前兜底
+// CTP 原生回调中的未处理异常可能绕过 Serilog，写 crash.log 确保有痕迹
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
+    var ex = e.ExceptionObject as Exception;
+    var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] FATAL: {ex?.GetType().Name}: {ex?.Message}\n{ex?.StackTrace}\n";
+    try { File.AppendAllText("crash.log", msg); } catch { }
+    Environment.Exit(1); // 确保进程退出，不留僵尸
+};
+
+TaskScheduler.UnobservedTaskException += (_, e) =>
+{
+    var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] UNOBSERVED: {e.Exception.GetType().Name}: {e.Exception.Message}\n{e.Exception.StackTrace}\n";
+    try { File.AppendAllText("crash.log", msg); } catch { }
+    e.SetObserved();
+};
+
 // 1. 位置参数
 string? exchange = null, symbol = null;
 var i = 0;

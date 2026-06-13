@@ -124,12 +124,19 @@ public class TickCsvWriter : IDisposable
         if (inst.StartsWith("si") || inst.StartsWith("lc") || inst.StartsWith("ps")) return "GFEX";
         // CZCE (双大写字母开头，如 TA608, FG511)
         if (inst.Length >= 2 && char.IsUpper(inst[0]) && char.IsUpper(inst[1])) return "CZCE";
-        // DCE
+        // SHFE (全小写前缀，必须在 DCE 字母通配之前显式匹配)
+        if (inst.StartsWith("cu") || inst.StartsWith("al") || inst.StartsWith("zn") || inst.StartsWith("pb")
+         || inst.StartsWith("ni") || inst.StartsWith("sn") || inst.StartsWith("au") || inst.StartsWith("ag")
+         || inst.StartsWith("rb") || inst.StartsWith("wr") || inst.StartsWith("hc") || inst.StartsWith("ss")
+         || inst.StartsWith("bu") || inst.StartsWith("ru") || inst.StartsWith("sp") || inst.StartsWith("fu")
+         || inst.StartsWith("ao") || inst.StartsWith("br")) return "SHFE";
+        // DCE (具体小写双字母前缀)
         if (inst.StartsWith("fb") || inst.StartsWith("bb") || inst.StartsWith("jd") || inst.StartsWith("lh")
          || inst.StartsWith("rr") || inst.StartsWith("pp") || inst.StartsWith("pg") || inst.StartsWith("eg")
          || inst.StartsWith("cs") || inst.StartsWith("eb")) return "DCE";
+        // DCE (单字母前缀: a=豆一, b=豆二, c=玉米, d=鸡蛋... 等)
         if ("abcdeijlmprvy".Contains(inst[0])) return "DCE";
-        return "SHFE";
+        return "??";
     }
 
     private const string Hdr = "日期,合约代码,交易所代码,合约在交易所的代码,最新价,上次结算价,昨收盘,昨持仓量," +
