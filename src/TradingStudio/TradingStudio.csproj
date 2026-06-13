@@ -15,13 +15,15 @@
 
   <ItemGroup>
     <Reference Include="CTPWrapper">
-      <HintPath>..\CTP\Wrapper\bin\Debug\CTPWrapper.dll</HintPath>
+      <HintPath>..\CTP\Wrapper\bin\Release\CTPWrapper.dll</HintPath>
     </Reference>
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="symbols.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\CTP\SDK\dll\thostmduserapi_se.dll" CopyToOutputDirectory="PreserveNewest" Link="thostmduserapi_se.dll" />
+    <Content Include="..\CTP\SDK\dll\thosttraderapi_se.dll" CopyToOutputDirectory="PreserveNewest" Link="thosttraderapi_se.dll" />
   </ItemGroup>
 
   <ItemGroup>
