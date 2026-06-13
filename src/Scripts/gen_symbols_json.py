@@ -112,10 +112,108 @@ CODES = {
     "工业硅":"si","碳酸锂":"lc","多晶硅":"ps",
 }
 
+# Trading hours — 日盘 + 夜盘时段
+# All commodity futures day: 09:00-10:15, 10:30-11:30, 13:30-15:00
+# CFFEX (financial): 09:30-11:30, 13:00-15:00 (IF/IC/IH/IM), 13:00-15:15 (国债)
+# Night session varies by contract
+DAY_ALL   = "09:00-10:15,10:30-11:30,13:30-15:00"
+NIGHT_23  = "; 夜盘:21:00-23:00"
+NIGHT_01  = "; 夜盘:21:00-01:00"
+NIGHT_0230 = "; 夜盘:21:00-02:30"
+NO_NIGHT  = ""
+CFFEX_DAY_INDEX = "09:30-11:30,13:00-15:00"
+CFFEX_DAY_BOND  = "09:30-11:30,13:00-15:15"
+
+# contract_name -> (tradingHours, priceLimitPct)
+RULES = {
+    # SHFE
+    "铜":         (DAY_ALL + NIGHT_01,   0.10),
+    "铝":         (DAY_ALL + NIGHT_01,   0.10),
+    "锌":         (DAY_ALL + NIGHT_01,   0.10),
+    "铅":         (DAY_ALL + NIGHT_01,   0.10),
+    "镍":         (DAY_ALL + NIGHT_01,   0.10),
+    "锡":         (DAY_ALL + NIGHT_01,   0.10),
+    "黄金":       (DAY_ALL + NIGHT_0230, 0.08),
+    "白银":       (DAY_ALL + NIGHT_0230, 0.08),
+    "螺纹钢":     (DAY_ALL + NIGHT_23,   0.07),
+    "线材":       (DAY_ALL + NIGHT_23,   0.07),
+    "热轧卷板":   (DAY_ALL + NIGHT_23,   0.07),
+    "不锈钢":     (DAY_ALL + NIGHT_23,   0.07),
+    "石油沥青":   (DAY_ALL + NIGHT_23,   0.08),
+    "天然橡胶":   (DAY_ALL + NIGHT_23,   0.08),
+    "纸浆":       (DAY_ALL + NIGHT_23,   0.08),
+    "燃料油":     (DAY_ALL + NIGHT_23,   0.10),
+    "氧化铝":     (DAY_ALL + NIGHT_23,   0.08),
+    "丁二烯橡胶": (DAY_ALL + NIGHT_23,   0.08),
+    # INE
+    "原油":       (DAY_ALL + NIGHT_0230, 0.10),
+    "低硫燃料油": (DAY_ALL + NIGHT_23,   0.10),
+    "铜(BC)":     (DAY_ALL + NIGHT_01,   0.08),
+    "20号胶":     (DAY_ALL + NIGHT_23,   0.08),
+    "SCFIS欧线":  (DAY_ALL + NIGHT_0230, 0.12),
+    # DCE
+    "黄玉米":         (DAY_ALL + NO_NIGHT,  0.05),
+    "玉米淀粉":       (DAY_ALL + NO_NIGHT,  0.05),
+    "黄大豆1号":      (DAY_ALL + NIGHT_23,  0.05),
+    "黄大豆2号":      (DAY_ALL + NIGHT_23,  0.05),
+    "豆粕":           (DAY_ALL + NIGHT_23,  0.07),
+    "豆油":           (DAY_ALL + NIGHT_23,  0.07),
+    "棕榈油":         (DAY_ALL + NIGHT_23,  0.08),
+    "线型低密度聚乙烯":(DAY_ALL + NIGHT_23,  0.07),
+    "聚氯乙烯":       (DAY_ALL + NIGHT_23,  0.07),
+    "聚丙烯":         (DAY_ALL + NIGHT_23,  0.07),
+    "苯乙烯":         (DAY_ALL + NIGHT_23,  0.08),
+    "乙二醇":         (DAY_ALL + NIGHT_23,  0.08),
+    "液化石油气":     (DAY_ALL + NIGHT_23,  0.08),
+    "焦炭":           (DAY_ALL + NIGHT_23,  0.15),
+    "焦煤":           (DAY_ALL + NIGHT_23,  0.15),
+    "铁矿石":         (DAY_ALL + NIGHT_23,  0.10),
+    "粳米":           (DAY_ALL + NO_NIGHT,  0.05),
+    "纤维板":         (DAY_ALL + NO_NIGHT,  0.10),
+    "胶合板":         (DAY_ALL + NO_NIGHT,  0.10),
+    "鸡蛋":           (DAY_ALL + NO_NIGHT,  0.08),
+    "生猪":           (DAY_ALL + NO_NIGHT,  0.12),
+    # CZCE
+    "棉花":     (DAY_ALL + NIGHT_23, 0.07),
+    "棉纱":     (DAY_ALL + NIGHT_23, 0.07),
+    "白糖":     (DAY_ALL + NIGHT_23, 0.07),
+    "PTA":      (DAY_ALL + NIGHT_23, 0.07),
+    "甲醇":     (DAY_ALL + NIGHT_23, 0.08),
+    "玻璃":     (DAY_ALL + NIGHT_23, 0.09),
+    "纯碱":     (DAY_ALL + NIGHT_23, 0.09),
+    "硅铁":     (DAY_ALL + NIGHT_23, 0.08),
+    "锰硅":     (DAY_ALL + NIGHT_23, 0.08),
+    "尿素":     (DAY_ALL + NIGHT_23, 0.08),
+    "短纤":     (DAY_ALL + NIGHT_23, 0.08),
+    "花生":     (DAY_ALL + NIGHT_23, 0.08),
+    "菜粕":     (DAY_ALL + NIGHT_23, 0.07),
+    "菜油":     (DAY_ALL + NIGHT_23, 0.07),
+    "烧碱":     (DAY_ALL + NIGHT_23, 0.08),
+    "瓶片":     (DAY_ALL + NIGHT_23, 0.08),
+    "苹果":     (DAY_ALL + NO_NIGHT,  0.10),
+    "红枣":     (DAY_ALL + NO_NIGHT,  0.10),
+    "对二甲苯": (DAY_ALL + NIGHT_23, 0.09),
+    "多晶硅":   (DAY_ALL + NIGHT_23, 0.09),
+    # CFFEX
+    "沪深300":    (CFFEX_DAY_INDEX, 0.10),
+    "中证500":    (CFFEX_DAY_INDEX, 0.10),
+    "上证50":     (CFFEX_DAY_INDEX, 0.10),
+    "中证1000":   (CFFEX_DAY_INDEX, 0.10),
+    "2年期国债":  (CFFEX_DAY_BOND,  0.005),
+    "5年期国债":  (CFFEX_DAY_BOND,  0.012),
+    "10年期国债": (CFFEX_DAY_BOND,  0.02),
+    "30年期国债": (CFFEX_DAY_BOND,  0.035),
+    # GFEX
+    "工业硅": (DAY_ALL + NIGHT_23, 0.09),
+    "碳酸锂": (DAY_ALL + NIGHT_23, 0.09),
+    "多晶硅": (DAY_ALL + NIGHT_23, 0.09),
+}
+
 def main():
     symbols = []
     for i, (name, ex, cat, delivery, unit, unit_name, tick, margin, months) in enumerate(DATA, 1):
         code = CODES.get(name, "??")
+        hours, limit = RULES.get(name, ("", 0.10))
         symbols.append({
             "id": i,
             "exchange": ex,
@@ -127,10 +225,10 @@ def main():
             "unitName": unit_name,
             "tickSize": tick,
             "tickValue": round(tick * unit, 4),
-            "priceLimitPct": 0.10,
+            "priceLimitPct": limit,
             "marginRate": margin,
             "months": months,
-            "tradingHours": "",
+            "tradingHours": hours,
         })
 
     result = {"generatedAt": date.today().isoformat(), "symbols": symbols}
