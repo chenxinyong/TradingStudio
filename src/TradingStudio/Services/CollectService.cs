@@ -85,8 +85,8 @@ public class CollectService : BackgroundService
             agg1Min.OnBar += bar => store.WriteAsync(bar);
             aggDay.OnBar  += bar => store.WriteAsync(bar);
 
-            // 日线定时刷新（每分钟）+ 日盘收盘前强制 flush
-            _ = DayFlushLoop(aggDay, ct);
+            // 日线仅在收盘时 flush（避免中途清空丢失数据）
+            // 1min bar 由 BarAggregator 的 CheckTimeouts（30s 无数据兜底）+ 收盘 Flush 保证落盘
 
             // 会话内：自动重连
             while (_scheduler.IsInSession() && !ct.IsCancellationRequested)
@@ -203,15 +203,6 @@ public class CollectService : BackgroundService
             q.BidPrice4, q.BidVolume4, q.AskPrice4, q.AskVolume4,
             q.BidPrice5, q.BidVolume5, q.AskPrice5, q.AskVolume5, q.AveragePrice);
         Interlocked.Increment(ref _quoteCount);
-    }
-
-    private async Task DayFlushLoop(DailyBarAggregator aggDay, CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            await Task.Delay(60_000, ct);
-            try { aggDay.FlushAll(); } catch { }
-        }
     }
 
     private async Task HealthLoop(BarStore store, TickCsvWriter tickWriter, CancellationToken ct)
