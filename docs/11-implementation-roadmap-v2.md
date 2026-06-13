@@ -1,6 +1,11 @@
 # 11 — 实施路线图 v2：基于当前代码状态的 6 步推进计划
 
 > 融合 docs/08-10 的分析结论，盘点现有代码，定义实施顺序。
+>
+> **更新 (2026-06-13):** 6/12 完成全市场采集管线部署，6/13 修复 6 个 Bug。
+> 原"存在"项绝大部分已解决，原"不存在"项中 BarAggregator/BarStore/TickWriter/Exchange/Future/ContractCodeGenerator
+> 均已实现 (见 `src/TradingStudio.Core/Models/` 和 `src/TradingStudio.Data/`)。
+> Step 1 (PostgreSQL + 实体) 尚未完成，其余 Step 2-3 的部分组件已超前实现。
 
 ---
 

@@ -1,6 +1,6 @@
 # TradingStudio 文档索引
 
-> 最后更新：2026-06-11
+> 最后更新：2026-06-13
 
 ---
 
@@ -62,6 +62,15 @@
 | `CTP接口封装方案.md` | ChatGPT 对话，C++/CLI 封装方案 | C++/CLI 技术参考，不作为项目决策 |
 | `Lean引擎架构分析.md` | Lean Engine 源码架构分析 | 设计模式参考，学习笔记 |
 | `架构验证报告.md` | 16 份文档交叉验证 + 代码审计 | 检测设计冲突和缺口 |
+| `TradingStudio命名规范.md` | C# 命名规范 (参考 Lean/天勤/掘金) | 写新代码时的命名风格参考 |
+| `部署环境指南.md` | 硬件/软件/网络/运维方案 | 部署时参考 |
+
+### 🔧 线上问题分析
+
+| 文件 | 内容 | 日期 |
+|------|------|------|
+| `线上问题分析/2026-06-13_周末Tick数据采集异常.md` | 首次全市场采集崩溃 + 6 Bug 分析修复 | 2026-06-13 |
+| `线上问题分析/2026-06-13_Bar与Tick数据质量分析.md` | Bar Volume/Turnover Bug + CSV 写入失败 | 2026-06-13 |
 
 ---
 
@@ -69,20 +78,17 @@
 
 ### 我要开始写代码，先读什么？
 
-1. [TradingStudio架构设计-精简版.md](TradingStudio架构设计-精简版.md) — 知道 5 个项目的定位
-2. [11-implementation-roadmap-v2.md](11-implementation-roadmap-v2.md) — 知道当前代码在哪、下一步做什么
-3. [02-data-model-spec.md](02-data-model-spec.md) — 知道 TickRecord 和 Bar 的精确定义
-4. [10-data-model-reconciled.md](10-data-model-reconciled.md) — 知道数据库表结构
+1. [TradingStudio架构设计-精简版.md](TradingStudio架构设计-精简版.md) — 5 项目定位（注意：当前仅 Core/Data/Ctp 已实现）
+2. [11-implementation-roadmap-v2.md](11-implementation-roadmap-v2.md) — 当前代码在哪、下一步做什么
+3. [02-data-model-spec.md](02-data-model-spec.md) — TickRecord (80B) 和 Bar 的精确定义
+4. `src/TradingStudio.sln` — 直接看代码结构
+5. [TradingStudio命名规范.md](TradingStudio命名规范.md) — 命名风格参考
 
-### 我要修改 CTP 桥接，先读什么？
+### 我要了解系统运行状态，先读什么？
 
-1. [09-ctp-interface-analysis.md](09-ctp-interface-analysis.md) — P0 缺口分析
-2. 实际代码：`src/CTP/CTPWrapper/CtpMdBridge.cpp` + `src/TradingStudioBridge/CtpInterop.cs`
-
-### 我要了解为什么这样设计，先读什么？
-
-1. [01-first-principles-analysis.md](01-first-principles-analysis.md) — 第一性原理
-2. [TradingStudio架构设计-精简版.md](TradingStudio架构设计-精简版.md) — 为什么砍掉那么多东西
+1. `src/TradingStudio/CLAUDE.md` — 调度逻辑、健康监控、数据命名约定（实时更新）
+2. [部署环境指南.md](部署环境指南.md) — 部署环境方案
+3. `线上问题分析/` — 已知 Bug 和生产问题记录
 
 ---
 

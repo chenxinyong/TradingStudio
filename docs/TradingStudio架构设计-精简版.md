@@ -3,6 +3,9 @@
 > 从 Lean 学习 → 对照自身需求 → 砍掉多余设计 → 保留核心骨架
 >
 > **约束条件：** C# / 国内期货 / 中低频 / 个人使用
+>
+> **当前阶段 (2026-06-13):** Phase 1 数据基建已完成 (Core/Data/Ctp)。
+> 本文描述的 5 项目架构中，Execution/Strategy/UI 尚未实现。
 
 ---
 
@@ -193,11 +196,11 @@ var filled = bars.FillForward();
 
 | 数据 | 存储 | 说明 |
 |------|------|------|
-| Tick 原始数据 | 文件：`{dataRoot}/ticks/{symbol}/{tradingDay:yyyyMMdd}_{symbol}.tick` | 二进制格式，80B/条，格式见 doc 02 |
-| Bar 缓存 | PostgreSQL | 常用周期 K 线入库查询快 |
-| 合约规格 | PostgreSQL 或 JSON | 数据驱动，可更新 |
+| Tick 原始数据 | CSV：`{basePath}/{exchange}/{contract}_{tradingDay}.csv` | 金数源 42 列格式 (Phase 1)；二进制 .tick 为 Phase 2 可选 |
+| Bar 缓存 | SQLite (Phase 1) → PostgreSQL (Phase 2) | 常用周期 K 线入库查询快 |
+| 合约规格 | JSON (`symbols.json`) | 数据驱动，可更新 |
 
-> 不需要 ClickHouse（中低频不需要那么高的写入吞吐），PostgreSQL + 文件存储足够。
+> Phase 1 用 SQLite + CSV；Phase 2 切 PostgreSQL。不引入 ClickHouse。
 
 ---
 
