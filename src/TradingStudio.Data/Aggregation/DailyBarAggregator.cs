@@ -14,6 +14,7 @@ public class DailyBarAggregator : IDisposable
 {
     private readonly ConcurrentDictionary<(string Inst, DateOnly Day), Bar> _bars = new();
     private readonly ConcurrentDictionary<(string Inst, DateOnly Day), object> _locks = new();
+    private readonly ConcurrentDictionary<(string Inst, DateOnly Day), (long Vol, double TO)> _lastCum = new();
     private readonly Channel<Bar> _output = Channel.CreateBounded<Bar>(256);
     private bool _disposed;
 
@@ -26,28 +27,37 @@ public class DailyBarAggregator : IDisposable
         if (_disposed) return;
 
         var key = (instrumentId, tradingDay);
-        _bars.AddOrUpdate(key,
-            // 新日线：首次 Tick
-            _ =>
+        var lk = _locks.GetOrAdd(key, _ => new object());
+        lock (lk)
+        {
+            if (!_bars.TryGetValue(key, out var bar))
             {
-                var bar = NewDay(tick, instrumentId, tradingDay);
-                return bar;
-            },
-            // 已有日线：更新
-            (_, bar) =>
+                // 首 Tick：创建日线，Volume/Turnover=0（首 Tick 的增量从第二个 Tick 开始计算）
+                bar = NewDay(tick, instrumentId, tradingDay);
+                bar.Volume = 0;
+                bar.Turnover = 0;
+                _bars[key] = bar;
+                _lastCum[key] = (tick.Volume, tick.Turnover);
+                return;
+            }
+
+            // 后续 Tick：更新 OHLC + 成交量/额 delta
+            if (tick.LastPrice > bar.High) bar.High = tick.LastPrice;
+            if (tick.LastPrice < bar.Low) bar.Low = tick.LastPrice;
+            bar.Close = tick.LastPrice;
+
+            if (_lastCum.TryGetValue(key, out var last))
             {
-                var lk = _locks.GetOrAdd(key, _ => new object());
-                lock (lk)
-                {
-                    if (tick.LastPrice > bar.High) bar.High = tick.LastPrice;
-                    if (tick.LastPrice < bar.Low) bar.Low = tick.LastPrice;
-                    bar.Close = tick.LastPrice;
-                    bar.Volume++;
-                    bar.OpenInterest = tick.OpenInterest;
-                    bar.TickCount++;
-                    return bar;
-                }
-            });
+                var dV = tick.Volume - last.Vol;
+                if (dV > 0) bar.Volume += dV;
+                var dTO = tick.Turnover - last.TO;
+                if (dTO > 0) bar.Turnover += dTO;
+            }
+            _lastCum[key] = (tick.Volume, tick.Turnover);
+
+            bar.OpenInterest = tick.OpenInterest;
+            bar.TickCount++;
+        }
     }
 
     /// <summary>获取当前日线快照（不发射）</summary>

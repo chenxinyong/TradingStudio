@@ -13,10 +13,14 @@ public class TickCsvWriter : IDisposable
 {
     private readonly string _basePath;
     private readonly ConcurrentDictionary<string, (StreamWriter Writer, string Day)> _writers = new();
+    private readonly ConcurrentDictionary<string, byte> _failed = new(); // 1=写失败,跳过后续写入
+    private readonly object _createLock = new();
     private readonly Timer _timer;
     private long _written;
+    private long _errors;
 
     public long WrittenCount => Interlocked.Read(ref _written);
+    public long ErrorCount => Interlocked.Read(ref _errors);
 
     public TickCsvWriter(string basePath = "TickData", int flushSec = 10)
     {
@@ -25,7 +29,7 @@ public class TickCsvWriter : IDisposable
         _timer = new Timer(_ => FlushAll(), null, flushSec * 1000, flushSec * 1000);
     }
 
-    /// <summary>写入一条 Tick 行</summary>
+    /// <summary>写入一条 Tick 行（线程安全，单 writer 失败不影响其他合约）</summary>
     public void Write(string instrumentId, string exchangeId, string tradingDay,
         string updateTime, int updateMs,
         double lastPrice, double preSettle, double preClose, double preOI,
@@ -44,39 +48,71 @@ public class TickCsvWriter : IDisposable
         var ex = string.IsNullOrEmpty(exchangeId) ? GuessExchange(instrumentId) : exchangeId;
         var key = $"{instrumentId}_{tradingDay}";
 
+        // 已标记为失败的 writer，跳过后续写入
+        if (_failed.ContainsKey(key)) return;
+
         if (!_writers.TryGetValue(key, out var entry) || entry.Day != tradingDay)
         {
-            _writers.TryRemove(key, out var old);
-            old.Writer?.Dispose();
-            entry = CreateWriter(instrumentId, tradingDay, ex);
-            _writers[key] = entry;
+            lock (_createLock)
+            {
+                if (!_writers.TryGetValue(key, out entry) || entry.Day != tradingDay)
+                {
+                    _writers.TryRemove(key, out var old);
+                    SafeDispose(old.Writer);
+                    try
+                    {
+                        entry = CreateWriter(instrumentId, tradingDay, ex);
+                        _writers[key] = entry;
+                    }
+                    catch (Exception)
+                    {
+                        _failed.TryAdd(key, 1);
+                        Interlocked.Increment(ref _errors);
+                        return;
+                    }
+                }
+            }
         }
 
-        lock (entry.Writer)
+        try
         {
-            var w = entry.Writer;
-            w.Write(tradingDay); w.Write(','); w.Write(instrumentId); w.Write(',');
-            w.Write(ex); w.Write(','); w.Write(','); // 4空
-            w.Write(F(lastPrice)); w.Write(','); w.Write(F(preSettle)); w.Write(',');
-            w.Write(F(preClose)); w.Write(','); w.Write(F(preOI)); w.Write(',');
-            w.Write(F(openPrice)); w.Write(','); w.Write(F(highest)); w.Write(',');
-            w.Write(F(lowest)); w.Write(','); w.Write(volume); w.Write(',');
-            w.Write(Fd(turnover)); w.Write(','); w.Write(F(openInterest)); w.Write(',');
-            w.Write(F(closePrice)); w.Write(','); w.Write(F(settle)); w.Write(',');
-            w.Write(F(upperLimit)); w.Write(','); w.Write(F(lowerLimit)); w.Write(',');
-            w.Write("0,0,"); // delta
-            w.Write(updateTime); w.Write(','); w.Write(updateMs); w.Write(',');
-            BP(w, bp1, bv1, ap1, av1); BP(w, bp2, bv2, ap2, av2);
-            BP(w, bp3, bv3, ap3, av3); BP(w, bp4, bv4, ap4, av4);
-            BP(w, bp5, bv5, ap5, av5);
-            w.Write(F(avgPrice)); w.Write(','); w.WriteLine(tradingDay);
+            lock (entry.Writer)
+            {
+                var w = entry.Writer;
+                w.Write(tradingDay); w.Write(','); w.Write(instrumentId); w.Write(',');
+                w.Write(ex); w.Write(','); w.Write(','); // 4空
+                w.Write(F(lastPrice)); w.Write(','); w.Write(F(preSettle)); w.Write(',');
+                w.Write(F(preClose)); w.Write(','); w.Write(F(preOI)); w.Write(',');
+                w.Write(F(openPrice)); w.Write(','); w.Write(F(highest)); w.Write(',');
+                w.Write(F(lowest)); w.Write(','); w.Write(volume); w.Write(',');
+                w.Write(Fd(turnover)); w.Write(','); w.Write(F(openInterest)); w.Write(',');
+                w.Write(F(closePrice)); w.Write(','); w.Write(F(settle)); w.Write(',');
+                w.Write(F(upperLimit)); w.Write(','); w.Write(F(lowerLimit)); w.Write(',');
+                w.Write("0,0,"); // delta
+                w.Write(updateTime); w.Write(','); w.Write(updateMs); w.Write(',');
+                BP(w, bp1, bv1, ap1, av1); BP(w, bp2, bv2, ap2, av2);
+                BP(w, bp3, bv3, ap3, av3); BP(w, bp4, bv4, ap4, av4);
+                BP(w, bp5, bv5, ap5, av5);
+                w.Write(F(avgPrice)); w.Write(','); w.WriteLine(tradingDay);
+            }
+            Interlocked.Increment(ref _written);
         }
-        Interlocked.Increment(ref _written);
+        catch (Exception)
+        {
+            // 标记失败，后续 Tick 跳过此合约（避免反复抛异常）
+            _failed.TryAdd(key, 1);
+            Interlocked.Increment(ref _errors);
+            try { _writers.TryRemove(key, out var old); SafeDispose(old.Writer); } catch { }
+        }
     }
 
     public void FlushAll()
     {
-        foreach (var (_, entry) in _writers) try { entry.Writer.Flush(); } catch { }
+        foreach (var (key, entry) in _writers)
+        {
+            if (_failed.ContainsKey(key)) continue;
+            try { entry.Writer.Flush(); } catch { }
+        }
     }
 
     public void Dispose()
@@ -84,6 +120,12 @@ public class TickCsvWriter : IDisposable
         _timer.Dispose();
         foreach (var (_, entry) in _writers) try { entry.Writer.Dispose(); } catch { }
         _writers.Clear();
+        _failed.Clear();
+    }
+
+    private static void SafeDispose(StreamWriter? sw)
+    {
+        try { sw?.Dispose(); } catch { }
     }
 
     private (StreamWriter Writer, string Day) CreateWriter(string inst, string day, string ex)

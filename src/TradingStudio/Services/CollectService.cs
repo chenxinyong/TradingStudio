@@ -225,8 +225,8 @@ public class CollectService : BackgroundService
                 _scheduler.IsInSession() ? "Connected" : "Idle",
                 _quoteCount, store.WrittenCount, tickWriter.WrittenCount,
                 _reconnectCount, session, _lastConnect, _lastQuote, _lastHealth);
-            _log.Information("quotes={Quotes} bars={Bars} reconnect={Reconnects} csv={Csv} [{Session}]",
-                _quoteCount, store.WrittenCount, _reconnectCount, tickWriter.WrittenCount, session);
+            _log.Information("quotes={Quotes} bars={Bars} reconnect={Reconnects} csv={Csv} csvErr={CsvErr} [{Session}]",
+                _quoteCount, store.WrittenCount, _reconnectCount, tickWriter.WrittenCount, tickWriter.ErrorCount, session);
         }
     }
 
