@@ -13,6 +13,9 @@ public class StrategyConfig
     public IReadOnlyList<string> Instruments { get; init; } = [];
     public string PrimaryBarType { get; init; } = "bars_1min";
 
+    /// <summary>Bar 周期（分钟）: 1=1min, 5/15/30/60=即时聚合。仅回测生效。</summary>
+    public int BarPeriodMinutes { get; init; } = 1;
+
     // ═══ 资金分配 ═══
     public decimal AllocatedCapital { get; init; }
     public decimal MaxDrawdownPct { get; init; } = 0.20m;

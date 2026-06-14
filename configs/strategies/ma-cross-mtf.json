@@ -1,0 +1,21 @@
+{
+  "StrategyId": "ma-cross-mtf",
+  "StrategyType": "MaCrossMultiTf",
+  "Description": "双均线多周期 — 1min入场 + 日线SMA(20)趋势过滤",
+  "Version": 1,
+  "Instruments": ["rb2005"],
+  "PrimaryBarType": "bars_1min",
+  "AllocatedCapital": 100000,
+  "MaxDrawdownPct": 0.20,
+  "MaxPositionPerInstrument": 5,
+  "Priority": 1,
+  "Parameters": {
+    "FastPeriod": 5,
+    "SlowPeriod": 20,
+    "DayTrendPeriod": 20,
+    "Quantity": 1
+  },
+  "RiskRules": [],
+  "SessionFilter": "All",
+  "SkipAuction": true
+}

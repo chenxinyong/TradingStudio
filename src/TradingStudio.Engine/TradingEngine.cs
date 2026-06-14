@@ -54,17 +54,47 @@ public class TradingEngine
         var globalTrades = new List<Trade>();
         var tradesLock = new object();
 
+        var barHistories = new Dictionary<string, List<Bar>>();
         foreach (var config in _options.StrategyConfigs)
         {
             var strategy = StrategyFactory.Create(config);
             _portfolio.CreateSubPortfolio(config.StrategyId, config.AllocatedCapital);
             var barHistory = new List<Bar>();
+            barHistories[config.StrategyId] = barHistory;
+
+            // 预加载历史 Bar：回测模式加载全部，实盘按 WarmupDays 加载
+            if (_dataFeed is Data.Engine.HistoricalBarFeed barFeed)
+            {
+                var loadStart = _options.IsLive
+                    ? _options.StartTime.AddDays(-_options.WarmupDays)
+                    : _options.StartTime;
+                var loadEnd = _options.IsLive ? _options.StartTime : _options.EndTime;
+
+                foreach (var inst in config.Instruments)
+                {
+                    await barFeed.LoadBars(inst, loadStart, loadEnd);
+                    var loaded = barFeed.GetWarmupBars(inst);
+                    barHistory.AddRange(loaded);
+                }
+                barHistory.Sort((a, b) => a.BarTime.CompareTo(b.BarTime));
+            }
+
             var ctx = new EngineStrategyContext(
                 config.StrategyId, _execution, _portfolio, _indicators,
                 _registry, config.Instruments, barHistory);
             strategy.Initialize(ctx);
+
+            // 预热：喂入历史 Bar 到策略（Warmup 模式，策略只更新状态不产生信号）
+            if (barHistory.Count > 0)
+            {
+                ((EngineStrategyContext)ctx).IsWarmup = true;
+                foreach (var bar in barHistory)
+                    strategy.OnBar(bar);
+                ((EngineStrategyContext)ctx).IsWarmup = false;
+            }
+
             _strategies.Register(strategy, config, ctx);
-            Console.WriteLine($"[Engine] Strategy '{config.StrategyId}' ({strategy.Name}) initialized");
+            Console.WriteLine($"[Engine] Strategy '{config.StrategyId}' ({strategy.Name}) initialized (history={barHistory.Count} bars)");
         }
 
         // 2. 主循环
@@ -157,6 +187,10 @@ public class TradingEngine
                     // 更新指标 → 策略 OnBar
                     _indicators.Feed(bar);
                     _strategies.DispatchBar(barEvt);
+
+                    // 追加到策略历史（供 GetBarHistory / GetRecentBars 查询）
+                    foreach (var history in barHistories.Values)
+                        history.Add(bar);
 
                     // 反馈采样 + 告警
                     _feedback.SamplePortfolio(_portfolio);

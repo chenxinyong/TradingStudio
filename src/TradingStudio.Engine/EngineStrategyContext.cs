@@ -22,6 +22,9 @@ internal class EngineStrategyContext : StrategyContext
     public override DateTimeOffset CurrentTime => _currentTime;
     public override IReadOnlyList<string> SubscribedInstruments => _instruments;
 
+    /// <summary>预热模式：策略应只更新内部状态，不产生交易信号</summary>
+    public bool IsWarmup { get; set; }
+
     public EngineStrategyContext(
         string strategyId,
         IExecutionHandler execution,

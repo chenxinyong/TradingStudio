@@ -1,0 +1,20 @@
+{
+  "StrategyId": "ma-cross-15min",
+  "StrategyType": "MaCross",
+  "Description": "双均线 15min — SMA(5)/SMA(20) on rb2005",
+  "Version": 1,
+  "Instruments": ["rb2005"],
+  "PrimaryBarType": "bars_15min",
+  "AllocatedCapital": 100000,
+  "MaxDrawdownPct": 0.20,
+  "MaxPositionPerInstrument": 5,
+  "Priority": 1,
+  "Parameters": {
+    "FastPeriod": 5,
+    "SlowPeriod": 20,
+    "Quantity": 1
+  },
+  "RiskRules": [],
+  "SessionFilter": "All",
+  "SkipAuction": true
+}

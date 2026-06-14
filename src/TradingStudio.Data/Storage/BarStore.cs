@@ -193,6 +193,48 @@ public class BarStore : IDisposable, IAsyncDisposable
         return list;
     }
 
+    /// <summary>从 bars_1min 聚合生成多周期表（如 bars_5min）</summary>
+    public async Task BuildMultiPeriodTableAsync(int periodMinutes, CancellationToken ct = default)
+    {
+        var srcTable = "bars_1min";
+        var dstTable = $"bars_{periodMinutes}min";
+
+        // 建表
+        using var createCmd = _conn.CreateCommand();
+        createCmd.CommandText = $@"
+            CREATE TABLE IF NOT EXISTS {dstTable} (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                instrument_id TEXT    NOT NULL,
+                trading_day   TEXT    NOT NULL,
+                bar_time      TEXT    NOT NULL,
+                open          INTEGER NOT NULL,
+                high          INTEGER NOT NULL,
+                low           INTEGER NOT NULL,
+                close         INTEGER NOT NULL,
+                volume        INTEGER NOT NULL,
+                turnover      REAL    NOT NULL,
+                open_interest REAL    NOT NULL,
+                tick_count    INTEGER DEFAULT 0,
+                UNIQUE(instrument_id, bar_time)
+            );
+            CREATE INDEX IF NOT EXISTS idx_{dstTable}_inst_time ON {dstTable}(instrument_id, bar_time);
+        ";
+        createCmd.ExecuteNonQuery();
+
+        // 获取所有品种
+        var instruments = await QueryInstrumentsAsync(srcTable, ct);
+        var aggregator = new TradingStudio.Data.Aggregation.MultiBarAggregator(periodMinutes);
+
+        foreach (var inst in instruments)
+        {
+            if (ct.IsCancellationRequested) break;
+            var minBars = await QueryBarsAsync(inst, DateTime.MinValue, DateTime.MaxValue, srcTable, ct);
+            var multiBars = aggregator.Aggregate(minBars).ToList();
+            if (multiBars.Count > 0)
+                await WriteBatchAsync(multiBars, ct);
+        }
+    }
+
     public void Dispose()
     {
         _cts.Cancel();

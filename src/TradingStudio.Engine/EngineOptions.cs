@@ -15,4 +15,7 @@ public class EngineOptions
 
     /// <summary>实盘模式：不生成报告，持续运行直到取消</summary>
     public bool IsLive { get; init; }
+
+    /// <summary>预热天数：启动前加载多少天历史 Bar 喂策略（0=不预热）</summary>
+    public int WarmupDays { get; init; }
 }

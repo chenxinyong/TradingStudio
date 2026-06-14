@@ -1,18 +1,19 @@
 using System.Runtime.CompilerServices;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
+using TradingStudio.Data.Aggregation;
 using TradingStudio.Data.Storage;
 
 namespace TradingStudio.Data.Engine;
 
 /// <summary>
-/// Bar 回放数据源 — 从 SQLite bars_1min 表按时间顺序回放 Bar。
-/// 支持多品种 K-way merge，不产生 TickEvent。
+/// Bar 回放数据源 — 从 SQLite bars_1min 读取，按需聚合为多周期 Bar。
+/// periodMinutes=1 直接输出, 5/15/30/60 即时聚合, 不落地存储。
 /// </summary>
 public class HistoricalBarFeed : IDataFeed
 {
     private readonly BarStore _store;
-    private readonly string _table;
+    private readonly int _periodMinutes;
     private DateTime _startTime;
     private DateTime _endTime;
     private IReadOnlyList<string> _instruments = [];
@@ -21,11 +22,27 @@ public class HistoricalBarFeed : IDataFeed
     public DateTime StartTime => _startTime;
     public DateTime EndTime => _endTime;
 
-    public HistoricalBarFeed(BarStore store, string table = "bars_1min")
+    /// <param name="store">BarStore 实例</param>
+    /// <param name="periodMinutes">Bar 周期: 1=原始1min, 5/15/30/60=即时聚合</param>
+    public HistoricalBarFeed(BarStore store, int periodMinutes = 1)
     {
         _store = store;
-        _table = table;
+        _periodMinutes = periodMinutes;
     }
+
+    /// <summary>预热用：预加载 1min Bar（聚合后返回）</summary>
+    public async Task LoadBars(string instrumentId, DateTime start, DateTime end)
+    {
+        var bars = await _store.QueryBarsAsync(instrumentId, start, end, "bars_1min");
+        if (_periodMinutes > 1)
+            bars = new MultiBarAggregator(_periodMinutes).Aggregate(bars).ToList();
+        _warmupBars.AddRange(bars);
+    }
+
+    public IReadOnlyList<Bar> GetWarmupBars(string instrumentId)
+        => _warmupBars.Where(b => b.InstrumentId == instrumentId).ToList();
+
+    private readonly List<Bar> _warmupBars = new();
 
     public void Initialize(DateTime startTime, DateTime endTime, IReadOnlyList<string> instruments)
     {
@@ -39,25 +56,26 @@ public class HistoricalBarFeed : IDataFeed
     {
         if (_instruments.Count == 0) yield break;
 
-        // 1. 并行加载各品种 Bar
         var allBars = new List<Bar>();
         foreach (var inst in _instruments)
         {
             if (ct.IsCancellationRequested) yield break;
-            var bars = await _store.QueryBarsAsync(inst, _startTime, _endTime, _table, ct);
+            var bars = await _store.QueryBarsAsync(inst, _startTime, _endTime, "bars_1min", ct);
+
+            // 实时聚合
+            if (_periodMinutes > 1)
+                bars = new MultiBarAggregator(_periodMinutes).Aggregate(bars).ToList();
+
             allBars.AddRange(bars);
         }
 
-        // 2. 按 bar_time 排序（K-way merge 简化版：全量排序。品种 < 20 时性能可接受）
         allBars.Sort((a, b) => a.BarTime.CompareTo(b.BarTime));
 
-        // 3. 产出 BarEvent 流
         DateTime? prevTime = null;
         foreach (var bar in allBars)
         {
             if (ct.IsCancellationRequested) yield break;
-            var isNew = prevTime == null || bar.BarTime.Minute != prevTime.Value.Minute
-                || bar.BarTime.Date != prevTime.Value.Date;
+            var isNew = prevTime == null || bar.BarTime != prevTime.Value;
             yield return new BarEvent
             {
                 Bar = bar,

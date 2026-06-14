@@ -1,0 +1,20 @@
+{
+  "StrategyId": "ma-cross-multi",
+  "StrategyType": "MaCross",
+  "Description": "双均线多品种 — rb2005 + ag2006 + i2005",
+  "Version": 1,
+  "Instruments": ["rb2005", "ag2006", "i2005"],
+  "PrimaryBarType": "bars_1min",
+  "AllocatedCapital": 300000,
+  "MaxDrawdownPct": 0.20,
+  "MaxPositionPerInstrument": 5,
+  "Priority": 1,
+  "Parameters": {
+    "FastPeriod": 5,
+    "SlowPeriod": 20,
+    "Quantity": 1
+  },
+  "RiskRules": [],
+  "SessionFilter": "All",
+  "SkipAuction": true
+}

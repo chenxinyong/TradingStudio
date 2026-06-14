@@ -12,5 +12,6 @@
   <Project Path="TradingStudio.Data/TradingStudio.Data.csproj" />
   <Project Path="TradingStudio.Engine/TradingStudio.Engine.csproj" />
   <Project Path="TradingStudio.Research/TradingStudio.Research.csproj" />
+  <Project Path="TradingStudio.ToolBox/TradingStudio.ToolBox.csproj" />
   <Project Path="TradingStudio/TradingStudio.csproj" />
 </Solution>

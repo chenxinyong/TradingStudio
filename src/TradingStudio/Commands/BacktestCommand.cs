@@ -97,8 +97,8 @@ public class BacktestCommand
         else
         {
             var store = new BarStore(dbPath);
-            var table = strategyConfig.PrimaryBarType ?? "bars_1min";
-            dataFeed = new HistoricalBarFeed(store, table);
+            var period = strategyConfig.BarPeriodMinutes > 0 ? strategyConfig.BarPeriodMinutes : 1;
+            dataFeed = new HistoricalBarFeed(store, period);
         }
 
         // 5. 创建引擎并运行
