@@ -39,13 +39,15 @@
 
 | 组件 | 文档依据 | 优先级 |
 |---|---|---|
-| Exchange/Symbol/Contract 实体 | doc 10 DDL | **P0** |
+| **TradingStudio.ToolBox** | CLI 数据工具集 | **P0** |
+| CSV Tick 导入器 | doc 02, 12 部署设计 | **P0** |
+| Jinshuyuan RAR 导入器 | doc 12 部署设计 | **P0** |
 | CommissionRule/MarginRule 实体 | doc 10 DDL | **P1** |
 | TradingSession 实体 | doc 10 DDL | **P1** |
 | ITickStore 接口 + 实现 | doc 02 | **P1** |
 | PostgreSQL 数据库 | doc 10 DDL | **P0** |
-| HandyControl UI 组件库 | doc 13 | P2 |
-| LiveCharts2 绩效面板 | doc 13 | P2 |
+| HandyControl UI 组件库 | doc 13 | Phase 4（推迟，FP4 复杂度最小化） |
+| LiveCharts2 绩效面板 | doc 13 | Phase 4（推迟，OxyPlot 先覆盖） |
 | SignalR 客户端实现 | doc 13 | P2 |
 
 ---

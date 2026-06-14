@@ -38,6 +38,26 @@ public static class CsvTickImporter
     }
 
     /// <summary>
+    /// 从 RAR 内文件名提取合约代码和交易日。
+    /// 格式: {contract}_{YYYYMMDD}.csv  例: "cu2501_20250601.csv", "ag主力连续_20210104.csv"
+    /// </summary>
+    public static (string Symbol, DateOnly TradingDay) ParseRarFileName(string filePath)
+    {
+        var name = Path.GetFileNameWithoutExtension(filePath); // "cu2501_20250601"
+        var lastUnderscore = name.LastIndexOf('_');
+        if (lastUnderscore < 0)
+            throw new FormatException($"无法解析 RAR 文件名: {filePath}");
+
+        var symbol = name[..lastUnderscore];        // "cu2501" or "ag主力连续"
+        var dateStr = name[(lastUnderscore + 1)..]; // "20250601"
+
+        if (DateOnly.TryParseExact(dateStr, "yyyyMMdd", out var day))
+            return (symbol, day);
+
+        throw new FormatException($"无法解析 RAR 文件名日期: {filePath}");
+    }
+
+    /// <summary>
     /// 流式解析金数源 CSV 文件，yield 每条 Tick。
     /// Encoding: GBK (code page 936)
     /// Delimiter: comma

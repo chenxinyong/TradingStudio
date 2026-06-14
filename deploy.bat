@@ -5,6 +5,7 @@ REM
 REM  Output:
 REM    dist/Server/  Trading Engine (Windows Service, 7x24)
 REM    dist/Desktop/ K-line Chart (WPF Desktop, on-demand)
+REM    dist/ToolBox/ Data Tools CLI (import/export/verify/convert/info)
 REM
 REM  Requires: Visual Studio 2026+ (for C++/CLI wrapper)
 REM
@@ -16,14 +17,14 @@ set DIST=%ROOT%dist
 set LOG=%TEMP%\deploy-publish.log
 
 echo ========================================
-echo  1/5  C++/CLI Wrapper
+echo  1/7  C++/CLI Wrapper
 echo ========================================
 call "%ROOT%src\CTP\Wrapper\build.bat"
 if %ERRORLEVEL% NEQ 0 (echo FAIL & exit /b 1)
 
 echo.
 echo ========================================
-echo  2/5  TradingStudio (Engine)
+echo  2/7  TradingStudio (Engine)
 echo ========================================
 REM use msbuild (not dotnet publish) because TradingStudio
 REM references CTPWrapper.vcxproj which requires C++ toolchain
@@ -36,7 +37,7 @@ findstr /V "info :" "%LOG%"
 
 echo.
 echo ========================================
-echo  3/5  TradingStudio.UI (Desktop)
+echo  3/7  TradingStudio.UI (Desktop)
 echo ========================================
 dotnet publish "%ROOT%src\TradingStudio.UI\TradingStudio.UI.csproj" -c Release -o "%DIST%\Desktop" --self-contained false > "%LOG%" 2>&1
 if %ERRORLEVEL% NEQ 0 (
@@ -47,7 +48,18 @@ findstr /V "info :" "%LOG%"
 
 echo.
 echo ========================================
-echo  4/5  Copy CTP Dependencies
+echo  4/7  TradingStudio.ToolBox (CLI)
+echo ========================================
+dotnet publish "%ROOT%src\TradingStudio.ToolBox\TradingStudio.ToolBox.csproj" -c Release -o "%DIST%\ToolBox" --self-contained false > "%LOG%" 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    type "%LOG%"
+    echo FAIL & exit /b 1
+)
+findstr /V "info :" "%LOG%"
+
+echo.
+echo ========================================
+echo  5/7  Copy CTP Dependencies
 echo ========================================
 copy /Y "%ROOT%src\CTP\Wrapper\bin\Release\*.dll" "%DIST%\Server\" >nul 2>&1
 copy /Y "%ROOT%src\CTP\Wrapper\bin\Debug\*.dll" "%DIST%\Server\" >nul 2>&1
@@ -56,11 +68,21 @@ echo DLLs deployed
 
 echo.
 echo ========================================
-echo  5/5  Generate symbols.json
+echo  6/7  Generate symbols.json
 echo ========================================
 python "%ROOT%src\Scripts\gen_symbols_json.py" >nul 2>&1
 copy /Y "%ROOT%src\TradingStudio\symbols.json" "%DIST%\Server\" >nul 2>&1
+copy /Y "%ROOT%src\TradingStudio\symbols.json" "%DIST%\ToolBox\" >nul 2>&1
 echo symbols.json deployed
+
+echo.
+echo ========================================
+echo  7/7  Deploy tools + configs
+echo ========================================
+if exist "%ROOT%deploy\install.ps1" copy /Y "%ROOT%deploy\install.ps1" "%DIST%\" >nul
+if exist "%ROOT%deploy\uninstall.ps1" copy /Y "%ROOT%deploy\uninstall.ps1" "%DIST%\" >nul
+if exist "%ROOT%deploy\configs" xcopy /E /I /Y "%ROOT%deploy\configs" "%DIST%\configs\" >nul 2>&1
+echo Tools deployed
 
 echo.
 echo ========================================
@@ -80,8 +102,24 @@ if exist "%DIST%\Desktop\TradingStudio.UI.exe" (
 ) else (
     echo   (empty)
 )
+echo.
+echo  dist/ToolBox/ (CLI)
+if exist "%DIST%\ToolBox\TradingStudio.ToolBox.exe" (
+    dir /b "%DIST%\ToolBox" 2>nul | findstr /V ".pdb$"
+) else (
+    echo   (empty)
+)
 
 echo.
+echo  dist\tools\
+if exist "%DIST%\install.ps1" echo    install.ps1
+if exist "%DIST%\uninstall.ps1" echo    uninstall.ps1
+if exist "%DIST%\configs" echo    configs\
+
+echo.
+echo  Install: powershell dist\install.ps1
 echo  Run:
 echo    Engine:  dist\Server\TradingStudio.exe collect [SHFE] [ag2608]
 echo    Desktop: dist\Desktop\TradingStudio.UI.exe
+echo    ToolBox: dist\ToolBox\TradingStudio.ToolBox.exe import -i ^<csv^>
+echo    ToolBox: dist\ToolBox\TradingStudio.ToolBox.exe info

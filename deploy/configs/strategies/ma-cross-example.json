@@ -1,0 +1,19 @@
+{
+  "id": "ma-cross-rb",
+  "name": "双均线交叉 (rb)",
+  "type": "TradingStudio.Strategy.MaCrossStrategy",
+  "enabled": false,
+  "parameters": {
+    "FastPeriod": 5,
+    "SlowPeriod": 20,
+    "Quantity": 1
+  },
+  "symbols": ["rb"],
+  "exchange": "SHFE",
+  "timeframe": "1min",
+  "riskLimits": {
+    "MaxPosition": 3,
+    "MaxDailyLoss": 5000,
+    "MaxOrderValue": 50000
+  }
+}

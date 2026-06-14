@@ -18,6 +18,16 @@ public class Order
     public decimal AvgFillPrice { get; set; }
 }
 
+/// <summary>
+/// 订单方向枚举 — 可根据实际需求扩展，如新增 Short（卖空）等方向。
+/// </summary>
 public enum OrderDirection { Buy, Sell }
+
+/// <summary>
+/// 订单类型枚举 — 可根据实际需求扩展，如新增 StopLimit（止损限价单）、TrailingStop（跟踪止损单）等类型。
+/// </summary>
 public enum OrderType { Market, Limit, Stop }
+/// <summary>
+/// 订单状态枚举 — 可根据实际需求扩展，如新增 PendingCancel（撤单中）、Expired（过期）等状态。
+/// </summary>
 public enum OrderStatus { Submitted, PartiallyFilled, Filled, Cancelled, Rejected }

@@ -247,7 +247,9 @@ src/
 │   ├── TradingStudio.UI.csproj              → net10.0-windows, UseWPF, SignalR.Client
 │   ├── App.xaml / App.xaml.cs               WPF 应用入口
 │   ├── MainWindow.xaml / MainWindow.xaml.cs  Dashboard 主窗口 (Phase 3 实现)
-│   └── (面板: 总览 / 策略列表 / 订单监控 / 告警中心 / K线图表)
+│   │                                          Dashboard-first: 1 主面板 + 按需详情窗口
+│   │                                          功能: 总览 / 策略 / 订单 / 告警 / K线图表
+│   └── 设计验证: 见 [[monitoring-client-first-principles-validation]]
 │
 ├── TradingStudio.Research/                  — (NEW) C# 研究环境
 │   ├── TradingStudio.Research.csproj        → net10.0, refs Engine + ScottPlot 5
@@ -1853,7 +1855,7 @@ Day 3: 端到端验证
 ├── CtpLiveFeed (CtpMdAdapter → DataEvent 流)
 ├── ExecutionHandler 实盘模式 (CTP TraderApi)
 ├── TradingStudio 实盘模式 (Windows Service + localhost API + SignalR)
-├── TradingStudio.UI (WPF/Blazor 监控面板)
+├── TradingStudio.UI (WPF 监控面板，SignalR-only + OxyPlot)
 ├── 策略配置热重载 (日终)
 ├── Simnow 模拟盘验证
 └── 小合约实盘
@@ -1880,7 +1882,13 @@ Day 3: 端到端验证
 ### A5. 为什么 FeedbackMonitor 和 RiskController 分开？
 RiskController 是闸门（阻断），FeedbackMonitor 是仪表盘（观测）。职责不同、触发时机不同、输出不同。
 
-### A6. 为什么指标在引擎层而非策略层？
+### A6. 为什么监控客户端用 SignalR 而非 SSE + REST 双协议？
+SignalR Hub 原生支持 request-response（Hub Method）和 server-push（Client.SendAsync），一个协议覆盖所有通信需求。SSE 只能单向推送，REST 只能请求-响应，两者叠加增加维护成本而 SignalR 已内置两者能力。详见 [[monitoring-client-first-principles-validation]]。
+
+### A7. 为什么 HandyControl/LiveCharts2 推迟到 Phase 4？
+第一性原理 FP4（复杂度是可靠性的敌人）。OxyPlot 一个库能画 K 线/权益曲线/回撤图/柱状图。WPF 原生控件足以支撑 Phase 2-3 的监控面板 UI。功能稳定后再引入额外依赖。
+
+### A8. 为什么指标在引擎层而非策略层？
 BarAggregator : Tick→Bar = IndicatorManager : Bar→衍生值。多策略共享去重。策略注册需求，引擎负责计算。
 
 ### A7. 为什么策略配置用 [StrategyParameter] 而非平铺字段？

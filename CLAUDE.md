@@ -50,6 +50,7 @@
 ```
 TradingStudio.Core           — 核心抽象、消息总线、公共接口
 TradingStudio.Data           — 行情接入、数据存储、K线合成
+TradingStudio.ToolBox        — 数据工具 CLI（导入/导出/验证/转换），独立控制台项目
 TradingStudio.Risk            — 风控引擎
 TradingStudio.Strategy      — 策略引擎
 TradingStudio.Execution    — CTP 执行网关
@@ -70,14 +71,16 @@ src/
 ├── TradingStudio.Data/    数据聚合 + 存储
 │   ├── Aggregation/       BarAggregator, DailyBarAggregator
 │   └── Storage/           BarStore (SQLite), TickCsvWriter (金数源格式)
-├── TradingStudio.Ctp/     C# 适配层 (CtpMdAdapter: Quote→Channel<TickRecord>)
-├── TradingStudio/         主程序 (.NET Host + DI + Serilog)
-│   ├── Program.cs         入口（8行）
-│   ├── Services/          CollectService, SessionScheduler, HealthMonitor
-│   ├── Options/           CollectOptions
-│   ├── appsettings.json   Serilog + CTP 连接 + 路径
-│   └── symbols.json       品种数据
-└── Scripts/               gen_symbols_json.py
+├── TradingStudio.Ctp/       C# 适配层 (CtpMdAdapter: Quote→Channel<TickRecord>)
+├── TradingStudio.ToolBox/   数据工具 CLI（独立控制台）
+│   └── 6命令: import / import-jinshuyuan / export / verify / info / convert
+├── TradingStudio/           引擎主程序 (.NET Host + DI + Serilog)
+│   ├── Program.cs           入口（live/collect/backtest）
+│   ├── Services/            CollectService, SessionScheduler, HealthMonitor
+│   ├── Options/             CollectOptions
+│   ├── appsettings.json     Serilog + CTP 连接 + 路径
+│   └── symbols.json         品种数据
+└── Scripts/                 gen_symbols_json.py
 
 test/
 ├── CtpDemo/               行情 + 交易 Demo
@@ -118,7 +121,7 @@ test/
 | 关系数据 | SQLite (Phase 1) → PostgreSQL (Phase 2) | 品种配置、订单记录 |
 | 回测框架 | 自研 | 通用回测框架不适合期货特性 |
 | 研究环境 | Python + Jupyter（可选） | pandas/numpy 做策略探索 |
-| 前端 | WPF 或 Blazor Server | C# 生态 |
+| 前端 | WPF | C# 生态，MVVM + OxyPlot + SignalR |
 
 ---
 

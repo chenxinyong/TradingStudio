@@ -9,7 +9,7 @@
 ```
 Layer 1: 结构化运行日志 → 文件（滚动）          — 运维排错
 Layer 2: 关键事件日志   → PostgreSQL            — 审计追溯 + 报表
-Layer 3: 实时运行反馈   → SignalR 推送          — WPF/Vue 监控面板
+Layer 3: 实时运行反馈   → SignalR 推送          — WPF 监控面板（Web 前端远期可选）
 Layer 4: 紧急告警       → 手机通知              — 人不在场时的最后防线
 ```
 
@@ -76,7 +76,7 @@ System.Startup        — 启动序列
 
 ---
 
-## 4. 运行时反馈 → WPF/Vue 监控面板
+## 4. 运行时反馈 → WPF 监控面板
 
 ### 4.1 实时数据（SignalR 推送，不落日志文件）
 
@@ -207,7 +207,7 @@ logs/
 
 ```csharp
 // Minimal API: GET /health
-// 返回 JSON, Vue 前端轮询, 也用于外部监控 (如 UptimeRobot)
+// 返回 JSON, WPF 面板轮询/SignalR 订阅, 也用于外部监控 (如 UptimeRobot)
 
 app.MapGet("/health", () => new
 {
@@ -268,4 +268,4 @@ app.MapGet("/health", () => new
 □ 每日自动生成报告 → Obsidian 知识库
 ```
 
-> Phase 2+ 再补充：SignalR 推送、手机告警、WPF/Vue 监控面板集成。
+> Phase 2+ 再补充：SignalR 推送、手机告警、WPF 监控面板集成。

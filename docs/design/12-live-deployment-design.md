@@ -2,7 +2,9 @@
 
 > 最终实盘部署的全景规划。从当前 v0.1.0（纯行情采集）到完整自动交易的演进路线。
 >
-> **版本**: v1.0 | **日期**: 2026-06-13 | **状态**: 设计文档，随 Phase 2-4 推进持续细化
+> **版本**: v1.2 | **日期**: 2026-06-14 | **状态**: 设计文档，随 Phase 2-4 推进持续细化
+>
+> **v1.2 修订**: 新增 TradingStudio.ToolBox 作为第三进程（独立 CLI 工具）；SSE → SignalR Hub 统一推送（v1.1 修订）
 
 ---
 
@@ -10,7 +12,7 @@
 
 1. [核心原则](#1-核心原则)
 2. [部署拓扑](#2-部署拓扑)
-3. [双进程架构](#3-双进程架构)
+3. [三进程架构](#3-三进程架构)
 4. [信号→成交完整链路](#4-信号成交完整链路)
 5. [交易日时序](#5-交易日时序)
 6. [风控横切层](#6-风控横切层)
@@ -69,8 +71,12 @@
 │  │  │  POST /api/tighten                   │   │  │
 │  │  │  POST /api/close-position            │   │  │
 │  │  │  POST /api/reload-config             │   │  │
-│  │  │  SSE  /api/stream/alerts             │   │  │
-│  │  │  SSE  /api/stream/orders             │   │  │
+│  │  │                                      │   │  │
+│  │  │  SignalR Hub (/hubs/engine)           │   │  │
+│  │  │  · "Alert" push (StrategyGroup)      │   │  │
+│  │  │  · "OrderUpdate" push (StrategyGroup)│   │  │
+│  │  │  · "Health" push (All)               │   │  │
+│  │  │  · GetSnapshot() Hub Method          │   │  │
 │  │  └──────────────────────────────────────┘   │  │
 │  └────────────────────────────────────────────┘  │
 │                                                  │
@@ -84,6 +90,13 @@
 │  │     WPF 监控面板 · 按需启动 · 可远程      │   │
 │  │     通过 localhost:5199 与引擎通信        │   │
 │  └──────────────────────────────────────────┘   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │     TradingStudio.ToolBox.exe (工具进程)  │   │
+│  │     CLI 数据工具 · 按需启动 · 离线运行    │   │
+│  │     直接读写 SQLite/PostgreSQL            │   │
+│  │     不与引擎/UI 通信（无端口/API 依赖）    │   │
+│  └──────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────┘
          │                          │
          ▼                          ▼
@@ -95,18 +108,18 @@
 
 ---
 
-## 3. 双进程架构
+## 3. 三进程架构
 
 ### 3.1 角色定义
 
-| | 引擎进程 (`TradingStudio.exe`) | UI进程 (`TradingStudio.UI.exe`) |
-|---|---|---|
-| **角色** | 主人 | 临时访客 |
-| **运行模式** | Windows Service，7×24 | 桌面应用，按需启停 |
-| **职责** | 行情采集 + 策略执行 + 下单 + 风控 | 监控面板 + 手动干预 |
-| **感知对方** | 不知道 UI 是否存在 | 通过 HTTP API 查询引擎 |
-| **崩溃影响** | 致命 — 系统停摆 | 无影响 — 引擎继续运行 |
-| **启动方式** | 系统启动自动拉起 | 远程桌面手动打开 |
+| | 引擎进程 (`TradingStudio.exe`) | UI进程 (`TradingStudio.UI.exe`) | 工具进程 (`TradingStudio.ToolBox.exe`) |
+|---|---|---|---|
+| **角色** | 主人 | 临时访客 | 工具箱 |
+| **运行模式** | Windows Service，7×24 | 桌面应用，按需启停 | CLI 工具，一次性运行 |
+| **职责** | 行情采集 + 策略执行 + 下单 + 风控 | 监控面板 + 手动干预 | 数据导入/导出/验证/转换 |
+| **感知对方** | 不知道 UI/ToolBox 是否存在 | 通过 SignalR 连接引擎 | 不连接引擎——直接读写数据库 |
+| **崩溃影响** | 致命 — 系统停摆 | 无影响 — 引擎继续运行 | 无影响 — 引擎继续运行 |
+| **启动方式** | 系统启动自动拉起 | 远程桌面手动打开 | 命令行手动调用 |
 
 ### 3.2 引擎进程 DI 注册
 
@@ -164,8 +177,14 @@ host.Run();
   ├── POST /api/close-position  → 手动平仓
   ├── POST /api/reload-config   → 重新加载策略配置
   │
-  ├── SSE  /api/stream/alerts   → 实时告警推送
-  └── SSE  /api/stream/orders   → 实时订单推送
+  ├── SignalR Hub (/hubs/engine)  → 实时双向推送 (替代 SSE)
+  │   ├── SubscribeStrategy(id)   → UI 加入策略组
+  │   ├── GetSnapshot()           → 引擎总览快照 (Hub Method)
+  │   ├── "Alert" push            → 告警推送 (策略组)
+  │   ├── "OrderUpdate" push      → 订单更新推送 (策略组)
+  │   └── "Health" push           → 健康快照推送 (全体)
+  │
+  └── 降级: health.json 文件直读  → Layer 0 零网络依赖
 ```
 
 **关键原则**：
@@ -451,8 +470,13 @@ D:\TradingStudio\
 │   ├── CTPWrapper.dll            ← C++/CLI 封装
 │   ├── thostmduserapi_se.dll     ← CTP 行情 DLL
 │   ├── thosttraderapi_se.dll     ← CTP 交易 DLL
-│   ├── appsettings.json          ← 配置
+│   ├── appsettings.json          ← 引擎配置
 │   └── symbols.json              ← 品种数据 (75 futures)
+│
+├── tools\                        ← 数据工具（一次性 CLI）
+│   ├── TradingStudio.ToolBox.exe  ← 导入/导出/验证/转换
+│   ├── appsettings.json          ← ToolBox 配置
+│   └── UnRAR.exe                 ← 金数源 RAR 解压
 │
 ├── data\
 │   ├── ticks\                    ← Tick CSV 原始落盘
@@ -519,7 +543,7 @@ D:\TradingStudio\
     │
     ├──→ health.json 状态变更
     │
-    ├──→ EngineMonitorApi → SSE → UI 面板 (如果开着)
+    ├──→ SignalR Hub → UI 面板推送 (如果连着)
     │
     ├──→ 手机推送 (Server酱 / Pushover / 企业微信)
     │     · CTP 断线重连失败 > 3 次

@@ -102,7 +102,7 @@ static async Task RunImportJinshuyuanAsync(string[] args)
     var layer = "";
     var symbols = new List<string>();
     string? exchangeStr = null;
-    var fromMonth = "202101"; var toMonth = "202212";
+    var fromMonth = "202001"; var toMonth = "202512";
     var dataDir = @"C:\Works\Datas\Jinshuyuan";
     var dbPath = "bars_history.db";
     var dryRun = false;

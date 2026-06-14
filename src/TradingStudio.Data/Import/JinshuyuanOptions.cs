@@ -22,10 +22,13 @@ public sealed class JinshuyuanOptions
     public string? ExchangeCode { get; init; }
 
     /// <summary>起始月份 YYYYMM</summary>
-    public string FromMonth { get; init; } = "202101";
+    public string FromMonth { get; init; } = "202001";
 
     /// <summary>结束月份 YYYYMM</summary>
-    public string ToMonth { get; init; } = "202212";
+    public string ToMonth { get; init; } = "202512";
+
+    /// <summary>临时解压目录 (null=系统临时目录)</summary>
+    public string? TempDir { get; init; }
 
     /// <summary>只列不导</summary>
     public bool DryRun { get; init; }

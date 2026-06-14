@@ -139,11 +139,13 @@ public class BarAggregator : IDisposable, IAsyncDisposable
 
         // 成交量 delta = 本次累计 - 上次累计
         var dV = tick.Volume - lastCumVol;
+        if (dV < 0) dV = tick.Volume;   // 跨交易日累计重置 → 直接用当日累计
         if (dV > 0) bar.Volume += dV;
         lastCumVol = tick.Volume;
 
         // 成交额 delta
         var dTO = tick.Turnover - lastCumTO;
+        if (dTO < 0) dTO = tick.Turnover; // 跨交易日累计重置
         if (dTO > 0) bar.Turnover += dTO;
         lastCumTO = tick.Turnover;
 
