@@ -536,6 +536,6 @@ OxyPlot PlotView (View 层，只读)
 > - ⏸️ FancyCandles 备选方案 — 暂未验证，OxyPlot 目前满足需求
 >
 > **相关文档：**
-> - [Phase 2 回测系统设计 v2.1](phase2-backtest-design-v2.md) — 引擎/UI 分离架构（§15）
-> - [TradingStudio 架构设计精简版](TradingStudio架构设计-精简版.md) — 7 项目结构
-> - [数据库架构选型](10-data-model-reconciled.md)
+> - [Phase 2 回测系统设计 v2.1](design/phase2-backtest-design-v2.md) — 引擎/UI 分离架构（§15）
+> - [TradingStudio 架构设计精简版](design/TradingStudio架构设计-精简版.md) — 7 项目结构
+> - [数据库架构选型](design/10-data-model-reconciled.md)

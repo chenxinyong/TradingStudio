@@ -78,8 +78,8 @@
 
 ### 我要开始写代码，先读什么？
 
-1. [TradingStudio架构设计-精简版.md](TradingStudio架构设计-精简版.md) — 5 项目定位（注意：当前仅 Core/Data/Ctp 已实现）
-2. [11-implementation-roadmap-v2.md](11-implementation-roadmap-v2.md) — 当前代码在哪、下一步做什么
+1. [TradingStudio架构设计-精简版.md](design/TradingStudio架构设计-精简版.md) — 5 项目定位（注意：当前仅 Core/Data/Ctp 已实现）
+2. [11-implementation-roadmap-v2.md](design/11-implementation-roadmap-v2.md) — 当前代码在哪、下一步做什么
 3. [02-data-model-spec.md](02-data-model-spec.md) — TickRecord (80B) 和 Bar 的精确定义
 4. `src/TradingStudio.sln` — 直接看代码结构
 5. [TradingStudio命名规范.md](TradingStudio命名规范.md) — 命名风格参考
@@ -87,7 +87,7 @@
 ### 我要了解系统运行状态，先读什么？
 
 1. `src/TradingStudio/CLAUDE.md` — 调度逻辑、健康监控、数据命名约定（实时更新）
-2. [部署环境指南.md](部署环境指南.md) — 部署环境方案
+2. [部署环境指南.md](design/部署环境指南.md) — 部署环境方案
 3. `线上问题分析/` — 已知 Bug 和生产问题记录
 
 ---

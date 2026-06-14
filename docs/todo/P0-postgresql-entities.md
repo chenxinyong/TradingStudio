@@ -18,5 +18,5 @@
 
 ## 关联
 
-- [[../10-data-model-reconciled]]
-- [[../11-implementation-roadmap-v2]] Step 1
+- [[../design/10-data-model-reconciled]]
+- [[../design/11-implementation-roadmap-v2]] Step 1
