@@ -61,7 +61,7 @@ public class HistoricalBarFeed : IDataFeed
             yield return new BarEvent
             {
                 Bar = bar,
-                Time = new DateTimeOffset(bar.BarTime, TimeSpan.FromHours(8)),
+                Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero),
                 IsNewBar = isNew,
             };
             prevTime = bar.BarTime;

@@ -9,8 +9,8 @@ namespace TradingStudio.Core.Engine;
 /// </summary>
 public interface IExecutionHandler
 {
-    /// <summary>提交订单，记录策略归属</summary>
-    OrderTicket Submit(Order order, string strategyId);
+    /// <summary>提交订单，记录策略归属。可选传入 portfolio 做风控检查。</summary>
+    OrderTicket Submit(Order order, string strategyId, Core.Risk.IPortfolioState? portfolio = null);
 
     /// <summary>取消订单</summary>
     bool Cancel(long orderId);

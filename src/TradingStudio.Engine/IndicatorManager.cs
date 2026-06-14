@@ -56,11 +56,13 @@ public class IndicatorManager
             : double.NaN;
     }
 
-    /// <summary>获取指标完整实例。</summary>
+    /// <summary>获取指标完整实例（按类型匹配）。</summary>
     public T? Get<T>(string instrumentId, string tag = "") where T : class, IIndicator
     {
-        var key = $"{instrumentId}:{typeof(T).Name}:{tag}";
-        return _indicators.GetValueOrDefault(key) as T;
+        return _indicators.Values
+            .FirstOrDefault(i => i is T && i.Tag == tag
+                && _byInstrument.ContainsKey(instrumentId)
+                && _byInstrument[instrumentId].Contains(i)) as T;
     }
 
     /// <summary>重置所有指标。</summary>

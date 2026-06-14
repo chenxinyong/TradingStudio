@@ -13,6 +13,24 @@ public static class StrategyFactory
     public static void Register<T>(string name) where T : IStrategy
         => _registry[name] = typeof(T);
 
+    /// <summary>自动发现程序集中所有 IStrategy 实现并注册（类名去掉 Strategy 后缀）</summary>
+    public static void DiscoverFromAssembly(System.Reflection.Assembly assembly)
+    {
+        foreach (var type in assembly.GetTypes())
+        {
+            if (type is { IsAbstract: false, IsInterface: false } && typeof(IStrategy).IsAssignableFrom(type))
+            {
+                var name = type.Name;                         // "MaCrossStrategy"
+                if (name.EndsWith("Strategy"))
+                    name = name[..^8];                        // "MaCross"
+                if (!_registry.ContainsKey(name))
+                    _registry[name] = type;
+            }
+        }
+    }
+
+    public static IReadOnlyList<string> RegisteredNames => _registry.Keys.OrderBy(k => k).ToList();
+
     public static IStrategy Create(StrategyConfig config)
     {
         if (!_registry.TryGetValue(config.StrategyType, out var type))

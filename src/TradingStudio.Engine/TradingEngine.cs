@@ -15,6 +15,7 @@ public class TradingEngine
     private readonly IndicatorManager _indicators;
     private readonly StrategyContainer _strategies;
     private readonly RiskController _risk;
+    private readonly FeedbackMonitor _feedback;
     private readonly EngineOptions _options;
     private readonly FutureRegistry _registry;
 
@@ -25,6 +26,7 @@ public class TradingEngine
         IndicatorManager indicators,
         StrategyContainer strategies,
         RiskController risk,
+        FeedbackMonitor feedback,
         EngineOptions options,
         FutureRegistry registry)
     {
@@ -34,6 +36,7 @@ public class TradingEngine
         _indicators = indicators;
         _strategies = strategies;
         _risk = risk;
+        _feedback = feedback;
         _options = options;
         _registry = registry;
     }
@@ -43,9 +46,13 @@ public class TradingEngine
     {
         _dataFeed.Initialize(_options.StartTime, _options.EndTime, _options.Instruments);
 
+        // 实盘模式
+        if (_execution is ExecutionHandler exec) exec.IsLive = _options.IsLive;
+
         // 1. 初始化策略
         var equityCurve = new List<(DateTimeOffset Time, decimal Equity)>();
         var globalTrades = new List<Trade>();
+        var tradesLock = new object();
 
         foreach (var config in _options.StrategyConfigs)
         {
@@ -64,53 +71,127 @@ public class TradingEngine
         Bar? prevBar = null;
         var firstBar = true;
 
-        await foreach (var evt in _dataFeed.StreamAsync(ct))
-        {
-            if (evt is not BarEvent barEvt) continue;
-
-            var bar = barEvt.Bar;
-            var inst = _registry.Resolve(bar.InstrumentId);
-
-            // 更新策略上下文中的历史 Bar
-            foreach (var slot in _strategies.AllSlots)
-                ((EngineStrategyContext)slot.Context).SetCurrentTime(barEvt.Time);
-
-            if (!firstBar && prevBar != null)
+        // 实盘模式：启动 CTP 成交回报消费
+        var fillChannel = (_execution is ExecutionHandler exec2) ? exec2.FillChannel : null;
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var fillReadTask = fillChannel != null
+            ? Task.Run(async () =>
             {
-                // ① 用当前 Bar 撮合上一轮 Bar 中提交的订单
-                //    关键：策略在 prevBar.OnBar 中下单，此时用本 Bar 的价格成交
-                //    市价单 → 本 Bar Open，限价/止损 → 检查本 Bar 区间
-                if (inst != null)
+                var reader = fillChannel.Reader;
+                while (await reader.WaitToReadAsync(cts.Token))
                 {
-                    var fills = _execution.ProcessBar(bar, inst);
-                    foreach (var fill in fills)
+                    while (reader.TryRead(out var fill))
                     {
                         var trade = _portfolio.ProcessFill(fill, _registry);
-                        if (trade != null) globalTrades.Add(trade);
-
-                        // 通知策略
+                        lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
                         _strategies.DispatchOrderEvent(fill);
                     }
                 }
+            }, ct)
+            : Task.CompletedTask;
+
+        await foreach (var evt in _dataFeed.StreamAsync(ct))
+        {
+            switch (evt)
+            {
+                case TickEvent tickEvt:
+                {
+                    var inst = _registry.Resolve(tickEvt.InstrumentId);
+                    if (inst == null) break;
+
+                    // ① Tick 撮合 — 处理已有订单（限价/止损可能被触发）
+                    var tickFills = _execution.ProcessTick(tickEvt.Tick, tickEvt.InstrumentId, inst);
+                    foreach (var fill in tickFills)
+                    {
+                        var trade = _portfolio.ProcessFill(fill, _registry);
+                        if (trade != null) globalTrades.Add(trade);
+                        _feedback.RecordFill(fill, fill.StrategyId);
+                        if (trade != null) _feedback.RecordTrade(trade, fill.StrategyId);
+                        _strategies.DispatchOrderEvent(fill);
+                    }
+
+                    // ② 策略 OnTick
+                    _strategies.DispatchTick(tickEvt);
+
+                    // ③ 同 Tick 撮合新下的市价单
+                    if (_options.TickFillDelay == 0 && _execution.ActiveOrders.Count > 0)
+                    {
+                        var newFills = _execution.ProcessTick(tickEvt.Tick, tickEvt.InstrumentId, inst);
+                        foreach (var fill in newFills)
+                        {
+                            var trade = _portfolio.ProcessFill(fill, _registry);
+                            if (trade != null) globalTrades.Add(trade);
+                            _feedback.RecordFill(fill, fill.StrategyId);
+                            if (trade != null) _feedback.RecordTrade(trade, fill.StrategyId);
+                            _strategies.DispatchOrderEvent(fill);
+                        }
+                    }
+                    break;
+                }
+
+                case BarEvent barEvt:
+                {
+                    var bar = barEvt.Bar;
+                    var inst = _registry.Resolve(bar.InstrumentId);
+
+                    // 按市价更新持仓未实现盈亏
+                    if (inst != null) _portfolio.UpdateMarketPrice(bar, inst);
+
+                    foreach (var slot in _strategies.AllSlots)
+                        ((EngineStrategyContext)slot.Context).SetCurrentTime(barEvt.Time);
+
+                    // Bar 撮合 — 处理上一轮 OnBar 中下的订单（前向偏差防护）
+                    if (!firstBar && prevBar != null && inst != null)
+                    {
+                        var barFills = _execution.ProcessBar(bar, inst);
+                        foreach (var fill in barFills)
+                        {
+                            var trade = _portfolio.ProcessFill(fill, _registry);
+                            if (trade != null) globalTrades.Add(trade);
+                            _feedback.RecordFill(fill, fill.StrategyId);
+                            if (trade != null) _feedback.RecordTrade(trade, fill.StrategyId);
+                            _strategies.DispatchOrderEvent(fill);
+                        }
+                    }
+
+                    // 更新指标 → 策略 OnBar
+                    _indicators.Feed(bar);
+                    _strategies.DispatchBar(barEvt);
+
+                    // 反馈采样 + 告警
+                    _feedback.SamplePortfolio(_portfolio);
+                    var alerts = _feedback.CheckAlerts();
+                    if (alerts.Count > 0) _strategies.DispatchAlert(alerts);
+
+                    // 权益采样
+                    equityCurve.Add((barEvt.Time, _portfolio.Equity));
+
+                    prevBar = bar;
+                    firstBar = false;
+                    break;
+                }
             }
-
-            // ② 更新指标（在策略 OnBar 之前）
-            _indicators.Feed(bar);
-
-            // ③ 策略 OnBar 回调
-            _strategies.DispatchBar(barEvt);
-
-            // ④ 权益采样
-            equityCurve.Add((barEvt.Time, _portfolio.Equity));
-
-            prevBar = bar;
-            firstBar = false;
         }
 
         // 3. 结束
         _strategies.DispatchEndOfAlgorithm();
 
-        // 4. 确保所有策略的最终持仓信息反映在报告中
+        if (_options.IsLive)
+        {
+            // 实盘模式：持续运行，此处不可达（StreamAsync 不结束）
+            await fillReadTask;
+            return new EngineReport();
+        }
+
+        // 等待 CTP 回调消费完成
+        if (fillChannel != null)
+        {
+            fillChannel.Writer.Complete();
+            cts.Cancel();
+            try { await fillReadTask; } catch (OperationCanceledException) { }
+        }
+
+        // 回测模式：生成报告
         Console.WriteLine($"[Engine] Done. Trades={globalTrades.Count} FinalEquity={_portfolio.Equity:C}");
 
         return new EngineReport
@@ -135,7 +216,7 @@ public class TradingEngine
                     _portfolio.GetSubPortfolio(slot.Config.StrategyId),
                     globalTrades.Where(t => t.StrategyId == slot.Config.StrategyId).ToList(),
                     equityCurve)).ToList(),
-            MonitorSummary = new MonitorSummary(),
+            MonitorSummary = _feedback.ToSummary(),
             ConfigSnapshots = _options.StrategyConfigs.ToList(),
         };
     }

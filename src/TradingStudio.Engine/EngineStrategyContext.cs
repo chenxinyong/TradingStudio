@@ -71,7 +71,7 @@ internal class EngineStrategyContext : StrategyContext
             Type = OrderType.Market,
             Quantity = quantity,
             Tag = tag,
-        }, StrategyId);
+        }, StrategyId, _portfolio);
 
     public override OrderTicket MarketSell(string instrumentId, int quantity, string? tag = null) =>
         _execution.Submit(new Order

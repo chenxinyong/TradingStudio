@@ -12,7 +12,18 @@ public class ExecutionHandler : IExecutionHandler
     private readonly List<Order> _activeOrders = new();
     private readonly List<OrderEvent> _orderHistory = new();
     private readonly RiskController _risk;
+    private readonly Dictionary<string, int> _lastCumulativeVolume = new();
     private long _nextOrderId = 1;
+
+    /// <summary>实盘模式：市价单发往 CTP 而非本地撮合</summary>
+    public bool IsLive { get; set; }
+
+    /// <summary>实盘模式：引擎调用此委托将订单发往 CTP。CTP 集成点。</summary>
+    public Action<Order>? SendToExchange { get; set; }
+
+    /// <summary>CTP 成交回报通道（实盘模式：CTP 回调写入 FillChannel.Writer，引擎后台消费）</summary>
+    public System.Threading.Channels.Channel<OrderEvent> FillChannel { get; }
+        = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
 
     public IReadOnlyList<Order> ActiveOrders => _activeOrders;
     public IReadOnlyList<Order> GetActiveOrders(string strategyId) =>
@@ -24,9 +35,8 @@ public class ExecutionHandler : IExecutionHandler
         _risk = risk;
     }
 
-    public OrderTicket Submit(Order order, string strategyId)
+    public OrderTicket Submit(Order order, string strategyId, Core.Risk.IPortfolioState? portfolio = null)
     {
-        // init-only 属性必须通过构造器设置
         var id = Interlocked.Increment(ref _nextOrderId);
         order = new Order
         {
@@ -43,7 +53,30 @@ public class ExecutionHandler : IExecutionHandler
             CreatedTime = DateTimeOffset.UtcNow,
         };
 
+        // 风控检查
+        if (portfolio != null)
+        {
+            var riskResult = _risk.CheckPreOrder(order, portfolio);
+            if (!riskResult.Passed)
+            {
+                order.Status = OrderStatus.Rejected;
+                _orderHistory.Add(new OrderEvent
+                {
+                    OrderId = id, InstrumentId = order.InstrumentId,
+                    StrategyId = strategyId, Direction = order.Direction,
+                    Quantity = order.Quantity, OrderQty = order.Quantity,
+                    FilledQty = 0, Type = OrderEventType.Rejected,
+                    Message = riskResult.Reason, Time = DateTimeOffset.UtcNow,
+                });
+                return new OrderTicket { OrderId = id, Status = OrderStatus.Rejected };
+            }
+        }
+
         _activeOrders.Add(order);
+
+        // 实盘模式：发往交易所
+        if (IsLive && order.Type == OrderType.Market)
+            SendToExchange?.Invoke(order);
 
         var evt = new OrderEvent
         {
@@ -82,8 +115,97 @@ public class ExecutionHandler : IExecutionHandler
 
     public IReadOnlyList<OrderEvent> ProcessTick(TickRecord tick, string instrumentId, Future future)
     {
-        // Phase 2b: Bid/Ask 滑点撮合
-        return [];
+        var fills = new List<OrderEvent>();
+
+        // 增量成交量（流动性约束）
+        int incrementalVolume = GetIncrementalVolume(instrumentId, (int)tick.Volume);
+        if (incrementalVolume <= 0) return fills;
+
+        int remainingVolume = incrementalVolume;
+
+        // 按策略优先级排序
+        var pending = _activeOrders
+            .Where(o => o.InstrumentId == instrumentId)
+            .OrderBy(o => o.OrderId)
+            .ToList();
+
+        foreach (var order in pending)
+        {
+            if (remainingVolume <= 0) break;
+
+            var fill = TryMatchTick(order, tick, future, ref remainingVolume);
+            if (fill != null)
+                fills.Add(fill);
+        }
+
+        foreach (var f in fills)
+            _activeOrders.RemoveAll(o => o.OrderId == f.OrderId);
+
+        return fills;
+    }
+
+    /// <summary>用 Tick 撮合一个订单。Bid/Ask 价格 + 流动性约束。</summary>
+    private OrderEvent? TryMatchTick(Order order, TickRecord tick, Future future, ref int remainingVolume)
+    {
+        // 实盘模式：市价单已在 CTP 成交，本地不撮合
+        if (IsLive && order.Type == OrderType.Market) return null;
+
+        var fillQty = Math.Min(order.Quantity - order.FilledQuantity, remainingVolume);
+        if (fillQty <= 0) return null;
+
+        decimal? fillPrice = order.Type switch
+        {
+            OrderType.Market when order.Direction == OrderDirection.Buy
+                => (decimal)(tick.AskPrice1 + future.TickSize) / TickRecord.PriceScale,
+            OrderType.Market when order.Direction == OrderDirection.Sell
+                => (decimal)(tick.BidPrice1 - future.TickSize) / TickRecord.PriceScale,
+            OrderType.Limit when order.Direction == OrderDirection.Buy
+                && tick.AskPrice1 > 0 && tick.AskPrice1 <= order.LimitPrice * TickRecord.PriceScale
+                => (decimal)tick.AskPrice1 / TickRecord.PriceScale,
+            OrderType.Limit when order.Direction == OrderDirection.Sell
+                && tick.BidPrice1 > 0 && tick.BidPrice1 >= order.LimitPrice * TickRecord.PriceScale
+                => (decimal)tick.BidPrice1 / TickRecord.PriceScale,
+            OrderType.Stop when order.Direction == OrderDirection.Buy
+                && tick.AskPrice1 > 0 && tick.AskPrice1 >= order.StopPrice * TickRecord.PriceScale
+                => (decimal)tick.AskPrice1 / TickRecord.PriceScale,
+            OrderType.Stop when order.Direction == OrderDirection.Sell
+                && tick.BidPrice1 > 0 && tick.BidPrice1 <= order.StopPrice * TickRecord.PriceScale
+                => (decimal)tick.BidPrice1 / TickRecord.PriceScale,
+            _ => null
+        };
+
+        if (fillPrice == null) return null;
+
+        remainingVolume -= fillQty;
+
+        var contractValue = fillPrice.Value * future.TradingUnit * fillQty;
+        var fee = Math.Max(1m, contractValue * 0.0001m);
+
+        // 滑点：市价单与理论中间价的偏差
+        var midPrice = (tick.BidPrice1 + tick.AskPrice1) / 2m / TickRecord.PriceScale;
+        var slippage = Math.Abs(fillPrice.Value - midPrice);
+
+        order.FilledQuantity += fillQty;
+        order.AvgFillPrice = fillPrice.Value;
+        order.Status = order.FilledQuantity >= order.Quantity
+            ? OrderStatus.Filled : OrderStatus.PartiallyFilled;
+
+        return new OrderEvent
+        {
+            OrderId = order.OrderId,
+            InstrumentId = order.InstrumentId,
+            StrategyId = order.StrategyId,
+            Direction = order.Direction,
+            Quantity = fillQty,
+            OrderQty = order.Quantity,
+            FilledQty = order.FilledQuantity,
+            Type = order.Status == OrderStatus.Filled
+                ? OrderEventType.Filled : OrderEventType.PartiallyFilled,
+            FillPrice = fillPrice.Value,
+            Fee = fee,
+            Slippage = slippage,
+            Time = DateTimeOffset.UtcNow,
+        };
     }
 
     public IReadOnlyList<OrderEvent> ProcessBar(Bar bar, Future future)
@@ -111,6 +233,9 @@ public class ExecutionHandler : IExecutionHandler
     /// <summary>用 Bar 撮合一个订单。前进偏差防护：用本 Bar Open 成交市价单。</summary>
     private OrderEvent? MatchBar(Order order, Bar bar, Future future)
     {
+        // 实盘模式：市价单已在 CTP 成交，本地不撮合
+        if (IsLive && order.Type == OrderType.Market) return null;
+
         decimal fillPrice;
         var fillQty = order.Quantity - order.FilledQuantity;
         if (fillQty <= 0) return null;
@@ -178,5 +303,15 @@ public class ExecutionHandler : IExecutionHandler
             Slippage = slippage,
             Time = DateTimeOffset.UtcNow,
         };
+    }
+
+    private int GetIncrementalVolume(string instrumentId, int currentCumulative)
+    {
+        if (!_lastCumulativeVolume.TryGetValue(instrumentId, out var last))
+            last = 0;
+        int delta = currentCumulative - last;
+        if (delta < 0) delta = currentCumulative;
+        _lastCumulativeVolume[instrumentId] = currentCumulative;
+        return delta;
     }
 }

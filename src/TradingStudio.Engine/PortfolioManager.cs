@@ -55,8 +55,22 @@ public class PortfolioManager : IPortfolioState
         _subPortfolios[strategyId] = sub;
     }
 
-    /// <summary>更新持仓市价（Tick 模式用，Phase 2b）</summary>
-    public void UpdateMarketPrice(string instrumentId, TickRecord tick) { }
+    /// <summary>按 Bar 收盘价更新持仓未实现盈亏</summary>
+    public void UpdateMarketPrice(Bar bar, Future future)
+    {
+        var price = (decimal)bar.CloseDouble;
+        if (!_positions.TryGetValue(bar.InstrumentId, out var pos)) return;
+        var mult = future.TradingUnit;
+        pos.MarketPrice = (double)price;
+        if (pos.Quantity > 0)
+            pos.UnrealizedPnl = (double)((price - pos.AvgPrice) * pos.Quantity * mult);
+        else if (pos.Quantity < 0)
+            pos.UnrealizedPnl = (double)((pos.AvgPrice - price) * Math.Abs(pos.Quantity) * mult);
+        else
+            pos.UnrealizedPnl = 0;
+        _positions[bar.InstrumentId] = pos;
+        Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
+    }
 
     /// <summary>
     /// 处理成交。更新持仓/资金/分账，产生 Trade 记录。
@@ -112,7 +126,8 @@ public class PortfolioManager : IPortfolioState
                 else
                 {
                     // 完全平仓
-                    var pnl = (fill.FillPrice - pos.AvgPrice) * Math.Abs(pos.Quantity)
+                    var mult = future.TradingUnit;
+                    var pnl = (fill.FillPrice - pos.AvgPrice) * Math.Abs(pos.Quantity) * mult
                         * (pos.Quantity > 0 ? 1 : -1);
                     var trade = new Trade
                     {
@@ -133,7 +148,7 @@ public class PortfolioManager : IPortfolioState
                     _trades.Add(trade);
 
                     // 更新权益
-                    Equity = Cash + MarginUsed;
+                    Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
                     if (Equity > PeakEquity) PeakEquity = Equity;
 
                     // 更新分账
@@ -152,7 +167,8 @@ public class PortfolioManager : IPortfolioState
                 // 反向开仓（先平后开）
                 // 简化：先平旧仓，再开新仓
                 var closeQty = Math.Abs(pos.Quantity);
-                var pnl = (fill.FillPrice - pos.AvgPrice) * closeQty
+                var mult = future.TradingUnit;
+                var pnl = (fill.FillPrice - pos.AvgPrice) * closeQty * mult
                     * (pos.Quantity > 0 ? 1 : -1);
                 var closeFee = pos.Commission;
 
@@ -211,7 +227,7 @@ public class PortfolioManager : IPortfolioState
             sp.MarginUsed = MarginUsed;
         }
 
-        Equity = Cash + MarginUsed;
+        Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
         if (Equity > PeakEquity) PeakEquity = Equity;
 
         return null; // 加仓不产生 Trade
@@ -227,7 +243,7 @@ public class SubPortfolio
     public decimal MarginUsed { get; internal set; }
     public decimal PeakEquity { get; internal set; }
     public decimal TodayPnL { get; internal set; }
-    public decimal Equity => Cash + MarginUsed;
+    public decimal Equity => Cash + MarginUsed + Positions.Sum(p => (decimal)p.UnrealizedPnl);
     public IReadOnlyList<Position> Positions { get; internal set; } = [];
 
     public SubPortfolio(string strategyId, decimal allocatedCapital)
