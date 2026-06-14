@@ -828,3 +828,78 @@ src/TradingStudio.UI/
 > - OxyPlot 主力, SciChart 作为 Phase 4 升级路径
 > - 使用 CommunityToolkit.Mvvm 内置 Messenger, 不引入额外 EventAggregator
 > - 回测在客户端本地执行 (内嵌 TradingEngine), 不依赖服务器
+> - WPF 原生控件优先, HandyControl 推迟 Phase 4
+> - 绩效面板: OxyPlot 统一 (不以 LiveCharts2 增加依赖)
+
+---
+
+## 附录 A: 图表库选型依据
+
+> 详细评估见原 `13-ui-technology-selection.md`，此处保留关键结论。
+
+### A.1 WPF vs Blazor Server
+
+| 维度 | WPF | Blazor Server |
+|------|-----|---------------|
+| 延迟 | 亚毫秒（本地） | 10-50ms（网络 + DOM） |
+| 实时推送 | 内存事件，零拷贝 | SignalR 序列化 |
+| 开发体验 | XAML + C#，20 年舒适区 | 需学 Web 前端 |
+| 离线能力 | 本地运行 | 需浏览器 |
+
+**选择 WPF** — 实时行情对延迟敏感，XAML 是舒适区。
+
+### A.2 图表库评估
+
+| 维度 | OxyPlot | SciChart | FancyCandles |
+|------|:---:|:---:|:---:|
+| 授权 | MIT | $1,095/年 | GPL-3.0 |
+| MVVM | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| K线功能 | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| 性能 | CPU 渲染 | GPU 加速 | WPF 原生 |
+| 社区 | 千万下载 | 企业级 | 126 star |
+
+**OxyPlot 主力** — MVVM 最干净，MIT 免费，Phase 2-3 够用。Phase 4 如需升级 → SciChart/ProEssentials。
+
+### A.3 淘汰方案
+
+| 方案 | 淘汰原因 |
+|------|---------|
+| ScottPlot 5 | 官方不支持 MVVM，"自己写 UserControl"是架构债 |
+| LiveCharts2 | 金融 K 线太弱，只适合绩效面板 |
+| 自绘 SkiaSharp | 造轮子 3 个月+ |
+
+### A.4 UI 组件库
+
+**WPF 原生控件 (Phase 2-3) → HandyControl (Phase 4)**
+
+OxyPlot 一个库画所有图表，WPF DataGrid/Button/TreeView 原生够用。HandyControl 提供深色主题和 80+ 控件，但增加依赖，Phase 4 按需引入。
+
+---
+
+## 附录 B: K 线图数据流
+
+```
+回测模式                          实盘模式
+────────                          ────────
+BarStore.QueryBarsAsync()         CtpLiveFeed → TickEvent
+    │                                  │
+    ▼                                  ▼
+Bar[] → HighLowItem[] 转换        BarAggregator → BarEvent
+    │                                  │
+    ▼                                  ▼
+ChartViewModel.KLineModel         ChartViewModel.KLineModel
+  = new PlotModel {                (增量更新最后一根 Bar)
+    Series = {
+      CandleStickSeries,          SignalR Hub → EngineHubClient
+      LineSeries (MA overlay),        │
+      VolumeSeries,                   ▼
+      MacdSeries,                ObservableCollection 增量更新
+      RsiSeries                      │
+    }                                ▼
+  }                            PlotModel.InvalidatePlot(true)
+    │
+    ▼
+oxy:PlotView.Model="{Binding KLineModel}"
+```
+
+ViewModel 不持有 UI 引用 — `PlotModel` 是纯数据对象，可单元测试。切换图表库 = 改 View 层 XAML + Adapter，2-3 天。
