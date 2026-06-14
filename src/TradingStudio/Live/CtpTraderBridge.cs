@@ -4,8 +4,8 @@ using TradingStudio.Core.Engine;
 namespace TradingStudio.Live;
 
 /// <summary>
-/// CTP 交易桥接 — 连接 ExecutionHandler.SendToExchange 与 CTP TraderApi。
-/// Phase 3a: 订单发出 + 回报接收。具体 CTP 字段映射待 C++/CLI TraderApi 封装确认后补全。
+/// CTP 交易桥接 — ExecutionHandler.SendToExchange → CTP InsertOrder。
+/// CTP 回报 (OnOrder/OnTrade) → OrderEvent → FillChannel。
 /// </summary>
 public class CtpTraderBridge : IDisposable
 {
@@ -22,7 +22,6 @@ public class CtpTraderBridge : IDisposable
         _opts = opts;
     }
 
-    /// <summary>连接 + 登录交易前置机</summary>
     public void Connect()
     {
         _trader = new CTP.TraderApi();
@@ -41,41 +40,92 @@ public class CtpTraderBridge : IDisposable
             }
         };
 
-        // TODO Phase 3a: CTP 回报 → OrderEvent
-        // _trader.OnRtnOrder += ctpOrder => {
-        //     var evt = ConvertOrder(ctpOrder);
-        //     if (evt != null) _fillWriter.TryWrite(evt);
-        // };
-        // _trader.OnRtnTrade += ctpTrade => {
-        //     var evt = ConvertTrade(ctpTrade);
-        //     if (evt != null) _fillWriter.TryWrite(evt);
-        // };
+        // CTP 回报 → OrderEvent
+        _trader.OnOrder += ctpOrder =>
+        {
+            var evt = ConvertOrder(ctpOrder);
+            if (evt != null) _fillWriter.TryWrite(evt);
+        };
+
+        _trader.OnTrade += ctpTrade =>
+        {
+            var evt = ConvertTrade(ctpTrade);
+            if (evt != null) _fillWriter.TryWrite(evt);
+        };
 
         _trader.OnError += (err, _) =>
-        {
-            System.Diagnostics.Debug.WriteLine($"[CTP] Error: {err.ErrorID} {err.ErrorMsg}");
-        };
+            System.Diagnostics.Debug.WriteLine($"[CTP] {err.ErrorID}: {err.ErrorMsg}");
 
         _trader.Connect(_opts.TraderFront);
     }
 
-    /// <summary>ExecutionHandler 集成点：市价单发往 CTP</summary>
+    /// <summary>ExecutionHandler.SendToExchange → CTP InsertOrder</summary>
     public void SendOrder(Order order)
     {
         if (!IsReady || _trader == null) return;
 
-        // TODO Phase 3a: 补全 CTP 下单字段映射
-        // var ctpOrder = new CTP.OrderField {
-        //     InstrumentID = order.InstrumentId,
-        //     Direction = order.Direction == OrderDirection.Buy
-        //         ? CTP.DirectionType.Buy : CTP.DirectionType.Sell,
-        //     OrderPriceType = order.Type == OrderType.Market
-        //         ? CTP.OrderPriceType.AnyPrice : CTP.OrderPriceType.LimitPrice,
-        //     LimitPrice = order.LimitPrice ?? 0m,
-        //     Volume = order.Quantity,
-        //     OrderRef = order.OrderId.ToString(),
-        // };
-        // _trader.ReqOrderInsert(ctpOrder);
+        var req = new CTP.OrderRequest
+        {
+            InstrumentID = order.InstrumentId,
+            Direction = order.Direction == OrderDirection.Buy
+                ? CTP.Direction.Buy : CTP.Direction.Sell,
+            PriceType = order.Type == OrderType.Market
+                ? CTP.OrderPriceType.AnyPrice : CTP.OrderPriceType.LimitPrice,
+            Price = (double)(order.LimitPrice ?? 0m),
+            Volume = order.Quantity,
+            Offset = CTP.OffsetFlag.Open,
+            OrderRef = order.OrderId.ToString(),
+        };
+
+        _trader.InsertOrder(req);
+    }
+
+    // ── 回报转换 ──
+
+    private static OrderEvent? ConvertOrder(CTP.Order ctpOrder)
+    {
+        var isFilled = ctpOrder.OrderStatus == '0';  // THOST_FTDC_OST_AllTraded
+        var isCancelled = ctpOrder.OrderStatus == '5'; // THOST_FTDC_OST_Canceled
+        var isRejected = ctpOrder.OrderStatus == '4';  // THOST_FTDC_OST_Rejected
+
+        if (!isFilled && !isCancelled && !isRejected) return null;
+
+        var type = isFilled
+            ? (ctpOrder.VolumeTraded >= ctpOrder.VolumeTotalOriginal
+                ? OrderEventType.Filled : OrderEventType.PartiallyFilled)
+            : isCancelled ? OrderEventType.Cancelled : OrderEventType.Rejected;
+
+        return new OrderEvent
+        {
+            OrderId = long.TryParse(ctpOrder.OrderRef, out var id) ? id : 0,
+            InstrumentId = ctpOrder.InstrumentID ?? "",
+            Direction = ctpOrder.Direction == '0' ? OrderDirection.Buy : OrderDirection.Sell,
+            Quantity = ctpOrder.VolumeTraded,
+            OrderQty = ctpOrder.VolumeTotalOriginal,
+            FilledQty = ctpOrder.VolumeTraded,
+            Type = type,
+            FillPrice = (decimal)ctpOrder.LimitPrice,
+            Message = ctpOrder.StatusMsg,
+            Time = DateTimeOffset.UtcNow,
+        };
+    }
+
+    private static OrderEvent? ConvertTrade(CTP.Trade ctpTrade)
+    {
+        if (ctpTrade.Volume <= 0) return null;
+
+        return new OrderEvent
+        {
+            OrderId = long.TryParse(ctpTrade.OrderRef, out var id) ? id : 0,
+            InstrumentId = ctpTrade.InstrumentID ?? "",
+            Direction = ctpTrade.Direction == '0' ? OrderDirection.Buy : OrderDirection.Sell,
+            Quantity = ctpTrade.Volume,
+            OrderQty = ctpTrade.Volume,
+            FilledQty = ctpTrade.Volume,
+            Type = OrderEventType.Filled,
+            FillPrice = (decimal)ctpTrade.Price,
+            Time = DateTimeOffset.UtcNow,
+        };
     }
 
     public void Dispose()

@@ -1,6 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
+using TradingStudio.Core.Engine;
+using TradingStudio.Core.Models;
+using TradingStudio.Engine;
+using TradingStudio.Live;
 using TradingStudio.Options;
 using TradingStudio.Services;
 
@@ -91,14 +95,103 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddSerilog((_, cfg) =>
         cfg.ReadFrom.Configuration(builder.Configuration));
 
-    // 引擎组件 (Phase 3 注入)
-    // builder.Services.AddSingleton<IDataFeed, CtpLiveFeed>();
-    // builder.Services.AddSingleton<PortfolioManager>();
-    // builder.Services.AddSingleton<StrategyContainer>();
-    // builder.Services.AddSingleton<IndicatorManager>();
-    // builder.Services.AddSingleton<ExecutionHandler>();
-    // builder.Services.AddSingleton<FeedbackMonitor>();
-    // builder.Services.AddSingleton<TradingEngine>();
+    // ── 引擎组件 DI ──
+    var cfg = builder.Configuration;
+
+    // 品种注册表
+    var symbolsPath = cfg["Live:SymbolsPath"] ?? "symbols.json";
+    var registry = FutureRegistry.Load(symbolsPath);
+    builder.Services.AddSingleton(registry);
+
+    // 数据源: CTP 行情
+    var mdOpts = new CtpMdOptions
+    {
+        MdFront = cfg["Live:MdFront"] ?? "",
+        BrokerId = cfg["Live:BrokerId"] ?? "9999",
+        UserId = cfg["Live:UserId"] ?? "",
+        Password = cfg["Live:Password"] ?? "",
+    };
+    var liveFeed = new CtpLiveFeed(mdOpts);
+    builder.Services.AddSingleton<IDataFeed>(liveFeed);
+
+    // 风控 + 执行
+    var risk = new RiskController();
+    builder.Services.AddSingleton(risk);
+    var execution = new ExecutionHandler(risk);
+    builder.Services.AddSingleton<IExecutionHandler>(execution);
+
+    // 反馈
+    var feedback = new FeedbackMonitor();
+    builder.Services.AddSingleton(feedback);
+
+    // 指标 + 策略容器
+    var indicators = new IndicatorManager();
+    builder.Services.AddSingleton(indicators);
+    var strategies = new StrategyContainer();
+    builder.Services.AddSingleton(strategies);
+
+    // 资金管理
+    var startCapital = decimal.Parse(cfg["Live:StartingCapital"] ?? "100000");
+    var portfolio = new PortfolioManager(startCapital);
+    builder.Services.AddSingleton(portfolio);
+
+    // CTP 交易桥接
+    if (!string.IsNullOrEmpty(cfg["Live:TraderFront"]))
+    {
+        var traderOpts = new CtpTraderOptions
+        {
+            TraderFront = cfg["Live:TraderFront"],
+            BrokerId = cfg["Live:BrokerId"] ?? "9999",
+            UserId = cfg["Live:UserId"] ?? "",
+            Password = cfg["Live:Password"] ?? "",
+        };
+        var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts);
+        bridge.Connect();
+        execution.SendToExchange = bridge.SendOrder;
+    }
+    execution.IsLive = true;
+
+    // 引擎
+    var engineOptions = new EngineOptions
+    {
+        StartTime = DateTime.Today,
+        EndTime = DateTime.Today.AddDays(1),
+        Instruments = registry.All.Values.Select(f => f.Code + "??")
+            .Take(10).ToList(), // 默认前10个品种, 实际由策略配置覆盖
+        StartingCapital = startCapital,
+        IsLive = true,
+    };
+    builder.Services.AddSingleton(engineOptions);
+
+    // 加载策略
+    var strategyConfigPath = cfg["Live:StrategyConfig"];
+    if (!string.IsNullOrEmpty(strategyConfigPath) && File.Exists(strategyConfigPath))
+    {
+        var json = File.ReadAllText(strategyConfigPath);
+        var strategyConfig = System.Text.Json.JsonSerializer.Deserialize<TradingStudio.Core.Strategy.StrategyConfig>(
+            json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (strategyConfig != null)
+        {
+            engineOptions = new EngineOptions
+            {
+                StartTime = DateTime.Today,
+                EndTime = DateTime.Today.AddDays(1),
+                Instruments = strategyConfig.Instruments,
+                StrategyConfigs = [strategyConfig],
+                StartingCapital = strategyConfig.AllocatedCapital > 0 ? strategyConfig.AllocatedCapital : startCapital,
+                IsLive = true,
+            };
+            StrategyFactory.DiscoverFromAssembly(typeof(TradingEngine).Assembly);
+        }
+    }
+
+    var engine = new TradingEngine(
+        liveFeed, execution, portfolio, indicators, strategies,
+        risk, feedback, engineOptions, registry);
+    builder.Services.AddSingleton(engine);
+
+    // 引擎后台运行
+    builder.Services.AddHostedService<EngineHost>();
 
     var app = builder.Build();
     app.UseCors();
