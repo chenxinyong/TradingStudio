@@ -1,0 +1,9 @@
+<Solution>
+  <Project DefaultStartup="true" Path="TradingStudio.UI/TradingStudio.UI.csproj" />
+  <Project Path="TradingStudio.Core/TradingStudio.Core.csproj" />
+  <Project Path="TradingStudio.Ctp/TradingStudio.Ctp.csproj" />
+  <Project Path="TradingStudio.Data/TradingStudio.Data.csproj" />
+  <Project Path="TradingStudio.Engine/TradingStudio.Engine.csproj" />
+  <Project Path="TradingStudio.Research/TradingStudio.Research.csproj" />
+  <Project Path="TradingStudio/TradingStudio.csproj" />
+</Solution>
