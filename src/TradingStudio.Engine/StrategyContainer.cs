@@ -5,39 +5,107 @@ namespace TradingStudio.Engine;
 
 /// <summary>
 /// 多策略容器。管理策略注册、事件路由、生命周期。
-/// 策略之间完全隔离，各自持有独立的 StrategyContext。
 /// </summary>
 public class StrategyContainer
 {
-    // instrumentId → 订阅该品种的策略列表
     private readonly SortedDictionary<string, List<StrategySlot>> _subscriptions = new();
+    private readonly List<StrategySlot> _allSlots = new();
 
-    public IReadOnlyList<StrategySlot> AllSlots => _subscriptions.Values.SelectMany(v => v).ToList();
+    public IReadOnlyList<StrategySlot> AllSlots => _allSlots;
 
     public void Register(IStrategy strategy, StrategyConfig config, StrategyContext context)
     {
         var slot = new StrategySlot(strategy, config, context);
+        _allSlots.Add(slot);
         foreach (var inst in config.Instruments)
         {
             if (!_subscriptions.ContainsKey(inst))
-                _subscriptions[inst] = new();
+                _subscriptions[inst] = new List<StrategySlot>();
             _subscriptions[inst].Add(slot);
         }
     }
 
-    public void Pause(string strategyId) { /* Phase 2a 实现 */ }
-    public bool Resume(string strategyId) => false;
-    public bool IsActive(string strategyId) => true;
+    public void Pause(string strategyId)
+    {
+        var slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == strategyId);
+        if (slot != null) slot.IsActive = false;
+    }
 
-    public void DispatchTick(TickEvent tickEvt) { /* Phase 2b 实现 */ }
-    public void DispatchBar(BarEvent barEvt) { /* Phase 2a 实现 */ }
-    public void DispatchOrderEvent(OrderEvent evt) { /* Phase 2a 实现 */ }
-    public void DispatchAlert(IReadOnlyList<MonitorAlert> alerts) { /* Phase 2b 实现 */ }
-    public void DispatchEndOfAlgorithm() { /* Phase 2a 实现 */ }
+    public bool Resume(string strategyId)
+    {
+        var slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == strategyId);
+        if (slot != null) slot.IsActive = true;
+        return slot != null;
+    }
 
-    public IReadOnlyList<StrategySnapshot> GetAllSnapshots() => [];
-    public StrategySnapshot? GetSnapshot(string strategyId) => null;
-    public bool TightenRisk(string strategyId, string ruleName, object newValue) => false;
+    public bool IsActive(string strategyId) =>
+        _allSlots.FirstOrDefault(s => s.Config.StrategyId == strategyId)?.IsActive ?? false;
+
+    public void DispatchTick(TickEvent tickEvt)
+    {
+        if (!_subscriptions.TryGetValue(tickEvt.InstrumentId, out var slots)) return;
+        foreach (var slot in slots)
+        {
+            if (slot.IsActive)
+                slot.Strategy.OnTick(tickEvt.Tick, tickEvt.InstrumentId);
+        }
+    }
+
+    public void DispatchBar(BarEvent barEvt)
+    {
+        var inst = barEvt.Bar.InstrumentId;
+        if (!_subscriptions.TryGetValue(inst, out var slots)) return;
+        foreach (var slot in slots)
+        {
+            if (slot.IsActive)
+            {
+                try { slot.Strategy.OnBar(barEvt.Bar); }
+                catch (Exception ex) { Console.Error.WriteLine($"[{slot.Config.StrategyId}] OnBar error: {ex.Message}"); }
+            }
+        }
+    }
+
+    public void DispatchOrderEvent(OrderEvent evt)
+    {
+        var slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == evt.StrategyId);
+        if (slot != null && slot.IsActive)
+        {
+            try { slot.Strategy.OnOrderEvent(evt); }
+            catch (Exception ex) { Console.Error.WriteLine($"[{slot.Config.StrategyId}] OnOrderEvent error: {ex.Message}"); }
+        }
+    }
+
+    public void DispatchAlert(IReadOnlyList<MonitorAlert> alerts)
+    {
+        foreach (var alert in alerts)
+        {
+            var slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == alert.StrategyId);
+            if (slot != null && slot.IsActive)
+                slot.Strategy.OnAlert(alert);
+        }
+    }
+
+    public void DispatchEndOfAlgorithm()
+    {
+        foreach (var slot in _allSlots)
+        {
+            if (slot.IsActive)
+            {
+                try { slot.Strategy.OnEndOfAlgorithm(); }
+                catch (Exception ex) { Console.Error.WriteLine($"[{slot.Config.StrategyId}] OnEnd error: {ex.Message}"); }
+            }
+        }
+    }
+
+    public IReadOnlyList<StrategySnapshot> GetAllSnapshots() =>
+        _allSlots.Select(s => new StrategySnapshot
+        {
+            StrategyId = s.Config.StrategyId,
+            Status = s.IsActive ? "Running" : "Paused",
+        }).ToList();
+
+    public StrategySnapshot? GetSnapshot(string strategyId) =>
+        GetAllSnapshots().FirstOrDefault(s => s.StrategyId == strategyId);
 }
 
 public class StrategySlot
@@ -55,14 +123,8 @@ public class StrategySlot
     }
 }
 
-/// <summary>策略快照（供 API/报告用）</summary>
 public record StrategySnapshot
 {
     public string StrategyId { get; init; } = "";
     public string Status { get; init; } = "Running";
-    public decimal AllocatedCapital { get; init; }
-    public decimal CurrentEquity { get; init; }
-    public double TodayPnl { get; init; }
-    public int PositionCount { get; init; }
-    public int ActiveOrderCount { get; init; }
 }

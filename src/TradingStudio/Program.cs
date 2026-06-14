@@ -1,5 +1,3 @@
-using TradingStudio.Core.Models;
-using TradingStudio.Data.Import;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -9,36 +7,69 @@ using TradingStudio.Services;
 // ================================================================
 // TradingStudio — 量化交易工作室
 //
-// 模式:
-//   TradingStudio                       启动实盘引擎 (Windows Service / 控制台)
-//   TradingStudio collect [args]        行情采集 (Phase 1)
-//   TradingStudio import [args]         金数源 CSV 导入
-//   TradingStudio import-jinshuyuan     金数源 RAR 导入
-//   TradingStudio backtest [args]       回测 (Phase 2)
+//   TradingStudio live                 启动实盘引擎 (Windows Service)
+//   TradingStudio backtest [options]   回测引擎
+//   TradingStudio collect [options]    行情采集
+//
+// 数据导入已迁移至: TradingStudio.ToolBox
 // ================================================================
 
-var mode = args.Length > 0 ? args[0] : "live";
-
-if (mode is "live")
+try
 {
-    await RunLiveAsync(args);
-    return;
+    if (args.Length == 0) { PrintUsage(); return; }
+
+    switch (args[0])
+    {
+        case "live":     await RunLiveAsync(args[1..]);     break;
+        case "backtest": await RunBacktestAsync(args[1..]); break;
+        case "collect":  await RunCollectAsync(args[1..]);  break;
+        default:         PrintUsage(); break;
+    }
+}
+catch (Exception ex)
+{
+    // 保证任何致命错误在窗口消失前可见
+    var msg = $@"
+═══════════════════════════════════════
+  FATAL ERROR — 进程即将退出
+═══════════════════════════════════════
+  {ex.GetType().Name}: {ex.Message}
+═══════════════════════════════════════
+";
+    Console.Error.WriteLine(msg);
+    try { File.AppendAllText("crash.log", msg + ex + "\n"); } catch { }
+    Console.Error.WriteLine("按任意键退出...");
+    try { Console.ReadKey(true); } catch { }
+    Environment.Exit(1);
 }
 
-if (mode is "backtest")
-{
-    await RunBacktestAsync(args[1..]);
-    return;
-}
-
-// ── 以下为 Phase 1 命令 (不变) ────────────────────────
-
-if (mode is "import-jinshuyuan") { await RunImportJinshuyuanAsync(args); return; }
-if (mode is "import") { await RunImportAsync(args); return; }
-
-// 默认: collect 模式
-await RunCollectAsync(args);
 return;
+
+static void PrintUsage()
+{
+    Console.WriteLine("TradingStudio — 量化交易工作室");
+    Console.WriteLine();
+    Console.WriteLine("用法:");
+    Console.WriteLine("  TradingStudio live              启动实盘引擎 (Windows Service)");
+    Console.WriteLine("  TradingStudio backtest --config <strategy.json> [--db <path>]");
+    Console.WriteLine("  TradingStudio collect [options]  行情采集");
+    Console.WriteLine();
+    Console.WriteLine("按任意键退出...");
+    try { Console.ReadKey(true); } catch { }
+}
+
+static void PrintBanner()
+{
+    Console.WriteLine("════════════════════════════════");
+    Console.WriteLine("  TradingStudio v0.2.0 行情采集");
+    Console.WriteLine("════════════════════════════════");
+    Console.WriteLine($"  .NET:    {Environment.Version}");
+    Console.WriteLine($"  OS:      {Environment.OSVersion}");
+    Console.WriteLine($"  x64:     {Environment.Is64BitProcess}");
+    Console.WriteLine($"  CWD:     {Environment.CurrentDirectory}");
+    Console.WriteLine($"  Time:    {DateTime.Now:yyyy-MM-dd HH:mm:ss} (local)");
+    Console.WriteLine("════════════════════════════════");
+}
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -87,97 +118,15 @@ static async Task RunLiveAsync(string[] args)
 // ═══════════════════════════════════════════════════════════════
 static async Task RunBacktestAsync(string[] args)
 {
-    Console.WriteLine("TradingStudio Backtest — Phase 2a (待实现)");
-    Console.WriteLine("Usage: TradingStudio backtest --config <strategy.json> [--mode bar|tick]");
-    await Task.CompletedTask;
+    var exitCode = await TradingStudio.Commands.BacktestCommand.RunAsync(args);
+    Environment.Exit(exitCode);
 }
 
-
-// ═══════════════════════════════════════════════════════════════
-// Phase 1 命令 (从原 Program.cs 迁移, 逻辑不变)
-// ═══════════════════════════════════════════════════════════════
-
-static async Task RunImportJinshuyuanAsync(string[] args)
-{
-    var layer = "";
-    var symbols = new List<string>();
-    string? exchangeStr = null;
-    var fromMonth = "202001"; var toMonth = "202512";
-    var dataDir = @"C:\Works\Datas\Jinshuyuan";
-    var dbPath = "bars_history.db";
-    var dryRun = false;
-
-    for (int j = 1; j < args.Length; j++)
-    {
-        switch (args[j])
-        {
-            case "--layer" when j + 1 < args.Length:    layer = args[++j]; break;
-            case "--symbol" when j + 1 < args.Length:   symbols.Add(args[++j].ToLowerInvariant()); break;
-            case "--exchange" when j + 1 < args.Length: exchangeStr = args[++j].ToUpperInvariant(); break;
-            case "--from" or "--from-month" when j + 1 < args.Length: fromMonth = args[++j]; break;
-            case "--to" or "--to-month" when j + 1 < args.Length:     toMonth = args[++j]; break;
-            case "--data-dir" when j + 1 < args.Length: dataDir = args[++j]; break;
-            case "--db" when j + 1 < args.Length:       dbPath = args[++j]; break;
-            case "--dry-run": dryRun = true; break;
-        }
-    }
-
-    if (layer is not ("main" or "active" or "all"))
-    {
-        Console.WriteLine("Error: --layer is required and must be 'main', 'active', or 'all'");
-        Environment.Exit(1);
-    }
-
-    var symbolsJson = FindSymbolsJson();
-    var registry = FutureRegistry.Load(symbolsJson);
-    var knownProducts = new HashSet<string>(
-        registry.All.Values.Select(p => p.Code.ToLowerInvariant()),
-        StringComparer.OrdinalIgnoreCase);
-
-    var opts = new JinshuyuanOptions
-    {
-        DataDir = dataDir, DbPath = dbPath, Layer = layer,
-        Symbols = new HashSet<string>(symbols, StringComparer.OrdinalIgnoreCase),
-        ExchangeCode = exchangeStr, FromMonth = fromMonth, ToMonth = toMonth,
-        DryRun = dryRun, KnownProducts = knownProducts,
-    };
-
-    var cts = new CancellationTokenSource();
-    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-    try
-    {
-        await new JinshuyuanImportService(opts).ImportAsync(cts.Token);
-        Environment.Exit(0);
-    }
-    catch (OperationCanceledException) { Console.WriteLine("\nImport cancelled."); Environment.Exit(1); }
-    catch (Exception ex) { Console.WriteLine($"Import failed: {ex.Message}"); Environment.Exit(1); }
-}
-
-static async Task RunImportAsync(string[] args)
-{
-    var input = ""; var dbPath = "bars.db";
-    for (int j = 1; j < args.Length; j++)
-    {
-        if (args[j] == "--input" && j + 1 < args.Length) { input = args[++j]; }
-        else if (args[j] == "--db" && j + 1 < args.Length) { dbPath = args[++j]; }
-    }
-    if (string.IsNullOrEmpty(input)) { Console.WriteLine("Usage: TradingStudio import --input <file|dir> [--db bars.db]"); Environment.Exit(1); }
-
-    var cts = new CancellationTokenSource();
-    Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-    try
-    {
-        if (Directory.Exists(input)) await TickImportService.ImportDirectoryAsync(input, dbPath, ct: cts.Token);
-        else if (File.Exists(input)) await TickImportService.ImportFileAsync(input, dbPath, cts.Token);
-        else { Console.WriteLine($"Error: path not found — {input}"); Environment.Exit(1); }
-        Console.WriteLine("Import complete."); Environment.Exit(0);
-    }
-    catch (OperationCanceledException) { Console.WriteLine("\nImport cancelled."); Environment.Exit(1); }
-    catch (Exception ex) { Console.WriteLine($"Import failed: {ex.Message}"); Environment.Exit(1); }
-}
 
 static async Task RunCollectAsync(string[] args)
 {
+    PrintBanner();
+
     // 全局崩溃日志
     AppDomain.CurrentDomain.UnhandledException += (_, e) =>
     {
@@ -218,14 +167,4 @@ static async Task RunCollectAsync(string[] args)
     builder.Services.PostConfigure<CollectOptions>(opts => { opts.ExchangeFilter = exchange; opts.SymbolFilter = symbol; });
     builder.Services.AddHostedService<CollectService>();
     await builder.Build().RunAsync();
-}
-
-static string FindSymbolsJson()
-{
-    var exeDir = AppContext.BaseDirectory;
-    var path = Path.Combine(exeDir, "symbols.json");
-    if (File.Exists(path)) return path;
-    var cwd = Path.Combine(Directory.GetCurrentDirectory(), "symbols.json");
-    if (File.Exists(cwd)) return cwd;
-    throw new FileNotFoundException("symbols.json not found in exe dir or current dir");
 }

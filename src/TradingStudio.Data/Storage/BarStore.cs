@@ -138,6 +138,61 @@ public class BarStore : IDisposable, IAsyncDisposable
     private static string TableName(Bar bar) =>
         bar.BarTime.TimeOfDay == TimeSpan.Zero ? "bars_day" : "bars_1min";
 
+    // ═══════════════════════════════════════════
+    // Query — 回测数据源使用
+    // ═══════════════════════════════════════════
+
+    /// <summary>查询指定品种和时间范围的 Bar，按 bar_time 排序</summary>
+    public async Task<IReadOnlyList<Bar>> QueryBarsAsync(
+        string instrumentId, DateTime start, DateTime end,
+        string table = "bars_1min", CancellationToken ct = default)
+    {
+        var bars = new List<Bar>();
+        await using var cmd = _conn.CreateCommand();
+        cmd.CommandText = $@"
+            SELECT instrument_id, trading_day, bar_time, open, high, low, close,
+                   volume, turnover, open_interest, tick_count
+            FROM {table}
+            WHERE instrument_id = @inst AND bar_time >= @start AND bar_time <= @end
+            ORDER BY bar_time";
+        cmd.Parameters.AddWithValue("@inst", instrumentId);
+        cmd.Parameters.AddWithValue("@start", start.ToString("yyyy-MM-dd HH:mm:ss"));
+        cmd.Parameters.AddWithValue("@end", end.ToString("yyyy-MM-dd HH:mm:ss"));
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            bars.Add(new Bar
+            {
+                InstrumentId = reader.GetString(0),
+                TradingDay = DateOnly.Parse(reader.GetString(1)),
+                BarTime = DateTime.Parse(reader.GetString(2)),
+                Open = reader.GetInt64(3),
+                High = reader.GetInt64(4),
+                Low = reader.GetInt64(5),
+                Close = reader.GetInt64(6),
+                Volume = reader.GetInt64(7),
+                Turnover = reader.GetDouble(8),
+                OpenInterest = reader.GetDouble(9),
+                TickCount = reader.GetInt32(10),
+            });
+        }
+        return bars;
+    }
+
+    /// <summary>列出某表中所有不重复的品种 ID</summary>
+    public async Task<IReadOnlyList<string>> QueryInstrumentsAsync(
+        string table = "bars_1min", CancellationToken ct = default)
+    {
+        var list = new List<string>();
+        await using var cmd = _conn.CreateCommand();
+        cmd.CommandText = $"SELECT DISTINCT instrument_id FROM {table} ORDER BY instrument_id";
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            list.Add(reader.GetString(0));
+        return list;
+    }
+
     public void Dispose()
     {
         _cts.Cancel();

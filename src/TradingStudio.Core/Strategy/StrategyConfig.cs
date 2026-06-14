@@ -32,7 +32,8 @@ public class StrategyConfig
     public bool SkipAuction { get; init; } = true;
 }
 
-/// <summary>强类型参数容器</summary>
+/// <summary>强类型参数容器，支持 JSON 反序列化</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(StrategyParametersConverter))]
 public class StrategyParameters : IEnumerable<KeyValuePair<string, object>>
 {
     private readonly Dictionary<string, object> _values = new();
@@ -50,6 +51,57 @@ public class StrategyParameters : IEnumerable<KeyValuePair<string, object>>
     public void Add(string name, object value) => _values[name] = value;
     public IEnumerator<KeyValuePair<string, object>> GetEnumerator() => _values.GetEnumerator();
     System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+}
+
+/// <summary>JSON 转换器：将 {"key": value, ...} 转为 StrategyParameters</summary>
+public class StrategyParametersConverter : System.Text.Json.Serialization.JsonConverter<StrategyParameters>
+{
+    public override StrategyParameters? Read(ref System.Text.Json.Utf8JsonReader reader,
+        Type typeToConvert, System.Text.Json.JsonSerializerOptions options)
+    {
+        if (reader.TokenType != System.Text.Json.JsonTokenType.StartObject)
+            throw new System.Text.Json.JsonException("Expected object");
+
+        var parameters = new StrategyParameters();
+        while (reader.Read())
+        {
+            if (reader.TokenType == System.Text.Json.JsonTokenType.EndObject)
+                return parameters;
+
+            if (reader.TokenType != System.Text.Json.JsonTokenType.PropertyName)
+                throw new System.Text.Json.JsonException("Expected property name");
+
+            var name = reader.GetString()!;
+            reader.Read();
+
+            // 根据 JSON token 类型推断 CLR 类型
+            object value = reader.TokenType switch
+            {
+                System.Text.Json.JsonTokenType.Number when reader.TryGetInt32(out var i) => i,
+                System.Text.Json.JsonTokenType.Number when reader.TryGetDouble(out var d) => d,
+                System.Text.Json.JsonTokenType.Number => reader.GetDecimal(),
+                System.Text.Json.JsonTokenType.String => reader.GetString()!,
+                System.Text.Json.JsonTokenType.True => true,
+                System.Text.Json.JsonTokenType.False => false,
+                _ => System.Text.Json.JsonSerializer.Deserialize<object>(ref reader, options) ?? ""
+            };
+            parameters.Add(name, value);
+        }
+
+        return parameters;
+    }
+
+    public override void Write(System.Text.Json.Utf8JsonWriter writer,
+        StrategyParameters value, System.Text.Json.JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        foreach (var (k, v) in value)
+        {
+            writer.WritePropertyName(k);
+            System.Text.Json.JsonSerializer.Serialize(writer, v, options);
+        }
+        writer.WriteEndObject();
+    }
 }
 
 /// <summary>风控规则配置</summary>

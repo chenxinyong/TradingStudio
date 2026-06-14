@@ -1,7 +1,23 @@
 namespace TradingStudio.Engine.Statistics;
 
-/// <summary>回撤计算（Phase 2a 实现）</summary>
-public class DrawdownCalculator
+/// <summary>回撤计算器</summary>
+public static class DrawdownCalculator
 {
-    // Phase 2a 实现
+    /// <summary>计算最大回撤（峰值到谷底的最大百分比跌幅）</summary>
+    public static double CalculateMaxDrawdown(IReadOnlyList<(DateTimeOffset Time, decimal Equity)> equityCurve)
+    {
+        if (equityCurve.Count == 0) return 0;
+
+        decimal peak = equityCurve[0].Equity;
+        double maxDrawdown = 0;
+
+        foreach (var (_, equity) in equityCurve)
+        {
+            if (equity > peak) peak = equity;
+            var drawdown = (double)((peak - equity) / peak);
+            if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+        }
+
+        return maxDrawdown;
+    }
 }

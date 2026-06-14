@@ -57,6 +57,12 @@ public class CollectService : BackgroundService
         _log.Information("Loaded {Count} futures → {Total} contracts in {Batches} batches",
             filtered.Count, batches.Sum(b => b.Length), batches.Count);
 
+        // 确保数据目录存在
+        var dbDir = Path.GetDirectoryName(Path.GetFullPath(_cfg.Database));
+        if (dbDir != null) Directory.CreateDirectory(dbDir);
+        var tickDir = Path.GetDirectoryName(Path.GetFullPath(_cfg.TickData));
+        if (tickDir != null) Directory.CreateDirectory(tickDir);
+
         using var store = new BarStore(_cfg.Database);
         using var tickWriter = new TickCsvWriter(_cfg.TickData);
 
