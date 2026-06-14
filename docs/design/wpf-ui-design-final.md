@@ -1,9 +1,8 @@
 # TradingStudio WPF 量化终端 — 最终设计方案
 
-> 合并以下三份文档:
-> - [WPF量化交易界面设计](./WPF量化交易界面设计.md) — AvalonDock 工作台布局
-> - [VSCode风格量化终端设计](./VSCode风格量化终端设计.md) — Command Palette + EventAggregator + Workspace + Plugin
-> - [设计方案 v2](./wpf-ui-design-v2.md) — 回测集成 + 数据绑定
+> 参考:
+> - [UI技术选型决策](./13-ui-technology-selection.md) — WPF + OxyPlot 选型依据
+> - AvalonDock 工作台布局 + Command Palette + EventAggregator + Workspace
 >
 > 目标体验: **VS Code × Bloomberg Terminal × TradingView Desktop**
 
