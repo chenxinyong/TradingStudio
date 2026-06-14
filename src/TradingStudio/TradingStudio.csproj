@@ -10,15 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj" />
     <ProjectReference Include="..\TradingStudio.Core\TradingStudio.Core.csproj" />
     <ProjectReference Include="..\TradingStudio.Data\TradingStudio.Data.csproj" />
     <ProjectReference Include="..\TradingStudio.Engine\TradingStudio.Engine.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="CTPWrapper">
-      <HintPath>..\CTP\Wrapper\bin\Release\CTPWrapper.dll</HintPath>
-    </Reference>
   </ItemGroup>
 
   <ItemGroup>

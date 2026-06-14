@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <PlatformTarget>x64</PlatformTarget>
@@ -7,13 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj" />
     <ProjectReference Include="..\TradingStudio.Core\TradingStudio.Core.csproj" />
   </ItemGroup>
 
   <!-- C++/CLI managed wrapper -->
-  <ItemGroup>
-    <Reference Include="CTPWrapper">
-      <HintPath>..\CTP\Wrapper\bin\Debug\CTPWrapper.dll</HintPath>
-    </Reference>
-  </ItemGroup>
 </Project>

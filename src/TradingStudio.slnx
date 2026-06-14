@@ -1,5 +1,12 @@
 <Solution>
   <Project DefaultStartup="true" Path="TradingStudio.UI/TradingStudio.UI.csproj" />
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/CTP/">
+    <Project Path="CTP/Wrapper/CTPWrapper.vcxproj" Id="b2c3d4e5-f6a7-8901-bcde-f12345678901" />
+  </Folder>
   <Project Path="TradingStudio.Core/TradingStudio.Core.csproj" />
   <Project Path="TradingStudio.Ctp/TradingStudio.Ctp.csproj" />
   <Project Path="TradingStudio.Data/TradingStudio.Data.csproj" />
