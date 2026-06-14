@@ -1,13 +1,16 @@
 @echo off
 REM ================================================================
-REM  TradingStudio 部署脚本
+REM  TradingStudio Deployment Script
 REM
-REM  产出:
-REM    dist/Server/  交易引擎 (Windows Service, 7×24)
-REM    dist/Desktop/  K线图表 (WPF 桌面, 按需运行)
+REM  Output:
+REM    dist/Server/  Trading Engine (Windows Service, 7x24)
+REM    dist/Desktop/ K-line Chart (WPF Desktop, on-demand)
+REM
+REM  Requires: Visual Studio 2026+ (for C++/CLI wrapper)
 REM ================================================================
 set ROOT=%~dp0
 set DIST=%ROOT%dist
+set LOG=%TEMP%\deploy-publish.log
 
 echo ========================================
 echo  1/5  C++/CLI Wrapper
@@ -17,23 +20,31 @@ if %ERRORLEVEL% NEQ 0 (echo FAIL & exit /b 1)
 
 echo.
 echo ========================================
-echo  2/5  TradingStudio (交易引擎)
+echo  2/5  TradingStudio (Engine)
 echo ========================================
-dotnet publish "%ROOT%src\TradingStudio\TradingStudio.csproj" ^
-    -c Release -o "%DIST%\Server" --self-contained false 2>&1 | findstr /V "info :"
-if %ERRORLEVEL% NEQ 0 (echo FAIL & exit /b 1)
+REM use msbuild (not dotnet publish) because TradingStudio
+REM references CTPWrapper.vcxproj which requires C++ toolchain
+msbuild "%ROOT%src\TradingStudio\TradingStudio.csproj" /t:Publish /p:Configuration=Release /p:PublishDir="%DIST%\Server" /p:SelfContained=false > "%LOG%" 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    type "%LOG%"
+    echo FAIL & exit /b 1
+)
+findstr /V "info :" "%LOG%"
 
 echo.
 echo ========================================
-echo  3/5  TradingStudio.UI (K线桌面)
+echo  3/5  TradingStudio.UI (Desktop)
 echo ========================================
-dotnet publish "%ROOT%src\TradingStudio.UI\TradingStudio.UI.csproj" ^
-    -c Release -o "%DIST%\Desktop" --self-contained false 2>&1 | findstr /V "info :"
-if %ERRORLEVEL% NEQ 0 (echo FAIL & exit /b 1)
+dotnet publish "%ROOT%src\TradingStudio.UI\TradingStudio.UI.csproj" -c Release -o "%DIST%\Desktop" --self-contained false > "%LOG%" 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    type "%LOG%"
+    echo FAIL & exit /b 1
+)
+findstr /V "info :" "%LOG%"
 
 echo.
 echo ========================================
-echo  4/5  复制 CTP 依赖
+echo  4/5  Copy CTP Dependencies
 echo ========================================
 copy /Y "%ROOT%src\CTP\Wrapper\bin\Release\*.dll" "%DIST%\Server\" >nul 2>&1
 copy /Y "%ROOT%src\CTP\Wrapper\bin\Debug\*.dll" "%DIST%\Server\" >nul 2>&1
@@ -42,7 +53,7 @@ echo DLLs deployed
 
 echo.
 echo ========================================
-echo  5/5  生成 symbols.json
+echo  5/5  Generate symbols.json
 echo ========================================
 python "%ROOT%src\Scripts\gen_symbols_json.py" >nul 2>&1
 copy /Y "%ROOT%src\TradingStudio\symbols.json" "%DIST%\Server\" >nul 2>&1
@@ -53,13 +64,21 @@ echo ========================================
 echo  DEPLOY COMPLETE
 echo ========================================
 echo.
-echo  dist/Server/  (交易引擎)
-dir /b "%DIST%\Server" 2>nul | findstr /V ".pdb$"
+echo  dist/Server/  (Engine)
+if exist "%DIST%\Server\TradingStudio.exe" (
+    dir /b "%DIST%\Server" 2>nul | findstr /V ".pdb$"
+) else (
+    echo   (empty)
+)
 echo.
-echo  dist/Desktop/ (K线桌面)
-dir /b "%DIST%\Desktop" 2>nul | findstr /V ".pdb$"
+echo  dist/Desktop/ (Desktop)
+if exist "%DIST%\Desktop\TradingStudio.UI.exe" (
+    dir /b "%DIST%\Desktop" 2>nul | findstr /V ".pdb$"
+) else (
+    echo   (empty)
+)
 
 echo.
-echo  启动:
-echo    交易引擎: dist\Server\TradingStudio.exe collect [SHFE] [ag2608]
-echo    K线桌面:  dist\Desktop\TradingStudio.UI.exe
+echo  Run:
+echo    Engine:  dist\Server\TradingStudio.exe collect [SHFE] [ag2608]
+echo    Desktop: dist\Desktop\TradingStudio.UI.exe
