@@ -192,8 +192,9 @@ static async Task RunLiveAsync(string[] args)
         risk, feedback, tickSnapshot, engineOptions, registry);
     builder.Services.AddSingleton(engine);
 
-    // 引擎后台运行
+    // 引擎后台运行 + SignalR 实时推送
     builder.Services.AddHostedService<EngineHost>();
+    builder.Services.AddHostedService<EngineHubPushService>();
 
     var app = builder.Build();
     app.UseCors();

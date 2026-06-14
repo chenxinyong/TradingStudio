@@ -824,6 +824,21 @@ src/TradingStudio.UI/
 | DI | **Microsoft.Extensions.DI** | 已有 |
 | 插件 | **自定义 IPlugin** | 轻量, 够用 |
 
+### 18.2 SignalR 实时推送事件
+
+```csharp
+// 引擎 → UI 的 7 个推送事件
+TickSnapshot        ← 每秒, 全品种最新行情
+PortfolioUpdated    ← 每秒, 权益/现金/保证金/持仓
+StrategiesUpdated   ← 每5秒, 策略快照列表
+OrderUpdated        ← 实时, 单笔成交/拒绝 (按策略分组)
+OrderFlowUpdated    ← 实时, 所有成交流水
+Alert               ← 实时, 告警 (按策略分组)
+AlertsUpdated       ← 每3秒, 告警全量列表
+```
+
+实现: `EngineHubPushService` (BackgroundService) — 监控 `FillChannel` + `TickSnapshot` + `FeedbackMonitor`, 通过 `IHubContext<EngineHub>` 推送。
+
 > **2026-06-14 决策**:
 > - OxyPlot 主力, SciChart 作为 Phase 4 升级路径
 > - 使用 CommunityToolkit.Mvvm 内置 Messenger, 不引入额外 EventAggregator
