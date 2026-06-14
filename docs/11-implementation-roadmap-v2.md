@@ -3,8 +3,9 @@
 > 融合 docs/08-10 的分析结论，盘点现有代码，定义实施顺序。
 >
 > **更新 (2026-06-13):** 6/12 完成全市场采集管线部署，6/13 修复 6 个 Bug。
-> 原"存在"项绝大部分已解决，原"不存在"项中 BarAggregator/BarStore/TickWriter/Exchange/Future/ContractCodeGenerator
-> 均已实现 (见 `src/TradingStudio.Core/Models/` 和 `src/TradingStudio.Data/`)。
+> **更新 (2026-06-14):** 技术指标引擎完成 (SMA/EMA/MACD/RSI/BOLL) → Core.Indicators。
+> K线图表 Demo 完成 (OxyPlot + MVVM + 实时模拟) → TradingStudio.UI。
+> Phase 2a 引擎组件全部实现 (TradingEngine/ExecutionHandler/PortfolioManager 等)。
 > Step 1 (PostgreSQL + 实体) 尚未完成，其余 Step 2-3 的部分组件已超前实现。
 
 ---
@@ -21,6 +22,10 @@
 | CTP Provider | `src/TradingStudio.Ctp/CtpMdProvider.cs` | ✅ 编译通过，单 Channel |
 | 合约规格数据 | `docs/contracts/` 76 .md + 100 CSV | ✅ 完整 |
 | 手续费/保证金脚本 | `src/gen_final_specs.py` | ✅ 运行正常 |
+| 技术指标引擎 | `Core/Indicators/` SMA/EMA/MACD/RSI/BOLL | ✅ 已实现 (2026-06-14) |
+| K线图表 Demo | `UI/ViewModels/ChartViewModel.cs` | ✅ OxyPlot + 实时模拟 |
+| DI + 日志 + 配置 | `UI/App.xaml.cs` + `appsettings.json` | ✅ Serilog + IConfiguration |
+| 部署脚本 | `deploy.bat` → `dist/Server/` + `dist/Desktop/` | ✅ 5 步管线 |
 
 ### 1.2 存在但需要修复
 
@@ -38,11 +43,10 @@
 | CommissionRule/MarginRule 实体 | doc 10 DDL | **P1** |
 | TradingSession 实体 | doc 10 DDL | **P1** |
 | ITickStore 接口 + 实现 | doc 02 | **P1** |
-| IBarStore 接口 + 实现 | doc 02 | **P1** |
-| BarAggregator | doc 02 | **P1** |
-| MarketDataService | doc 06 | **P2** |
-| CsvTickImporter | doc 06 | **P2** |
 | PostgreSQL 数据库 | doc 10 DDL | **P0** |
+| HandyControl UI 组件库 | doc 13 | P2 |
+| LiveCharts2 绩效面板 | doc 13 | P2 |
+| SignalR 客户端实现 | doc 13 | P2 |
 
 ---
 

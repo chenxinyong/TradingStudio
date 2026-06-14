@@ -222,17 +222,17 @@ src/
 │   │   └── TickImportService.cs
 │   └── Engine/                             — (NEW) 数据源实现
 │       ├── HistoricalTickFeed.cs          (Stub — Phase 2b 实现)
-│       ├── HistoricalBarFeed.cs           (Stub — Phase 2a 实现)
+│       ├── HistoricalBarFeed.cs           (✅ 已实现)
 │       └── CtpLiveFeed.cs                (Stub — Phase 3 实现)
 │
 ├── TradingStudio.Engine/                   — (NEW 项目) 主引擎
 │   ├── TradingStudio.Engine.csproj         → net10.0, refs Core + Data
-│   ├── TradingEngine.cs                   (Stub — Phase 2a 实现)
+│   ├── TradingEngine.cs                   (✅ 已实现)
 │   ├── EngineOptions.cs
-│   ├── EngineReport.cs                    (Stub — Phase 2a 实现)
-│   ├── StrategyContainer.cs               (Stub — Phase 2a 实现)
+│   ├── EngineReport.cs                    (✅ 已实现)
+│   ├── StrategyContainer.cs               (✅ 已实现)
 │   ├── StrategyFactory.cs                 namespace: TradingStudio.Engine
-│   ├── ExecutionHandler.cs                (Stub — Phase 2a 实现)
+│   ├── ExecutionHandler.cs                (✅ 已实现)
 │   ├── PortfolioManager.cs                (Stub — Phase 2a 实现, 含 SubPortfolio)
 │   ├── IndicatorManager.cs                namespace: TradingStudio.Engine
 │   ├── FeedbackMonitor.cs                 (Stub — Phase 2b 实现, 含 MonitorSummary)
@@ -241,7 +241,7 @@ src/
 │   │   ├── TradeStatistics.cs             (Stub)
 │   │   └── DrawdownCalculator.cs          (Stub)
 │   └── Examples/
-│       └── MaCrossStrategy.cs             (Stub — Phase 2a 实现)
+│       └── MaCrossStrategy.cs             (✅ 已实现)
 │
 ├── TradingStudio.UI/                        — (NEW) WPF 监控客户端
 │   ├── TradingStudio.UI.csproj              → net10.0-windows, UseWPF, SignalR.Client
@@ -277,7 +277,7 @@ src/
 │   │   ├── HealthMonitor.cs
 │   │   └── SessionScheduler.cs
 │   └── Commands/
-│       └── BacktestCommand.cs             (Stub — Phase 2a 实现)
+│       └── BacktestCommand.cs             (✅ 已实现)
 │
 └── Scripts/                                — Python 数据脚本
     └── gen_symbols_json.py (+14 others)
@@ -1679,7 +1679,7 @@ TradingStudio.exe import-jinshuyuan [args] → RAR 导入 (Phase 1)
 ### 15.4 EngineMonitorApi + SignalR Hub
 
 > 代码文件位于 `src/TradingStudio/EngineMonitorApi.cs` + `src/TradingStudio/Hubs/EngineHub.cs`
-> Phase 3 实现, 当前为 Stub。
+> ✅ 已实现 (2026-06-13)。
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
@@ -1779,7 +1779,7 @@ TradingStudio.exe import-jinshuyuan [args] → RAR 导入 (Phase 1)
 
 ## 17. 实施路线
 
-### Phase 2a: 最小可用回测 — 单策略 Bar 回放（2-3 天）
+### Phase 2a: 最小可用回测 — 单策略 Bar 回放 ✅ 已完成 (2026-06-13)
 
 ```
 Day 1: 核心模型 + 接口

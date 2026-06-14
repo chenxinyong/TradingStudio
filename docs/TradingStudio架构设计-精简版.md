@@ -41,18 +41,27 @@
 
 ---
 
-## 2. 精简架构：5 个项目
+## 2. 精简架构：7 个项目
 
 ```
 TradingStudio/
-├── TradingStudio.Core/           — 核心抽象（接口 + 共享类型）
+├── TradingStudio.Core/           — 核心抽象（接口 + 共享类型 + 技术指标）
+├── TradingStudio.Ctp/             — C# 适配层（CTP C++ bridge → Channel<Tick>）
 ├── TradingStudio.Data/            — 行情接入 + 数据存储 + K 线合成
-├── TradingStudio.Execution/     — CTP 执行网关 + 风控横切层
-├── TradingStudio.Strategy/      — 策略引擎 + 回测引擎 + 核心指标
-└── TradingStudio.UI/              — 监控管理界面（WPF）
+├── TradingStudio.Engine/          — 策略引擎 + 回测引擎 + 执行 + 风控
+├── TradingStudio.Research/        — 量化研究（BarReader + 统计 + 可视化）
+├── TradingStudio/                 — 控制台主机（collect/import/backtest/live）
+└── TradingStudio.UI/              — WPF 桌面（K线图表 + 监控面板）
+
+外部依赖:
+├── CTP/Wrapper/                   — C++/CLI 封装 (CTPWrapper.dll)
+└── CTP/SDK/                       — CTP 6.7.13 原生库
 ```
 
-> 5 个项目 vs Lean 的 25+ 个项目。够用就好。
+> 7 个 .NET 项目 + 1 个 C++/CLI bridge vs Lean 的 25+ 个项目。够用就好。
+>
+> 原设计中的 `Execution` 和 `Strategy` 合并入 `Engine`，因为期货单一品种策略不需要 Execution/Strategy 两层分离。
+> `Research` 是独立 Library，不依赖 WPF，用 ScottPlot 做 headless 出图。
 
 ---
 
