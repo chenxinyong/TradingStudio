@@ -11,7 +11,7 @@ public class StrategyConfig
 
     // ═══ 订阅 ═══
     public IReadOnlyList<string> Instruments { get; init; } = [];
-    public string PrimaryBarType { get; init; } = "1min";
+    public string PrimaryBarType { get; init; } = "bars_1min";
 
     // ═══ 资金分配 ═══
     public decimal AllocatedCapital { get; init; }
