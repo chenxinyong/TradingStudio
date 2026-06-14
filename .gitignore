@@ -434,7 +434,10 @@ ctp_flow/
 dist/
 
 # Raw data downloads
-data/ticks/
+data/
+
+# Database files
+*.db
 
 # Tools and scripts
 tools/

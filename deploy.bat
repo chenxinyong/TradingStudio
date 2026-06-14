@@ -7,6 +7,9 @@ REM    dist/Server/  Trading Engine (Windows Service, 7x24)
 REM    dist/Desktop/ K-line Chart (WPF Desktop, on-demand)
 REM
 REM  Requires: Visual Studio 2026+ (for C++/CLI wrapper)
+REM
+REM  WARNING: dist/ is ephemeral. Persistent data (DB, ticks, reports)
+REM  MUST go into data/ directory, NOT dist/.
 REM ================================================================
 set ROOT=%~dp0
 set DIST=%ROOT%dist
