@@ -101,7 +101,13 @@ public class StrategyContainer
         _allSlots.Select(s => new StrategySnapshot
         {
             StrategyId = s.Config.StrategyId,
+            StrategyType = s.Config.StrategyType,
             Status = s.IsActive ? "Running" : "Paused",
+            Instruments = s.Config.Instruments.ToList(),
+            AllocatedCapital = s.Config.AllocatedCapital,
+            CurrentEquity = s.Context.Equity,
+            PositionCount = s.Context.Positions.Count,
+            ActiveOrderCount = 0, // Phase 3: from ExecutionHandler
         }).ToList();
 
     public StrategySnapshot? GetSnapshot(string strategyId) =>
@@ -126,5 +132,11 @@ public class StrategySlot
 public record StrategySnapshot
 {
     public string StrategyId { get; init; } = "";
+    public string StrategyType { get; init; } = "";
     public string Status { get; init; } = "Running";
+    public IReadOnlyList<string> Instruments { get; init; } = [];
+    public decimal AllocatedCapital { get; init; }
+    public decimal CurrentEquity { get; init; }
+    public int PositionCount { get; init; }
+    public int ActiveOrderCount { get; init; }
 }

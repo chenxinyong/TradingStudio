@@ -120,9 +120,11 @@ static async Task RunLiveAsync(string[] args)
     var execution = new ExecutionHandler(risk);
     builder.Services.AddSingleton<IExecutionHandler>(execution);
 
-    // 反馈
+    // 反馈 + 行情快照
     var feedback = new FeedbackMonitor();
     builder.Services.AddSingleton(feedback);
+    var tickSnapshot = new TickSnapshot();
+    builder.Services.AddSingleton(tickSnapshot);
 
     // 指标 + 策略容器
     var indicators = new IndicatorManager();
@@ -187,7 +189,7 @@ static async Task RunLiveAsync(string[] args)
 
     var engine = new TradingEngine(
         liveFeed, execution, portfolio, indicators, strategies,
-        risk, feedback, engineOptions, registry);
+        risk, feedback, tickSnapshot, engineOptions, registry);
     builder.Services.AddSingleton(engine);
 
     // 引擎后台运行

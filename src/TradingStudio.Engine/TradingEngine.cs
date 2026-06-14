@@ -16,6 +16,7 @@ public class TradingEngine
     private readonly StrategyContainer _strategies;
     private readonly RiskController _risk;
     private readonly FeedbackMonitor _feedback;
+    private readonly TickSnapshot _tickSnapshot;
     private readonly EngineOptions _options;
     private readonly FutureRegistry _registry;
 
@@ -27,6 +28,7 @@ public class TradingEngine
         StrategyContainer strategies,
         RiskController risk,
         FeedbackMonitor feedback,
+        TickSnapshot tickSnapshot,
         EngineOptions options,
         FutureRegistry registry)
     {
@@ -37,6 +39,7 @@ public class TradingEngine
         _strategies = strategies;
         _risk = risk;
         _feedback = feedback;
+        _tickSnapshot = tickSnapshot;
         _options = options;
         _registry = registry;
     }
@@ -128,6 +131,9 @@ public class TradingEngine
                 {
                     var inst = _registry.Resolve(tickEvt.InstrumentId);
                     if (inst == null) break;
+
+                    // 更新行情快照
+                    _tickSnapshot.Update(tickEvt.InstrumentId, tickEvt.Tick, tickEvt.Time);
 
                     // ① Tick 撮合 — 处理已有订单（限价/止损可能被触发）
                     var tickFills = _execution.ProcessTick(tickEvt.Tick, tickEvt.InstrumentId, inst);

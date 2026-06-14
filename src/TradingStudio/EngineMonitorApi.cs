@@ -1,8 +1,9 @@
+using TradingStudio.Engine;
+
 namespace TradingStudio;
 
 /// <summary>
-/// 引擎监控 API — 内嵌于 TradingStudio 进程。
-/// REST 查询 + 控制命令。实时推送走 SignalR Hub。
+/// 引擎监控 API — 对接实盘引擎组件，供 WPF 客户端查询。
 /// </summary>
 public static class EngineMonitorApi
 {
@@ -11,46 +12,71 @@ public static class EngineMonitorApi
         var api = app.MapGroup("/api");
 
         // ═══ 快照查询 (GET) ═══
-        api.MapGet("/health", () =>
+
+        api.MapGet("/health", (PortfolioManager? portfolio, TickSnapshot? ticks) =>
         {
-            // Phase 3: 从 HealthMonitor 获取快照
-            return Results.Ok(new { Status = "Phase 3" });
+            return Results.Ok(new
+            {
+                Status = "Running",
+                ConnectedInstruments = ticks?.Count ?? 0,
+                TotalEquity = portfolio?.Equity ?? 0,
+                LastUpdate = DateTimeOffset.UtcNow,
+            });
         });
 
-        api.MapGet("/portfolio", () =>
+        api.MapGet("/portfolio", (PortfolioManager portfolio) =>
         {
-            // Phase 3: 从 PortfolioManager 获取快照
-            return Results.Ok(new { Phase = 3 });
+            return Results.Ok(new
+            {
+                StartingCapital = portfolio.StartingCapital,
+                TotalEquity = portfolio.Equity,
+                Cash = portfolio.Cash,
+                MarginUsed = portfolio.MarginUsed,
+                TotalPnL = portfolio.TotalPnL,
+                Positions = portfolio.AllPositions,
+                TradeCount = portfolio.TradeHistory.Count,
+            });
         });
 
-        api.MapGet("/strategies", () =>
+        api.MapGet("/strategies", (StrategyContainer strategies) =>
         {
-            // Phase 3: 从 StrategyContainer 获取快照
-            return Results.Ok(new { Phase = 3 });
+            return Results.Ok(strategies.GetAllSnapshots());
         });
 
-        api.MapGet("/strategies/{id}", (string id) =>
+        api.MapGet("/strategies/{id}", (string id, StrategyContainer strategies) =>
         {
-            // Phase 3: 单策略快照
-            return Results.Ok(new { StrategyId = id, Phase = 3 });
+            var s = strategies.GetSnapshot(id);
+            return s != null ? Results.Ok(s) : Results.NotFound();
         });
 
-        api.MapGet("/orders", () =>
+        api.MapGet("/orders", (ExecutionHandler execution) =>
         {
-            // Phase 3: 从 ExecutionHandler 获取活跃订单
-            return Results.Ok(new { Phase = 3 });
+            return Results.Ok(new
+            {
+                Active = execution.ActiveOrders,
+                History = execution.OrderHistory.TakeLast(100),
+            });
         });
 
-        api.MapGet("/trades", () =>
+        api.MapGet("/trades", (PortfolioManager portfolio) =>
         {
-            // Phase 3: 从 PortfolioManager 获取今日成交
-            return Results.Ok(new { Phase = 3 });
+            return Results.Ok(portfolio.TradeHistory.TakeLast(100));
         });
 
-        api.MapGet("/alerts", () =>
+        api.MapGet("/alerts", (FeedbackMonitor feedback) =>
         {
-            // Phase 3: 从 FeedbackMonitor 获取告警列表
-            return Results.Ok(new { Phase = 3 });
+            return Results.Ok(feedback.RecentAlerts);
+        });
+
+        api.MapGet("/ticks", (TickSnapshot ticks) =>
+        {
+            return Results.Ok(ticks.GetAll());
+        });
+
+        api.MapGet("/ticks/{instrumentId}", (string instrumentId, TickSnapshot ticks) =>
+        {
+            var t = ticks.Get(instrumentId);
+            return t != null ? Results.Ok(t) : Results.NotFound();
         });
 
         api.MapGet("/indicators/{strategyId}", (string strategyId) =>
@@ -60,28 +86,29 @@ public static class EngineMonitorApi
         });
 
         // ═══ 控制命令 (POST) ═══
-        api.MapPost("/strategies/{id}/pause", (string id) =>
+
+        api.MapPost("/strategies/{id}/pause", (string id, StrategyContainer strategies) =>
         {
-            // Phase 3: StrategyContainer.Pause(id)
-            return Results.Ok(new { StrategyId = id, Action = "pause", Phase = 3 });
+            strategies.Pause(id);
+            return Results.Ok(new { StrategyId = id, Action = "pause" });
         });
 
-        api.MapPost("/strategies/{id}/resume", (string id) =>
+        api.MapPost("/strategies/{id}/resume", (string id, StrategyContainer strategies) =>
         {
-            // Phase 3: StrategyContainer.Resume(id)
-            return Results.Ok(new { StrategyId = id, Action = "resume", Phase = 3 });
+            strategies.Resume(id);
+            return Results.Ok(new { StrategyId = id, Action = "resume" });
         });
 
         api.MapPost("/strategies/{id}/tighten", (string id, TightenRiskRequest req) =>
         {
-            // Phase 3: StrategyContainer.TightenRisk(id, req.RuleName, req.NewValue)
+            // Phase 3: RiskController.Tighten
             return Results.Ok(new { StrategyId = id, Rule = req.RuleName, Phase = 3 });
         });
 
         api.MapPost("/orders/close-position", (ClosePositionRequest req) =>
         {
             // Phase 3: 紧急平仓
-            return Results.Ok(new { InstrumentId = req.InstrumentId, Phase = 3 });
+            return Results.Ok(new { req.InstrumentId, Phase = 3 });
         });
 
         api.MapPost("/config/reload", () =>
@@ -92,8 +119,5 @@ public static class EngineMonitorApi
     }
 }
 
-/// <summary>风控收紧请求</summary>
 public record TightenRiskRequest(string RuleName, string NewValue);
-
-/// <summary>手动平仓请求</summary>
 public record ClosePositionRequest(string InstrumentId);
