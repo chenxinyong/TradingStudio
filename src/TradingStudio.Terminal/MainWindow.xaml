@@ -207,8 +207,48 @@
             <GridSplitter Grid.Column="2" Width="4" HorizontalAlignment="Stretch"
                           Background="{StaticResource VsBorderLight}" />
 
-            <!-- 主内容区 -->
-            <ContentControl Grid.Column="3" x:Name="MainContent" />
+            <!-- 主内容区 (多文档标签) -->
+            <TabControl Grid.Column="3" x:Name="MainTabs" Background="{StaticResource VsBgPrimary}"
+                        BorderThickness="0" Padding="0">
+                <TabControl.Resources>
+                    <Style TargetType="TabItem">
+                        <Setter Property="Background" Value="{StaticResource VsBgTertiary}" />
+                        <Setter Property="Foreground" Value="{StaticResource VsFgSecondary}" />
+                        <Setter Property="FontSize" Value="12" />
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Padding" Value="12,4" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="TabItem">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{StaticResource VsAccentBlue}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            Padding="{TemplateBinding Padding}" CornerRadius="0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ContentPresenter Content="{TemplateBinding Header}"
+                                                              VerticalAlignment="Center" />
+                                            <Button Content="✕" FontSize="10" Cursor="Hand"
+                                                    Foreground="{StaticResource VsFgMuted}" Background="Transparent"
+                                                    BorderThickness="0" Margin="8,0,0,0" Padding="2,0"
+                                                    Click="CloseTab_Click" Tag="{TemplateBinding Name}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource VsBgPrimary}" />
+                                            <Setter Property="BorderThickness" Value="0,0,0,2" />
+                                            <Setter Property="Foreground" Value="White" />
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource VsBgHover}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </TabControl.Resources>
+            </TabControl>
 
             <!-- 分隔线 -->
             <GridSplitter Grid.Column="4" Width="4" HorizontalAlignment="Stretch"
