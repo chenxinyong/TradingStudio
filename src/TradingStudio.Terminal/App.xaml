@@ -3,6 +3,38 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <SolidColorBrush x:Key="BackgroundBrush" Color="#1E1E2E" />
+
+        <!-- ═══════════════════════════════════════════
+             VS Code 暗色主题色板
+             ═══════════════════════════════════════════ -->
+
+        <!-- 背景层级 -->
+        <SolidColorBrush x:Key="VsBgPrimary"   Color="#1E1E1E" />  <!-- 主背景 -->
+        <SolidColorBrush x:Key="VsBgSecondary" Color="#252526" />  <!-- 面板/侧栏 -->
+        <SolidColorBrush x:Key="VsBgTertiary"  Color="#2D2D30" />  <!-- 工具栏/标题栏 -->
+        <SolidColorBrush x:Key="VsBgHover"     Color="#3E3E42" />  <!-- 悬停 -->
+
+        <!-- 前景 -->
+        <SolidColorBrush x:Key="VsFgPrimary"   Color="#CCCCCC" />  <!-- 正文 -->
+        <SolidColorBrush x:Key="VsFgSecondary" Color="#969696" />  <!-- 次要文字 -->
+        <SolidColorBrush x:Key="VsFgMuted"     Color="#6E6E6E" />  <!-- 不活跃文字 -->
+
+        <!-- 边框 -->
+        <SolidColorBrush x:Key="VsBorder"      Color="#3E3E42" />  <!-- 面板边框 -->
+        <SolidColorBrush x:Key="VsBorderLight" Color="#474747" />  <!-- Splitter -->
+
+        <!-- 强调色 -->
+        <SolidColorBrush x:Key="VsAccentBlue"   Color="#007ACC" />  <!-- 主强调 -->
+        <SolidColorBrush x:Key="VsAccentLight"  Color="#4FC1FF" />  <!-- 亮强调 -->
+        <SolidColorBrush x:Key="VsAccentGreen"  Color="#4EC9B0" />  <!-- 成功/盈利 -->
+        <SolidColorBrush x:Key="VsAccentRed"    Color="#F44747" />  <!-- 错误/亏损 -->
+        <SolidColorBrush x:Key="VsAccentYellow" Color="#CCA700" />  <!-- 警告 -->
+
+        <!-- 状态栏 -->
+        <SolidColorBrush x:Key="VsStatusBar"    Color="#007ACC" />  <!-- 底部状态栏 -->
+
+        <!-- 兼容: 保留旧名称，指向新色板 -->
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#1E1E1E" />
+
     </Application.Resources>
 </Application>
