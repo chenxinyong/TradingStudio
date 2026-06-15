@@ -25,8 +25,6 @@ public class NavigationService : INavigationService
             _chartWindow = new ChartWindow();
             _chartWindow.Closed += (_, _) => _chartWindow = null;
         }
-        if (instrumentId != null && _chartWindow.DataContext is ViewModels.ChartViewModel vm)
-            vm.InstrumentId = instrumentId;
         _chartWindow.Show();
         _chartWindow.Activate();
     }

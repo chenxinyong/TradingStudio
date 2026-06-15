@@ -1,8 +1,8 @@
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
-using TradingStudio.UI.ViewModels;
+using TradingStudio.Terminal.ViewModels;
 
-namespace TradingStudio.UI;
+namespace TradingStudio.Terminal;
 
 /// <summary>
 /// K线图表 Demo 主窗口 — 四窗格布局 (K线/成交量/MACD/RSI)
