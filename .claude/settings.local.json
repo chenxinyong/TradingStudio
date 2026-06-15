@@ -31,7 +31,10 @@
       "PowerShell($proc = Start-Process -FilePath \"cmd.exe\" -ArgumentList \"/c `\"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release\\\\start.bat`\"\" -NoNewWindow -PassThru; Start-Sleep -Seconds 10; if \\(!$proc.HasExited\\) { Stop-Process $proc.Id -Force }; Write-Host \"start.bat ran for 10s - OK\")",
       "Bash(cmd /c release-collect.bat --quick)",
       "PowerShell(cmd /c \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release-collect.bat\" --quick 2>&1)",
-      "Bash(rm -rf /c/Works/ClaudeCode/TradingStudio/data/_import_temp_20* && echo \"Temp dirs cleaned\" && ls /c/Works/ClaudeCode/TradingStudio/data/_import_temp_* 2>&1)"
+      "Bash(rm -rf /c/Works/ClaudeCode/TradingStudio/data/_import_temp_20* && echo \"Temp dirs cleaned\" && ls /c/Works/ClaudeCode/TradingStudio/data/_import_temp_* 2>&1)",
+      "PowerShell($dir = \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release\\\\collect\"; $size = \\(Get-ChildItem $dir -Recurse | Measure-Object -Property Length -Sum\\).Sum / 1MB; $files = \\(Get-ChildItem $dir -Recurse | Measure-Object\\).Count; Write-Host \"collect: $\\([math]::Round\\($size,0\\)\\) MB, $files files\")",
+      "PowerShell(cmd /c \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release-all.bat\" 2>&1)",
+      "PowerShell(Set-Location \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release\"; Get-ChildItem -Directory | Where-Object { $_.Name -notin @\\('collect','live','backtest'\\) } | Remove-Item -Recurse -Force; Write-Host \"Cleaned. Remaining:\"; Get-ChildItem -Directory | ForEach-Object { Write-Host \"  $_\" })"
     ],
     "additionalDirectories": [
       "C:\\Works\\ClaudeCode\\TradingStudio\\data"
