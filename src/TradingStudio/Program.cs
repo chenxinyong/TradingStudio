@@ -4,6 +4,7 @@ using Serilog;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Engine;
+using TradingStudio.Data.Storage;
 using TradingStudio.Live;
 using TradingStudio.Options;
 using TradingStudio.Services;
@@ -136,6 +137,11 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddSingleton(indicators);
     var strategies = new StrategyContainer();
     builder.Services.AddSingleton(strategies);
+
+    // ── 数据持久化 ──
+    var dbPath = cfg["Live:Database"] ?? "bars_live.db";
+    var barStore = new BarStore(dbPath);
+    builder.Services.AddSingleton(barStore);
 
     // 资金管理
     var startCapital = decimal.Parse(cfg["Live:StartingCapital"] ?? "100000");

@@ -21,8 +21,12 @@ public class ExecutionHandler : IExecutionHandler
     /// <summary>实盘模式：引擎调用此委托将订单发往 CTP。CTP 集成点。</summary>
     public Action<Order>? SendToExchange { get; set; }
 
-    /// <summary>CTP 成交回报通道（实盘模式：CTP 回调写入 FillChannel.Writer，引擎后台消费）</summary>
+    /// <summary>CTP 成交回报通道（实盘模式：CTP 回调写入 FillChannel.Writer，引擎独占消费）</summary>
     public System.Threading.Channels.Channel<OrderEvent> FillChannel { get; }
+        = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
+
+    /// <summary>已处理的成交事件输出通道（引擎处理完 FillChannel 后写入，SignalR 推送端消费）</summary>
+    public System.Threading.Channels.Channel<OrderEvent> OrderOutbox { get; }
         = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
 
     public IReadOnlyList<Order> ActiveOrders => _activeOrders;

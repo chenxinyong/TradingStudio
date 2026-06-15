@@ -36,16 +36,18 @@ public class EngineHubPushService : BackgroundService
         var lastPortfolio = DateTimeOffset.UtcNow;
         var lastAlerts = DateTimeOffset.UtcNow;
 
+        // 从引擎的 OrderOutbox 读取已处理的成交（引擎独占 FillChannel，
+        // 处理完后写入 OrderOutbox，我们只读 OrderOutbox——避免双消费者竞态）
         if (_execution != null)
         {
             _ = Task.Run(async () =>
             {
-                var reader = _execution.FillChannel.Reader;
+                var reader = _execution.OrderOutbox.Reader;
                 while (!ct.IsCancellationRequested && await reader.WaitToReadAsync(ct))
                 {
                     while (reader.TryRead(out var fill))
                     {
-                        await _hub.Clients.Group(fill.StrategyId)
+                        await _hub.Clients.Group(fill.StrategyId ?? "")
                             .SendAsync("OrderUpdated", fill, ct);
                         await _hub.Clients.All
                             .SendAsync("OrderFlowUpdated", fill, ct);

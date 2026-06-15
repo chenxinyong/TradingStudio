@@ -9,13 +9,13 @@ namespace TradingStudio.Live;
 
 /// <summary>
 /// 实盘数据源 — 直接封装 CTP MdApi，产出 TickEvent + BarEvent 流。
-/// 内置断线自动重连。
+/// 内置断线自动重连。使用 CTP 交易日字段正确处理夜盘归属。
 /// </summary>
 public class CtpLiveFeed : IDataFeed, IDisposable
 {
     private readonly CtpMdOptions _opts;
     private readonly ILogger<CtpLiveFeed> _log;
-    private readonly Channel<(string InstId, TickRecord Tick)> _merged;
+    private readonly Channel<(string InstId, TickRecord Tick, DateOnly TradingDay)> _merged;
     private CTP.MdApi? _mdApi;
     private DateTime _startTime;
     private DateTime _endTime;
@@ -31,7 +31,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     {
         _opts = opts;
         _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CtpLiveFeed>.Instance;
-        _merged = Channel.CreateBounded<(string, TickRecord)>(8192);
+        _merged = Channel.CreateBounded<(string, TickRecord, DateOnly)>(8192);
     }
 
     public void Initialize(DateTime startTime, DateTime endTime, IReadOnlyList<string> instruments)
@@ -81,10 +81,13 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                 else { _log.Error("CTP login failed: {Err}", err.ErrorMsg()); loggedIn.TrySetResult(false); }
             };
 
+            // 行情回调 → 归并 Channel（使用 CTP 交易日字段）
             _mdApi.OnQuote += q =>
             {
                 if (string.IsNullOrEmpty(q.InstrumentID)) return;
                 var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
+                var tradingDay = DateOnly.TryParseExact(q.TradingDay, "yyyyMMdd", out var d)
+                    ? d : DateOnly.FromDateTime(DateTime.Today);
                 var record = new TickRecord
                 {
                     ExchangeTimestamp = q.ExchangeTimestamp,
@@ -94,7 +97,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                     BidPrice1 = (long)(q.BidPrice1 * TickRecord.PriceScale), BidVolume1 = q.BidVolume1,
                     AskPrice1 = (long)(q.AskPrice1 * TickRecord.PriceScale), AskVolume1 = q.AskVolume1,
                 };
-                _merged.Writer.TryWrite((instId, record));
+                _merged.Writer.TryWrite((instId, record, tradingDay));
             };
 
             try
@@ -121,8 +124,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                     if (!await reader.WaitToReadAsync(ct)) break;
                     while (reader.TryRead(out var item))
                     {
-                        var (instId, tick) = item;
-                        var tradingDay = DateOnly.FromDateTime(DateTime.Today);
+                        var (instId, tick, tradingDay) = item;
 
                         yield return new TickEvent
                         {
@@ -151,7 +153,6 @@ public class CtpLiveFeed : IDataFeed, IDisposable
 
             if (ct.IsCancellationRequested) break;
 
-            // ── 重连退避 ──
             _log.Information("Reconnecting in 5s...");
             try { await Task.Delay(5000, ct); }
             catch (OperationCanceledException) { break; }

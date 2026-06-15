@@ -125,27 +125,22 @@ public class CtpTraderBridge : IDisposable
 
     private static OrderEvent? ConvertOrder(CTP.Order ctpOrder)
     {
-        var isFilled = ctpOrder.OrderStatus == '0';      // AllTraded
         var isCancelled = ctpOrder.OrderStatus == '5';   // Canceled
         var isRejected = ctpOrder.OrderStatus == '4';    // Rejected
 
-        if (!isFilled && !isCancelled && !isRejected) return null;
+        // 成交回报走 OnTrade（有准确成交价），OnOrder 只处理拒绝/撤销
+        if (!isCancelled && !isRejected) return null;
 
-        var type = isFilled
-            ? (ctpOrder.VolumeTraded >= ctpOrder.VolumeTotalOriginal
-                ? OrderEventType.Filled : OrderEventType.PartiallyFilled)
-            : isCancelled ? OrderEventType.Cancelled : OrderEventType.Rejected;
+        var type = isCancelled ? OrderEventType.Cancelled : OrderEventType.Rejected;
 
         return new OrderEvent
         {
             OrderId = long.TryParse(ctpOrder.OrderRef, out var id) ? id : 0,
             InstrumentId = ctpOrder.InstrumentID ?? "",
             Direction = ctpOrder.Direction == '0' ? OrderDirection.Buy : OrderDirection.Sell,
-            Quantity = ctpOrder.VolumeTraded,
+            Quantity = ctpOrder.VolumeTotalOriginal,
             OrderQty = ctpOrder.VolumeTotalOriginal,
-            FilledQty = ctpOrder.VolumeTraded,
             Type = type,
-            FillPrice = (decimal)ctpOrder.LimitPrice,
             Message = ctpOrder.StatusMsg,
             Time = DateTimeOffset.UtcNow,
         };

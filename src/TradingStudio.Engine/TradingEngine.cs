@@ -111,6 +111,7 @@ public class TradingEngine
             ? Task.Run(async () =>
             {
                 var reader = fillChannel.Reader;
+                var outboxWriter = (_execution is ExecutionHandler exec2) ? exec2.OrderOutbox.Writer : null;
                 while (await reader.WaitToReadAsync(cts.Token))
                 {
                     while (reader.TryRead(out var fill))
@@ -118,6 +119,7 @@ public class TradingEngine
                         var trade = _portfolio.ProcessFill(fill, _registry);
                         lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
                         _strategies.DispatchOrderEvent(fill);
+                        outboxWriter?.TryWrite(fill);  // 通知 SignalR 推送端
                     }
                 }
             }, ct)
