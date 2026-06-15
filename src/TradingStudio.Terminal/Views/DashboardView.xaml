@@ -11,51 +11,101 @@
 
         <!-- 系统健康 -->
         <Border Grid.Row="0" Grid.Column="0" Margin="4" Background="{StaticResource VsBgSecondary}"
-                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="12">
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="16">
             <StackPanel>
-                <TextBlock Text="系统健康" Foreground="{StaticResource VsFgPrimary}" FontSize="14" FontWeight="Bold"/>
-                <TextBlock Text="● 已连接" Foreground="{StaticResource VsAccentGreen}" FontSize="13" Margin="0,8,0,0"/>
-                <TextBlock Text="日盘 09:00-15:00" Foreground="{StaticResource VsFgSecondary}" Margin="0,4,0,0"/>
-                <TextBlock Text="运行 3d 2h 15m" Foreground="{StaticResource VsFgSecondary}" Margin="0,4,0,0"/>
+                <TextBlock Text="系统健康" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Margin="0,0,0,8"/>
+                <TextBlock Text="{Binding StatusText}" FontSize="16" Margin="0,4,0,0">
+                    <TextBlock.Foreground>
+                        <SolidColorBrush Color="{Binding StatusColor, FallbackValue=#4EC9B0}" />
+                    </TextBlock.Foreground>
+                </TextBlock>
+                <TextBlock Foreground="{StaticResource VsFgSecondary}" FontSize="12" Margin="0,4,0,0">
+                    <Run Text="Tick "/><Run Text="{Binding TickCount, FallbackValue=0}"/><Run Text=" · 品种 "/>
+                    <Run Text="{Binding ConnectedInstruments, FallbackValue=0}"/>
+                </TextBlock>
+                <TextBlock Text="{Binding Session, FallbackValue=休市}" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Margin="0,2,0,0"/>
             </StackPanel>
         </Border>
 
         <!-- 风控概览 -->
         <Border Grid.Row="0" Grid.Column="1" Margin="4" Background="{StaticResource VsBgSecondary}"
-                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="12">
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="16">
             <StackPanel>
-                <TextBlock Text="风控概览" Foreground="{StaticResource VsFgPrimary}" FontSize="14" FontWeight="Bold"/>
-                <TextBlock Text="权益 ¥102,345" Foreground="White" FontSize="16" Margin="0,8,0,0"/>
-                <TextBlock Text="保证金 45% · 回撤 -2.1% · 敞口 3 品种" Foreground="{StaticResource VsFgSecondary}" Margin="0,4,0,0"/>
+                <TextBlock Text="风控概览" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Margin="0,0,0,8"/>
+                <TextBlock FontSize="18" FontWeight="Bold" Margin="0,4,0,0">
+                    <Run Text="¥" Foreground="{StaticResource VsFgMuted}"/><Run Text="{Binding TotalEquity, FallbackValue=102345, StringFormat=N0}" Foreground="White"/>
+                </TextBlock>
+                <TextBlock Foreground="{StaticResource VsFgSecondary}" FontSize="12" Margin="0,4,0,0">
+                    <Run Text="保证金 "/><Run Text="{Binding MarginPct, FallbackValue=45, StringFormat=F1}"/><Run Text="% · 持仓 "/>
+                    <Run Text="{Binding PositionCount, FallbackValue=3}"/><Run Text=" 手"/>
+                </TextBlock>
+                <TextBlock Text="可用 {Binding Cash, FallbackValue=55000, StringFormat=¥#,##0}" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Margin="0,2,0,0"/>
             </StackPanel>
         </Border>
 
         <!-- 活跃告警 -->
         <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="4" Background="{StaticResource VsBgSecondary}"
-                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="12">
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="16">
             <StackPanel>
-                <TextBlock Text="活跃告警" Foreground="{StaticResource VsFgPrimary}" FontSize="14" FontWeight="Bold"/>
-                <TextBlock Text="⚠ 14:32 rb2608 滑点偏高 (2.3 tick)" Foreground="{StaticResource VsAccentYellow}" Margin="0,6,0,0"/>
-                <TextBlock Text="⚠ 14:28 CTP 重连 #2" Foreground="{StaticResource VsAccentYellow}" Margin="0,2,0,0"/>
+                <TextBlock Text="活跃告警" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Margin="0,0,0,6"/>
+                <ItemsControl ItemsSource="{Binding RecentAlerts}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock FontSize="12" Margin="0,2,0,0">
+                                <Run Text="⚠" Foreground="{StaticResource VsAccentYellow}"/>
+                                <Run Text="{Binding Type, Mode=OneWay}" Foreground="{StaticResource VsFgPrimary}"/>
+                                <Run Text=" " Foreground="{StaticResource VsFgMuted}"/>
+                                <Run Text="{Binding Message, Mode=OneWay}" Foreground="{StaticResource VsFgMuted}"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="暂无告警" Foreground="{StaticResource VsFgMuted}" FontSize="12" Margin="0,6,0,0"
+                           Visibility="{Binding RecentAlerts.Count, Converter={StaticResource ZeroToVisible}}" />
             </StackPanel>
         </Border>
 
-        <!-- 策略状态 + 最近成交 -->
+        <!-- 策略状态 -->
         <Border Grid.Row="2" Grid.Column="0" Margin="4" Background="{StaticResource VsBgSecondary}"
-                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="12">
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="16">
             <StackPanel>
-                <TextBlock Text="策略状态" Foreground="{StaticResource VsFgPrimary}" FontSize="14" FontWeight="Bold"/>
-                <TextBlock Text="▶ MA趋势 · 权益 51,234 · 持仓 2" Foreground="{StaticResource VsAccentGreen}" Margin="0,6,0,0"/>
-                <TextBlock Text="■ 网格 · 暂停 · 权益 48,901" Foreground="{StaticResource VsAccentRed}" Margin="0,2,0,0"/>
+                <TextBlock Text="策略状态" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Margin="0,0,0,6"/>
+                <ItemsControl ItemsSource="{Binding Strategies}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock FontSize="12" Margin="0,2,0,0">
+                                <Run Text="{Binding Status, Mode=OneWay}" Foreground="{StaticResource VsAccentGreen}"/>
+                                <Run Text=" "/><Run Text="{Binding StrategyId, Mode=OneWay}" Foreground="{StaticResource VsFgPrimary}"/>
+                                <Run Text=" · "/><Run Text="¥" Foreground="{StaticResource VsFgMuted}"/>
+                                <Run Text="{Binding CurrentEquity, Mode=OneWay, StringFormat=N0}" Foreground="{StaticResource VsFgSecondary}"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="无运行策略" Foreground="{StaticResource VsFgMuted}" FontSize="12" Margin="0,6,0,0"
+                           Visibility="{Binding Strategies.Count, Converter={StaticResource ZeroToVisible}}" />
             </StackPanel>
         </Border>
 
+        <!-- 最近成交 -->
         <Border Grid.Row="2" Grid.Column="1" Margin="4" Background="{StaticResource VsBgSecondary}"
-                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="12">
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="1" Padding="16">
             <StackPanel>
-                <TextBlock Text="最近成交" Foreground="{StaticResource VsFgPrimary}" FontSize="14" FontWeight="Bold"/>
-                <TextBlock Text="15:00 cu2607 多开 2手 @68500 +1200" Foreground="{StaticResource VsAccentGreen}" Margin="0,6,0,0"/>
-                <TextBlock Text="14:55 rb2608 平仓 1手 @3520 +350" Foreground="{StaticResource VsAccentGreen}" Margin="0,2,0,0"/>
+                <TextBlock Text="最近成交" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Margin="0,0,0,6"/>
+                <ItemsControl ItemsSource="{Binding RecentOrders}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock FontSize="12" Margin="0,2,0,0"
+                                       Foreground="{StaticResource VsFgSecondary}">
+                                <Run Text="{Binding Type, Mode=OneWay}"/><Run Text=" "/>
+                                <Run Text="{Binding InstrumentId, Mode=OneWay}" Foreground="{StaticResource VsFgPrimary}"/>
+                                <Run Text=" "/><Run Text="{Binding Direction, Mode=OneWay}"/>
+                                <Run Text=" "/><Run Text="{Binding Quantity, Mode=OneWay}"/><Run Text="手"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="暂无成交" Foreground="{StaticResource VsFgMuted}" FontSize="12" Margin="0,6,0,0"/>
             </StackPanel>
         </Border>
     </Grid>
