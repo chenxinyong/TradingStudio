@@ -95,21 +95,26 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddSerilog((_, cfg) =>
         cfg.ReadFrom.Configuration(builder.Configuration));
 
-    // ── 引擎组件 DI ──
+    // ── 启动配置验证 ──
     var cfg = builder.Configuration;
+    ValidateLiveConfig(cfg);
 
-    // 品种注册表
+    // ── 基础设施 (时段 + 健康) ──
+    builder.Services.AddSingleton<SessionScheduler>();
+    builder.Services.AddSingleton<HealthMonitor>();
+
+    // ── 品种注册表 ──
     var symbolsPath = cfg["Live:SymbolsPath"] ?? "symbols.json";
     var registry = FutureRegistry.Load(symbolsPath);
     builder.Services.AddSingleton(registry);
 
-    // 数据源: CTP 行情
+    // ── 数据源: CTP 行情 ──
     var mdOpts = new CtpMdOptions
     {
-        MdFront = cfg["Live:MdFront"] ?? "",
+        MdFront = cfg["Live:MdFront"]!,
         BrokerId = cfg["Live:BrokerId"] ?? "9999",
-        UserId = cfg["Live:UserId"] ?? "",
-        Password = cfg["Live:Password"] ?? "",
+        UserId = cfg["Live:UserId"]!,
+        Password = cfg["Live:Password"]!,
     };
     var liveFeed = new CtpLiveFeed(mdOpts);
     builder.Services.AddSingleton<IDataFeed>(liveFeed);
@@ -263,4 +268,24 @@ static async Task RunCollectAsync(string[] args)
     builder.Services.PostConfigure<CollectOptions>(opts => { opts.ExchangeFilter = exchange; opts.SymbolFilter = symbol; });
     builder.Services.AddHostedService<CollectService>();
     await builder.Build().RunAsync();
+}
+
+static void ValidateLiveConfig(IConfiguration cfg)
+{
+    var errors = new List<string>();
+
+    if (string.IsNullOrEmpty(cfg["Live:UserId"]))
+        errors.Add("Live:UserId is required — check appsettings.json → Live.UserId");
+    if (string.IsNullOrEmpty(cfg["Live:Password"]))
+        errors.Add("Live:Password is required — check appsettings.json → Live.Password");
+    if (string.IsNullOrEmpty(cfg["Live:MdFront"]))
+        errors.Add("Live:MdFront is required — check appsettings.json → Live.MdFront");
+
+    if (errors.Count > 0)
+    {
+        Console.Error.WriteLine("=== 配置错误 ===");
+        foreach (var e in errors) Console.Error.WriteLine($"  - {e}");
+        Console.Error.WriteLine("================");
+        throw new InvalidOperationException(string.Join("\n", errors));
+    }
 }

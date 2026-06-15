@@ -1,25 +1,30 @@
 using System.Threading.Channels;
 using TradingStudio.Core.Engine;
+using Microsoft.Extensions.Logging;
 
 namespace TradingStudio.Live;
 
 /// <summary>
 /// CTP 交易桥接 — ExecutionHandler.SendToExchange → CTP InsertOrder。
 /// CTP 回报 (OnOrder/OnTrade) → OrderEvent → FillChannel。
+/// 内置断线检测：断开时 IsReady=false，后续订单立即拒绝。
 /// </summary>
 public class CtpTraderBridge : IDisposable
 {
     private readonly CtpTraderOptions _opts;
     private readonly ChannelWriter<OrderEvent> _fillWriter;
+    private readonly ILogger<CtpTraderBridge> _log;
     private CTP.TraderApi? _trader;
     private bool _disposed;
 
     public bool IsReady { get; private set; }
 
-    public CtpTraderBridge(Channel<OrderEvent> fillChannel, CtpTraderOptions opts)
+    public CtpTraderBridge(Channel<OrderEvent> fillChannel, CtpTraderOptions opts,
+                           ILogger<CtpTraderBridge>? log = null)
     {
         _fillWriter = fillChannel.Writer;
         _opts = opts;
+        _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CtpTraderBridge>.Instance;
     }
 
     public void Connect()
@@ -28,7 +33,22 @@ public class CtpTraderBridge : IDisposable
 
         _trader.OnFrontConnected += () =>
         {
+            _log.Information("CTP Trader connected: {Front}", _opts.TraderFront);
             _trader.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
+        };
+
+        _trader.OnFrontDisconnected += _ =>
+        {
+            IsReady = false;
+            _log.Warning("CTP Trader disconnected — IsReady=false");
+
+            // 通知引擎：交易已断
+            _fillWriter.TryWrite(new OrderEvent
+            {
+                Type = OrderEventType.Rejected,
+                Message = "CTP交易连接断开",
+                Time = DateTimeOffset.UtcNow,
+            });
         };
 
         _trader.OnLogin += (err, _) =>
@@ -36,7 +56,12 @@ public class CtpTraderBridge : IDisposable
             if (err.IsOK())
             {
                 IsReady = true;
+                _log.Information("CTP Trader login OK");
                 _trader.ConfirmSettlement();
+            }
+            else
+            {
+                _log.Error("CTP Trader login failed: {Err}", err.ErrorMsg());
             }
         };
 
@@ -54,7 +79,7 @@ public class CtpTraderBridge : IDisposable
         };
 
         _trader.OnError += (err, _) =>
-            System.Diagnostics.Debug.WriteLine($"[CTP] {err.ErrorID}: {err.ErrorMsg}");
+            _log.Warning("[CTP-Trader] {ErrorID}: {ErrorMsg}", err.ErrorID, err.ErrorMsg);
 
         _trader.Connect(_opts.TraderFront);
     }
@@ -62,7 +87,23 @@ public class CtpTraderBridge : IDisposable
     /// <summary>ExecutionHandler.SendToExchange → CTP InsertOrder</summary>
     public void SendOrder(Order order)
     {
-        if (!IsReady || _trader == null) return;
+        if (!IsReady || _trader == null)
+        {
+            _log.Warning("Order rejected — CTP not ready (OrderId={Id}, Inst={Inst})",
+                order.OrderId, order.InstrumentId);
+            // 立即拒绝——策略知道订单没成交
+            _fillWriter.TryWrite(new OrderEvent
+            {
+                OrderId = order.OrderId,
+                InstrumentId = order.InstrumentId,
+                Direction = order.Direction,
+                Quantity = order.Quantity,
+                Type = OrderEventType.Rejected,
+                Message = "CTP交易未就绪",
+                Time = DateTimeOffset.UtcNow,
+            });
+            return;
+        }
 
         var req = new CTP.OrderRequest
         {
@@ -84,9 +125,9 @@ public class CtpTraderBridge : IDisposable
 
     private static OrderEvent? ConvertOrder(CTP.Order ctpOrder)
     {
-        var isFilled = ctpOrder.OrderStatus == '0';  // THOST_FTDC_OST_AllTraded
-        var isCancelled = ctpOrder.OrderStatus == '5'; // THOST_FTDC_OST_Canceled
-        var isRejected = ctpOrder.OrderStatus == '4';  // THOST_FTDC_OST_Rejected
+        var isFilled = ctpOrder.OrderStatus == '0';      // AllTraded
+        var isCancelled = ctpOrder.OrderStatus == '5';   // Canceled
+        var isRejected = ctpOrder.OrderStatus == '4';    // Rejected
 
         if (!isFilled && !isCancelled && !isRejected) return null;
 

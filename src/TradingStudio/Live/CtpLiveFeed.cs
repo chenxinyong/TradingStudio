@@ -3,16 +3,18 @@ using System.Threading.Channels;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Data.Aggregation;
+using Microsoft.Extensions.Logging;
 
 namespace TradingStudio.Live;
 
 /// <summary>
 /// 实盘数据源 — 直接封装 CTP MdApi，产出 TickEvent + BarEvent 流。
-/// 与 CollectService 使用相同的底层 CTP 接口。
+/// 内置断线自动重连。
 /// </summary>
 public class CtpLiveFeed : IDataFeed, IDisposable
 {
     private readonly CtpMdOptions _opts;
+    private readonly ILogger<CtpLiveFeed> _log;
     private readonly Channel<(string InstId, TickRecord Tick)> _merged;
     private CTP.MdApi? _mdApi;
     private DateTime _startTime;
@@ -25,9 +27,10 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     public DateTime EndTime => _endTime;
     public bool IsConnected { get; private set; }
 
-    public CtpLiveFeed(CtpMdOptions opts)
+    public CtpLiveFeed(CtpMdOptions opts, ILogger<CtpLiveFeed>? log = null)
     {
         _opts = opts;
+        _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CtpLiveFeed>.Instance;
         _merged = Channel.CreateBounded<(string, TickRecord)>(8192);
     }
 
@@ -43,91 +46,116 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     {
         if (_instruments.Count == 0) yield break;
 
-        _mdApi = new CTP.MdApi();
-        using var barAgg = new BarAggregator();
-        var barQueue = new Queue<BarEvent>();
-        barAgg.OnBar += b =>
-        {
-            lock (barQueue)
-                barQueue.Enqueue(new BarEvent { Bar = b, Time = new DateTimeOffset(b.BarTime, TimeSpan.Zero), IsNewBar = true });
-        };
-
-        // 连接 + 登录
-        var connected = new TaskCompletionSource<bool>();
-        var loggedIn = new TaskCompletionSource<bool>();
-        var discLock = new object();
-        var disconnected = false;
-
-        _mdApi.OnFrontConnected += () =>
-        {
-            IsConnected = true;
-            connected.TrySetResult(true);
-            _mdApi.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
-        };
-        _mdApi.OnFrontDisconnected += _ => { lock (discLock) disconnected = true; IsConnected = false; };
-        _mdApi.OnLogin += (err, _) =>
-        {
-            if (err.IsOK()) loggedIn.TrySetResult(true);
-            else loggedIn.TrySetResult(false);
-        };
-
-        _mdApi.Connect(_opts.MdFront);
-        if (!await Wait(connected, 15000, ct)) throw new Exception("CTP connect timeout");
-        if (!await Wait(loggedIn, 15000, ct)) throw new Exception("CTP login failed");
-
-        // 行情回调 → 归并 Channel
-        _mdApi.OnQuote += q =>
-        {
-            if (string.IsNullOrEmpty(q.InstrumentID)) return;
-            var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
-            var record = new TickRecord
-            {
-                ExchangeTimestamp = q.ExchangeTimestamp,
-                LocalTimestamp = q.LocalTimestamp,
-                LastPrice = (long)(q.LastPrice * TickRecord.PriceScale),
-                Volume = q.Volume, Turnover = q.Turnover, OpenInterest = q.OpenInterest,
-                BidPrice1 = (long)(q.BidPrice1 * TickRecord.PriceScale), BidVolume1 = q.BidVolume1,
-                AskPrice1 = (long)(q.AskPrice1 * TickRecord.PriceScale), AskVolume1 = q.AskVolume1,
-            };
-            _merged.Writer.TryWrite((instId, record));
-        };
-
-        // 订阅
-        for (int i = 0; i < _instruments.Count && !ct.IsCancellationRequested; i += 50)
-        {
-            _mdApi.Subscribe(_instruments.Skip(i).Take(50).ToArray());
-            await Task.Delay(200, ct);
-        }
-
-        // 消费归并流
-        var reader = _merged.Reader;
         while (!ct.IsCancellationRequested)
         {
-            // 断线检查
-            lock (discLock) { if (disconnected) break; }
-
-            if (!await reader.WaitToReadAsync(ct)) break;
-            while (reader.TryRead(out var item))
+            _mdApi = new CTP.MdApi();
+            using var barAgg = new BarAggregator();
+            var barQueue = new Queue<BarEvent>();
+            barAgg.OnBar += b =>
             {
-                var (instId, tick) = item;
-                var tradingDay = DateOnly.FromDateTime(DateTime.Today);
-
-                yield return new TickEvent
-                {
-                    Tick = tick, InstrumentId = instId, TradingDay = tradingDay,
-                    Time = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp),
-                };
-
-                barAgg.Feed(tick, instId, tradingDay);
-
                 lock (barQueue)
-                    while (barQueue.Count > 0) yield return barQueue.Dequeue();
-            }
-        }
+                    barQueue.Enqueue(new BarEvent { Bar = b, Time = new DateTimeOffset(b.BarTime, TimeSpan.Zero), IsNewBar = true });
+            };
 
-        _merged.Writer.Complete();
-        barAgg.Flush();
-        lock (barQueue) while (barQueue.Count > 0) yield return barQueue.Dequeue();
+            // ── 连接 + 登录 ──
+            var connected = new TaskCompletionSource<bool>();
+            var loggedIn = new TaskCompletionSource<bool>();
+            var discLock = new object();
+            var disconnected = false;
+
+            _mdApi.OnFrontConnected += () =>
+            {
+                IsConnected = true;
+                connected.TrySetResult(true);
+                _mdApi.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
+            };
+            _mdApi.OnFrontDisconnected += _ =>
+            {
+                lock (discLock) { disconnected = true; }
+                IsConnected = false;
+                _log.Warning("CTP MdApi disconnected");
+            };
+            _mdApi.OnLogin += (err, _) =>
+            {
+                if (err.IsOK()) loggedIn.TrySetResult(true);
+                else { _log.Error("CTP login failed: {Err}", err.ErrorMsg()); loggedIn.TrySetResult(false); }
+            };
+
+            _mdApi.OnQuote += q =>
+            {
+                if (string.IsNullOrEmpty(q.InstrumentID)) return;
+                var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
+                var record = new TickRecord
+                {
+                    ExchangeTimestamp = q.ExchangeTimestamp,
+                    LocalTimestamp = q.LocalTimestamp,
+                    LastPrice = (long)(q.LastPrice * TickRecord.PriceScale),
+                    Volume = q.Volume, Turnover = q.Turnover, OpenInterest = q.OpenInterest,
+                    BidPrice1 = (long)(q.BidPrice1 * TickRecord.PriceScale), BidVolume1 = q.BidVolume1,
+                    AskPrice1 = (long)(q.AskPrice1 * TickRecord.PriceScale), AskVolume1 = q.AskVolume1,
+                };
+                _merged.Writer.TryWrite((instId, record));
+            };
+
+            try
+            {
+                _mdApi.Connect(_opts.MdFront);
+                if (!await Wait(connected, 15000, ct)) throw new Exception("CTP connect timeout");
+                if (!await Wait(loggedIn, 15000, ct)) throw new Exception("CTP login failed");
+
+                _log.Information("CTP connected: {Front}", _opts.MdFront);
+
+                // 订阅
+                for (int i = 0; i < _instruments.Count && !ct.IsCancellationRequested; i += 50)
+                {
+                    _mdApi.Subscribe(_instruments.Skip(i).Take(50).ToArray());
+                    await Task.Delay(200, ct);
+                }
+
+                // ── 消费循环 ──
+                var reader = _merged.Reader;
+                while (!ct.IsCancellationRequested)
+                {
+                    lock (discLock) { if (disconnected) break; }
+
+                    if (!await reader.WaitToReadAsync(ct)) break;
+                    while (reader.TryRead(out var item))
+                    {
+                        var (instId, tick) = item;
+                        var tradingDay = DateOnly.FromDateTime(DateTime.Today);
+
+                        yield return new TickEvent
+                        {
+                            Tick = tick, InstrumentId = instId, TradingDay = tradingDay,
+                            Time = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp),
+                        };
+
+                        barAgg.Feed(tick, instId, tradingDay);
+
+                        lock (barQueue)
+                            while (barQueue.Count > 0) yield return barQueue.Dequeue();
+                    }
+                }
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                _log.Warning(ex, "CTP stream error — reconnecting in 5s...");
+            }
+            finally
+            {
+                _merged.Writer.Complete();
+                barAgg.Flush();
+                lock (barQueue) while (barQueue.Count > 0) yield return barQueue.Dequeue();
+                _mdApi?.Dispose();
+            }
+
+            if (ct.IsCancellationRequested) break;
+
+            // ── 重连退避 ──
+            _log.Information("Reconnecting in 5s...");
+            try { await Task.Delay(5000, ct); }
+            catch (OperationCanceledException) { break; }
+        }
     }
 
     private static async Task<bool> Wait(TaskCompletionSource<bool> tcs, int ms, CancellationToken ct)
