@@ -324,7 +324,7 @@ public class ExecutionHandler : IExecutionHandler
             FillPrice = fillPrice,
             Fee = fee,
             Slippage = slippage,
-            Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero),
+            Time = new DateTimeOffset(bar.BarTime, TimeSpan.FromHours(8)),
         };
     }
 
@@ -338,3 +338,4 @@ public class ExecutionHandler : IExecutionHandler
         return delta;
     }
 }
+
