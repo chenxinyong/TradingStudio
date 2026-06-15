@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
+using Microsoft.Extensions.DependencyInjection;
+using TradingStudio.Terminal.ViewModels;
 using TradingStudio.Terminal.Views;
 
 namespace TradingStudio.Terminal;
@@ -7,10 +9,13 @@ namespace TradingStudio.Terminal;
 public partial class MainWindow : Window
 {
     private UIElement? _dashboardView, _chartView, _strategyView, _orderView, _logView;
+    private readonly DashboardViewModel _dashVM;
 
     public MainWindow()
     {
         InitializeComponent();
+        _dashVM = App.Services.GetRequiredService<DashboardViewModel>();
+        DataContext = _dashVM;  // 状态栏 + 标题绑定
         ShowDashboard();
 
         KeyDown += (_, e) =>
