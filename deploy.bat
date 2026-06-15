@@ -28,7 +28,7 @@ echo  2/7  TradingStudio (Engine)
 echo ========================================
 REM use msbuild (not dotnet publish) because TradingStudio
 REM references CTPWrapper.vcxproj which requires C++ toolchain
-msbuild "%ROOT%src\TradingStudio\TradingStudio.csproj" /t:Publish /p:Configuration=Release /p:PublishDir="%DIST%\Server" /p:SelfContained=false > "%LOG%" 2>&1
+msbuild "%ROOT%src\TradingStudio\TradingStudio.csproj" /t:Publish /p:Configuration=Release /p:PublishDir="%DIST%\Server" /p:SelfContained=true > "%LOG%" 2>&1
 if %ERRORLEVEL% NEQ 0 (
     type "%LOG%"
     echo FAIL & exit /b 1
@@ -39,7 +39,7 @@ echo.
 echo ========================================
 echo  3/7  TradingStudio.UI (Desktop)
 echo ========================================
-dotnet publish "%ROOT%src\TradingStudio.UI\TradingStudio.UI.csproj" -c Release -o "%DIST%\Desktop" --self-contained false > "%LOG%" 2>&1
+dotnet publish "%ROOT%src\TradingStudio.UI\TradingStudio.UI.csproj" -c Release -o "%DIST%\Desktop" --self-contained true > "%LOG%" 2>&1
 if %ERRORLEVEL% NEQ 0 (
     type "%LOG%"
     echo FAIL & exit /b 1
@@ -50,7 +50,7 @@ echo.
 echo ========================================
 echo  4/7  TradingStudio.ToolBox (CLI)
 echo ========================================
-dotnet publish "%ROOT%src\TradingStudio.ToolBox\TradingStudio.ToolBox.csproj" -c Release -o "%DIST%\ToolBox" --self-contained false > "%LOG%" 2>&1
+dotnet publish "%ROOT%src\TradingStudio.ToolBox\TradingStudio.ToolBox.csproj" -c Release -o "%DIST%\ToolBox" --self-contained true > "%LOG%" 2>&1
 if %ERRORLEVEL% NEQ 0 (
     type "%LOG%"
     echo FAIL & exit /b 1

@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit *)",
+      "Bash(git commit -m 'docs: 缠论策略四文档 + 金数源并行导入脚本 *)",
+      "Bash(sed -i '216s/DateTimeOffset.UtcNow/DateTimeOffset.FromUnixTimeMilliseconds\\(tick.ExchangeTimestamp\\)/' src/TradingStudio.Engine/ExecutionHandler.cs)",
+      "Bash(sed -i '315s/DateTimeOffset.UtcNow/new DateTimeOffset\\(bar.BarTime, TimeSpan.Zero\\)/' src/TradingStudio.Engine/ExecutionHandler.cs)",
+      "Bash(rm -f /c/Works/ClaudeCode/TradingStudio/data/bars_2020.db /c/Works/ClaudeCode/TradingStudio/data/bars_2021.db && echo \"Old DBs removed\" && ls -lh /c/Works/ClaudeCode/TradingStudio/data/bars_2020.db /c/Works/ClaudeCode/TradingStudio/data/bars_2021.db 2>&1)",
+      "Bash(./TradingStudio.ToolBox.exe import-jinshuyuan *)",
+      "Bash(/c/Works/ClaudeCode/TradingStudio/src/TradingStudio.ToolBox/bin/Release/net10.0/TradingStudio.ToolBox.exe import-jinshuyuan *)",
+      "Bash(dotnet build *)",
+      "Read(//c/Users/chenx/AppData/Local/Temp/claude/c--Works-ClaudeCode-TradingStudio/a8d05ead-fc00-4791-988d-1dde25dc4c70/tasks/**)",
+      "Bash(git add *)",
+      "Bash(git reset *)",
+      "Bash(git push *)",
+      "Bash(dotnet add *)",
+      "Bash(dotnet test *)",
+      "Bash(sed -i '$d' src/TradingStudio.Engine/ExecutionHandler.cs)",
+      "Bash(cmd /c release-collect.bat)",
+      "PowerShell(cmd /c \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release-collect.bat\" 2>&1)",
+      "PowerShell($logPath = \"$env:TEMP\\\\release-collect.log\"; if \\(Test-Path $logPath\\) { Write-Host \"=== LOG \\(last 30 lines\\) ===\"; Get-Content $logPath -Tail 30 } else { Write-Host \"Log file not found: $logPath\" }; Write-Host \"---\"; if \\(Test-Path \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release\"\\) { Write-Host \"release/ exists\"; ls \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release\\\\\" | Select-Object Name -First 10 } else { Write-Host \"release/ does NOT exist\" })",
+      "PowerShell($logPath = \"$env:TEMP\\\\release-collect.log\"; Remove-Item $logPath -ErrorAction SilentlyContinue; cmd /c \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release-collect.bat\" 2>&1 | Select-Object -Last 50)",
+      "PowerShell($logPath = \"$env:TEMP\\\\release-collect.log\"; if \\(Test-Path $logPath\\) { Write-Host \"=== LOG TAIL ===\"; Get-Content $logPath -Tail 30 -Encoding UTF8 } else { Write-Host \"No log at $logPath\" })",
+      "PowerShell($logPath = \"$env:TEMP\\\\release-collect.log\"; Remove-Item $logPath -ErrorAction SilentlyContinue; cmd /c \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release-collect.bat\" 2>&1 | Select-Object -Last 40)",
+      "PowerShell($content = Get-Content \"$env:TEMP\\\\release-collect.log\" -Tail 20 -Encoding UTF8; $content -join \"`n\")",
+      "PowerShell($logPath = \"$env:TEMP\\\\release-collect.log\"; Remove-Item $logPath -ErrorAction SilentlyContinue; cmd /c \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release-collect.bat\" 2>&1 | Select-Object -Last 30)",
+      "PowerShell($logPath = \"$env:TEMP\\\\release-collect.log\"; Remove-Item $logPath -ErrorAction SilentlyContinue; cmd /c \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release-collect.bat\" 2>&1 | Select-Object -Last 25)",
+      "Bash(git tag -a v0.2.0-collect -m 'v0.2.0-collect: 行情采集一键发布 *)",
+      "PowerShell(Set-Location \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release\"; $env:DOTNET_ENVIRONMENT = \"Development\"; try { $p = Start-Process -FilePath \".\\\\TradingStudio.exe\" -ArgumentList \"collect\" -NoNewWindow -PassThru -Wait -RedirectStandardOutput \"stdout.txt\" -RedirectStandardError \"stderr.txt\"; Write-Host \"ExitCode: $\\($p.ExitCode\\)\" } catch { Write-Host \"Exception: $_\" }; Write-Host \"=== stdout ===\"; if \\(Test-Path stdout.txt\\) { Get-Content stdout.txt } else { Write-Host \"\\(empty\\)\" }; Write-Host \"=== stderr ===\"; if \\(Test-Path stderr.txt\\) { Get-Content stderr.txt } else { Write-Host \"\\(empty\\)\" }; Write-Host \"=== crash.log ===\"; if \\(Test-Path crash.log\\) { Get-Content crash.log } else { Write-Host \"\\(not found\\)\" })",
+      "Bash(timeout 8 cmd /c start.bat)",
+      "PowerShell($proc = Start-Process -FilePath \"cmd.exe\" -ArgumentList \"/c `\"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release\\\\start.bat`\"\" -NoNewWindow -PassThru; Start-Sleep -Seconds 10; if \\(!$proc.HasExited\\) { Stop-Process $proc.Id -Force }; Write-Host \"start.bat ran for 10s - OK\")",
+      "Bash(cmd /c release-collect.bat --quick)",
+      "PowerShell(cmd /c \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\release-collect.bat\" --quick 2>&1)",
+      "Bash(rm -rf /c/Works/ClaudeCode/TradingStudio/data/_import_temp_20* && echo \"Temp dirs cleaned\" && ls /c/Works/ClaudeCode/TradingStudio/data/_import_temp_* 2>&1)"
+    ],
+    "additionalDirectories": [
+      "C:\\Works\\ClaudeCode\\TradingStudio\\data"
+    ]
+  }
+}

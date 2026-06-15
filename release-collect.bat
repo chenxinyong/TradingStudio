@@ -38,7 +38,7 @@ REM --- Step 2: TradingStudio Engine ---
 echo.
 echo [2/5] TradingStudio Engine (Release)...
 if not exist "%RELEASE%" mkdir "%RELEASE%"
-msbuild "%ROOT%src\TradingStudio\TradingStudio.csproj" /t:Publish /p:Configuration=Release /p:PublishDir="%RELEASE%" /p:SelfContained=false > "%LOG%" 2>&1
+msbuild "%ROOT%src\TradingStudio\TradingStudio.csproj" /t:Publish /p:Configuration=Release /p:PublishDir="%RELEASE%" /p:SelfContained=true > "%LOG%" 2>&1
 if %ERRORLEVEL% NEQ 0 (
     type "%LOG%"
     echo FAIL: msbuild failed
