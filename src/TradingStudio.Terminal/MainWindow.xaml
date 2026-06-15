@@ -151,10 +151,10 @@
                         <Run Text="💰 ¥"/><Run Text="{Binding TotalEquity, StringFormat=N0, FallbackValue=102345}"/>
                     </TextBlock>
                     <TextBlock Style="{StaticResource StatusItem}">
-                        <Run Text="品种 "/><Run Text="{Binding ConnectedInstruments, FallbackValue=45}"/>
+                        <Run Text="品种 "/><Run Text="{Binding ConnectedInstruments, Mode=OneWay, FallbackValue=45}"/>
                     </TextBlock>
                     <TextBlock Style="{StaticResource StatusItem}" Foreground="{StaticResource VsAccentYellow}">
-                        <Run Text="⚠ "/><Run Text="{Binding RecentAlerts.Count, FallbackValue=3}"/>
+                        <Run Text="⚠ "/><Run Text="{Binding RecentAlerts.Count, Mode=OneWay, FallbackValue=3}"/>
                     </TextBlock>
                 </StackPanel>
                 <StackPanel HorizontalAlignment="Right" Margin="0,0,12,0">
