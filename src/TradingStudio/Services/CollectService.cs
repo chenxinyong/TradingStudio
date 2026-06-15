@@ -66,7 +66,8 @@ public class CollectService : BackgroundService
         using var store = new BarStore(_cfg.Database);
         using var tickWriter = new TickCsvWriter(_cfg.TickData);
 
-        _ = HealthLoop(store, tickWriter, ct);
+        using var healthCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var healthTask = HealthLoop(store, tickWriter, healthCts.Token);
 
         while (!ct.IsCancellationRequested)
         {
@@ -118,6 +119,9 @@ public class CollectService : BackgroundService
             aggDay.FlushAll();
             await Task.Delay(500, ct);
         }
+
+        healthCts.Cancel();
+        try { await healthTask; } catch (OperationCanceledException) { }
 
         _log.Information("Done. quotes={Quotes} bars={Bars} csv={Csv}",
             _quoteCount, store.WrittenCount, tickWriter.WrittenCount);
