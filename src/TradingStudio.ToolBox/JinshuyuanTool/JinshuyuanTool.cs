@@ -30,6 +30,7 @@ public class JinshuyuanTool : IToolCommand
         var toMonth = "202512";
         var dataDir = @"C:\Works\Datas\Jinshuyuan";
         var dbPath = "bars_history.db";
+        string? tempDir = null;
         var dryRun = false;
 
         for (int j = 0; j < args.Length; j++)
@@ -42,6 +43,7 @@ public class JinshuyuanTool : IToolCommand
                 case "--from" or "-f" or "--from-month" when j + 1 < args.Length: fromMonth = args[++j]; break;
                 case "--to" or "-t" or "--to-month" when j + 1 < args.Length:     toMonth = args[++j]; break;
                 case "--data-dir" or "-d" when j + 1 < args.Length: dataDir = args[++j]; break;
+                case "--temp-dir" when j + 1 < args.Length:         tempDir = args[++j]; break;
                 case "--db" when j + 1 < args.Length:               dbPath = args[++j]; break;
                 case "--dry-run": dryRun = true; break;
             }
@@ -71,6 +73,7 @@ public class JinshuyuanTool : IToolCommand
             ExchangeCode = exchangeStr,
             FromMonth = fromMonth,
             ToMonth = toMonth,
+            TempDir = tempDir,
             DryRun = dryRun,
             KnownProducts = knownProducts,
         };
