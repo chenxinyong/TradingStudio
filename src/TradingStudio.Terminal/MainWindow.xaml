@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="TradingStudio.Terminal" Height="900" Width="1400"
-        WindowStartupLocation="CenterScreen"
+        WindowStartupLocation="CenterScreen" WindowState="Maximized"
         WindowStyle="None" AllowsTransparency="False" ResizeMode="CanResizeWithGrip"
         BorderBrush="{StaticResource VsBorder}" BorderThickness="1"
         Background="{StaticResource VsBgPrimary}">
@@ -111,8 +111,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="32" />  <!-- 标题栏 -->
-            <RowDefinition Height="24" />  <!-- 菜单栏 -->
-            <RowDefinition Height="28" />  <!-- 命令栏 -->
+            <RowDefinition Height="28" />  <!-- 菜单+命令栏 -->
             <RowDefinition Height="*" />   <!-- 内容区 -->
             <RowDefinition Height="24" />  <!-- 状态栏 -->
         </Grid.RowDefinitions>
@@ -136,32 +135,27 @@
             </Grid>
         </Border>
 
-        <!-- ── 菜单栏 ── -->
+        <!-- ── 菜单+命令栏 (同行) ── -->
         <Border Grid.Row="1" Background="{StaticResource VsBgTertiary}"
                 BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                <MenuItem Header="文件(_F)" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Padding="6,2" Background="Transparent" BorderThickness="0" />
-                <MenuItem Header="编辑(_E)" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Padding="6,2" Background="Transparent" BorderThickness="0" />
-                <MenuItem Header="视图(_V)" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Padding="6,2" Background="Transparent" BorderThickness="0" />
-                <MenuItem Header="工具(_T)" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Padding="6,2" Background="Transparent" BorderThickness="0" />
-                <MenuItem Header="帮助(_H)" Foreground="{StaticResource VsFgSecondary}" FontSize="12" Padding="6,2" Background="Transparent" BorderThickness="0" />
-            </StackPanel>
-        </Border>
-
-        <!-- ── 命令栏 ── -->
-        <Border Grid.Row="2" Background="{StaticResource VsBgSecondary}"
-                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,0,1">
-            <Grid Margin="12,0">
-                <TextBlock Text="🔍" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Left" />
-                <TextBlock Text="搜索命令 (Ctrl+Shift+P)..." FontSize="12"
-                           Foreground="{StaticResource VsFgMuted}" VerticalAlignment="Center" Margin="24,0,0,0" />
-                <TextBlock Text="Ctrl+` 切换终端" FontSize="11"
-                           Foreground="{StaticResource VsFgMuted}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
+            <Grid Margin="8,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <MenuItem Header="文件(_F)" FontSize="12" Padding="6,2" />
+                    <MenuItem Header="编辑(_E)" FontSize="12" Padding="6,2" />
+                    <MenuItem Header="视图(_V)" FontSize="12" Padding="6,2" />
+                    <MenuItem Header="工具(_T)" FontSize="12" Padding="6,2" />
+                    <MenuItem Header="帮助(_H)" FontSize="12" Padding="6,2" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="🔍" FontSize="12" VerticalAlignment="Center" />
+                    <TextBlock Text="搜索命令 (Ctrl+Shift+P)" FontSize="12"
+                               Foreground="{StaticResource VsFgMuted}" VerticalAlignment="Center" Margin="6,0,0,0" />
+                </StackPanel>
             </Grid>
         </Border>
 
         <!-- ── 内容区 ── -->
-        <Grid Grid.Row="3">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="48" />
                 <ColumnDefinition Width="*" />
@@ -194,7 +188,7 @@
         </Grid>
 
         <!-- ── 状态栏 (绑定 DashboardViewModel) ── -->
-        <Border Grid.Row="4" Background="{StaticResource VsStatusBar}"
+        <Border Grid.Row="3" Background="{StaticResource VsStatusBar}"
                 BorderBrush="{StaticResource VsBorder}" BorderThickness="0,1,0,0" Padding="8,0">
             <Grid>
                 <StackPanel Orientation="Horizontal">
