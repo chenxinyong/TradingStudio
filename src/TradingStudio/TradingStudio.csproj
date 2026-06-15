@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <Content Include="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" CopyToPublishDirectory="PreserveNewest" Link="CTPWrapper.dll" />
+    <Content Include="C:\Windows\System32\vcruntime140.dll" CopyToPublishDirectory="PreserveNewest" Link="vcruntime140.dll" />
     <Content Include="..\CTP\SDK\dll\thostmduserapi_se.dll" CopyToPublishDirectory="PreserveNewest" Link="thostmduserapi_se.dll" />
     <Content Include="..\CTP\SDK\dll\thosttraderapi_se.dll" CopyToPublishDirectory="PreserveNewest" Link="thosttraderapi_se.dll" />
     <Content Include="..\..\tools\UnRAR.exe" CopyToPublishDirectory="PreserveNewest" Link="tools\UnRAR.exe" />
