@@ -44,4 +44,11 @@ public partial class MainWindow : Window
     void NavStrategies_Click(object s, RoutedEventArgs e) => ShowStrategies();
     void NavOrders_Click(object s, RoutedEventArgs e)    => ShowOrders();
     void NavLogs_Click(object s, RoutedEventArgs e)      => ShowLogs();
+    void NavAdmin_Click(object s, RoutedEventArgs e)     => ShowAdmin();
+
+    void ShowAdmin()
+    {
+        var view = new PlaceholderView("⚡", "管理", "Phase 2 — 系统配置、数据库、部署");
+        MainContent.Content = view;
+    }
 }

@@ -121,14 +121,23 @@
             <!-- 左侧导航 -->
             <Border Grid.Column="0" Background="{StaticResource VsBgSecondary}"
                     BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,1,0">
-                <StackPanel VerticalAlignment="Top" Margin="0,8,0,0">
-                    <Button Style="{StaticResource NavButton}" Content="📊" ToolTip="仪表盘 (Ctrl+1)" Click="NavDashboard_Click" />
-                    <Button Style="{StaticResource NavButton}" Content="📈" ToolTip="行情图表 (Ctrl+2)" Click="NavChart_Click" />
-                    <Button Style="{StaticResource NavButton}" Content="📋" ToolTip="策略管理 (Ctrl+3)" Click="NavStrategies_Click" />
-                    <Button Style="{StaticResource NavButton}" Content="📜" ToolTip="订单监控 (Ctrl+4)" Click="NavOrders_Click" />
-                    <Separator Background="{StaticResource VsBorderLight}" Height="1" Margin="8,4" />
-                    <Button Style="{StaticResource NavButton}" Content="⚙" ToolTip="日志 (Ctrl+5)" Click="NavLogs_Click" />
-                </StackPanel>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="0,8,0,0">
+                        <Button Style="{StaticResource NavButton}" Content="📊" ToolTip="仪表盘 (Ctrl+1)" Click="NavDashboard_Click" />
+                        <Button Style="{StaticResource NavButton}" Content="📈" ToolTip="行情图表 (Ctrl+2)" Click="NavChart_Click" />
+                        <Button Style="{StaticResource NavButton}" Content="📋" ToolTip="策略管理 (Ctrl+3)" Click="NavStrategies_Click" />
+                        <Button Style="{StaticResource NavButton}" Content="📜" ToolTip="订单监控 (Ctrl+4)" Click="NavOrders_Click" />
+                        <Separator Background="{StaticResource VsBorderLight}" Height="1" Margin="8,4" />
+                        <Button Style="{StaticResource NavButton}" Content="⚙" ToolTip="日志 (Ctrl+5)" Click="NavLogs_Click" />
+                    </StackPanel>
+                    <Button Grid.Row="2" Style="{StaticResource NavButton}" Content="⚡"
+                            ToolTip="管理" Margin="0,0,0,8" Click="NavAdmin_Click" />
+                </Grid>
             </Border>
 
             <!-- 主内容区 -->
