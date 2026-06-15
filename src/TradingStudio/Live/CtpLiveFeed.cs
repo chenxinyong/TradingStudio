@@ -90,7 +90,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
             _mdApi.OnQuote += q =>
             {
                 if (string.IsNullOrEmpty(q.InstrumentID)) return;
-                var record = QuoteConverter.FromQuote(q);
+                var record = QuoteConverter.FromCTPQuote(q);
                 var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
                 var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
                 _merged.Writer.TryWrite((instId, record, tradingDay));

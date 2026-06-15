@@ -183,7 +183,7 @@ public class CollectService : BackgroundService
     {
         if (string.IsNullOrEmpty(q.InstrumentID)) return;
         var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
-        var record = QuoteConverter.FromQuote(q);
+        var record = QuoteConverter.FromCTPQuote(q);
         var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
 
         agg1Min.Feed(record, instId, tradingDay); aggDay.Feed(record, instId, tradingDay);

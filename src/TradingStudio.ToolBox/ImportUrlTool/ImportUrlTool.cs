@@ -52,10 +52,13 @@ public class ImportUrlTool : IToolCommand
         var log = sp.GetRequiredService<ILogger<ImportUrlTool>>();
         log.LogInformation("Downloading: {Url}", url);
 
-        // 下载到临时目录
+        // 下载到临时目录（按金数源目录结构：DataDir/FutAC_TickKZ_CTP_Daily_{year}/file.rar）
         var tempDir = Path.Combine(Path.GetTempPath(), $"jinshuyuan_{DateTime.Now:yyyyMMddHHmmss}");
-        Directory.CreateDirectory(tempDir);
-        var rarFile = Path.Combine(tempDir, "data.rar");
+        var year = dateStr.Length >= 4 ? dateStr[..4] : DateTime.Now.Year.ToString();
+        var rarDir = Path.Combine(tempDir, $"FutAC_TickKZ_CTP_Daily_{year}");
+        Directory.CreateDirectory(rarDir);
+        var monthStr = dateStr.Length >= 6 ? dateStr[..6] : dateStr;  // YYYYMM format
+        var rarFile = Path.Combine(rarDir, $"FutAC_TickKZ_CTP_Daily_{monthStr}.rar");
 
         try
         {
