@@ -6,6 +6,7 @@
         Title="TradingStudio.Terminal"
         Height="900" Width="1400"
         WindowStartupLocation="CenterScreen"
+        WindowStyle="None" AllowsTransparency="False"
         Background="{StaticResource VsBgPrimary}">
 
     <Window.Resources>
@@ -47,10 +48,42 @@
         </Style>
 
         <Style x:Key="StatusText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource VsFgMuted}" />
+            <Setter Property="Foreground" Value="{StaticResource VsFgSecondary}" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Margin" Value="12,0" />
+        </Style>
+
+        <Style x:Key="StatusItem" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource VsFgSecondary}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="16,0,0,0" />
+        </Style>
+
+        <!-- 窗口控制按钮 -->
+        <Style x:Key="WinButton" TargetType="Button">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource VsFgSecondary}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource VsBgHover}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- 侧栏导航按钮 -->
@@ -79,104 +112,154 @@
         </Style>
     </Window.Resources>
 
-    <!-- ═══════════════════════════════════════════
-         VS Code 布局: 侧栏 + 主区 + 状态栏
-         ═══════════════════════════════════════════ -->
+    <!-- ═══════════════════════════════════════
+         主布局: 标题栏 + 侧栏 + 主区 + 状态栏
+         ═══════════════════════════════════════ -->
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="28" />   <!-- 标题栏 -->
+            <RowDefinition Height="*" />    <!-- 内容区 -->
+            <RowDefinition Height="24" />   <!-- 状态栏 -->
         </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="48" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
 
-        <!-- 左侧导航栏 -->
-        <Border Grid.Row="0" Grid.Column="0" Background="{StaticResource VsBgSecondary}"
-                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,1,0">
-            <StackPanel VerticalAlignment="Top" Margin="0,8,0,0">
-                <Button Style="{StaticResource NavButton}" Content="📊"
-                        ToolTip="仪表盘 (Ctrl+1)" Click="NavDashboard_Click" />
-                <Button Style="{StaticResource NavButton}" Content="📈"
-                        ToolTip="行情 (Ctrl+2)" Click="NavChart_Click" />
-                <Button Style="{StaticResource NavButton}" Content="📋"
-                        ToolTip="策略 (Ctrl+3)" Click="NavStrategies_Click" />
-                <Button Style="{StaticResource NavButton}" Content="📜"
-                        ToolTip="订单 (Ctrl+4)" Click="NavOrders_Click" />
-                <Separator Background="{StaticResource VsBorder}" Height="1" Margin="8,4" />
-                <Button Style="{StaticResource NavButton}" Content="⚙"
-                        ToolTip="日志 (Ctrl+5)" Click="NavLogs_Click" />
-            </StackPanel>
+        <!-- ── 标题栏 ── -->
+        <Border Grid.Row="0" Background="{StaticResource VsBgTertiary}"
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,0,1"
+                MouseDown="TitleBar_MouseDown">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <TextBlock Text="📈" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="TradingStudio" FontSize="12" Foreground="{StaticResource VsFgPrimary}"
+                               VerticalAlignment="Center" FontWeight="SemiBold" />
+                    <TextBlock Text="Terminal" FontSize="12" Foreground="{StaticResource VsFgMuted}"
+                               VerticalAlignment="Center" Margin="4,0,0,0" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <Button Style="{StaticResource WinButton}" Content="─" Click="Minimize_Click" />
+                    <Button Style="{StaticResource WinButton}" Content="□" Click="Maximize_Click" />
+                    <Button Style="{StaticResource WinButton}" Content="✕" Click="Close_Click"
+                            Foreground="{StaticResource VsFgSecondary}" />
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <!-- 主内容区 -->
-        <Grid Grid.Row="0" Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="5*" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="1.5*" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="1.5*" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="1.5*" />
-            </Grid.RowDefinitions>
+        <!-- ── 内容区 ── -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-            <!-- 工具栏 -->
-            <Border Grid.Row="0" Background="{StaticResource VsBgTertiary}"
-                    BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,0,1" Padding="8,6">
-                <Grid>
-                    <StackPanel Grid.Column="0" Orientation="Horizontal">
-                        <Button Style="{StaticResource ToolbarButton}"
-                                Command="{Binding ToggleRealtimeCommand}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding IsRunning, Converter={StaticResource RunningToIcon}}" />
-                                <TextBlock Text=" " />
-                                <TextBlock Text="{Binding IsRunning, Converter={StaticResource RunningToText}}" />
-                            </StackPanel>
-                        </Button>
-                        <Button Style="{StaticResource ToolbarButton}"
-                                Content="重置" Command="{Binding ResetViewCommand}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
-                        <CheckBox Style="{StaticResource ToggleCheck}"
-                                  IsChecked="{Binding ShowMA}" Content="MA(5,20,60)" />
-                        <CheckBox Style="{StaticResource ToggleCheck}"
-                                  IsChecked="{Binding ShowBoll}" Content="BOLL(20,2)" />
-                        <CheckBox Style="{StaticResource ToggleCheck}"
-                                  IsChecked="{Binding ShowMACD}" Content="MACD" />
-                        <CheckBox Style="{StaticResource ToggleCheck}"
-                                  IsChecked="{Binding ShowRSI}" Content="RSI(14)" />
-                    </StackPanel>
-                </Grid>
+            <!-- 左侧导航栏 -->
+            <Border Grid.Column="0" Background="{StaticResource VsBgSecondary}"
+                    BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,1,0">
+                <StackPanel VerticalAlignment="Top" Margin="0,8,0,0">
+                    <Button Style="{StaticResource NavButton}" Content="📊"
+                            ToolTip="仪表盘 (Ctrl+1)" Click="NavDashboard_Click" />
+                    <Button Style="{StaticResource NavButton}" Content="📈"
+                            ToolTip="行情图表 (Ctrl+2)" Click="NavChart_Click" />
+                    <Button Style="{StaticResource NavButton}" Content="📋"
+                            ToolTip="策略管理 (Ctrl+3)" Click="NavStrategies_Click" />
+                    <Button Style="{StaticResource NavButton}" Content="📜"
+                            ToolTip="订单监控 (Ctrl+4)" Click="NavOrders_Click" />
+                    <Separator Background="{StaticResource VsBorderLight}" Height="1" Margin="8,4" />
+                    <Button Style="{StaticResource NavButton}" Content="⚙"
+                            ToolTip="日志 (Ctrl+5)" Click="NavLogs_Click" />
+                </StackPanel>
             </Border>
 
-            <!-- K 线主图 -->
-            <oxy:PlotView Grid.Row="1" Model="{Binding KLineModel}" />
-            <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch"
-                          Background="{StaticResource VsBorderLight}" />
-            <!-- 成交量 -->
-            <oxy:PlotView Grid.Row="3" Model="{Binding VolumeModel}" />
-            <GridSplitter Grid.Row="4" Height="4" HorizontalAlignment="Stretch"
-                          Background="{StaticResource VsBorderLight}" />
-            <!-- MACD -->
-            <oxy:PlotView Grid.Row="5" Model="{Binding MacdModel}" />
-            <GridSplitter Grid.Row="6" Height="4" HorizontalAlignment="Stretch"
-                          Background="{StaticResource VsBorderLight}" />
-            <!-- RSI -->
-            <oxy:PlotView Grid.Row="7" Model="{Binding RsiModel}" />
+            <!-- 主内容区 (K线图表) -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="5*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="1.5*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="1.5*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="1.5*" />
+                </Grid.RowDefinitions>
+
+                <!-- View 工具栏 -->
+                <Border Grid.Row="0" Background="{StaticResource VsBgTertiary}"
+                        BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,0,1" Padding="8,6">
+                    <Grid>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <Button Style="{StaticResource ToolbarButton}"
+                                    Command="{Binding ToggleRealtimeCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding IsRunning, Converter={StaticResource RunningToIcon}}" />
+                                    <TextBlock Text=" " />
+                                    <TextBlock Text="{Binding IsRunning, Converter={StaticResource RunningToText}}" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource ToolbarButton}"
+                                    Content="重置" Command="{Binding ResetViewCommand}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <CheckBox Style="{StaticResource ToggleCheck}"
+                                      IsChecked="{Binding ShowMA}" Content="MA(5,20,60)" />
+                            <CheckBox Style="{StaticResource ToggleCheck}"
+                                      IsChecked="{Binding ShowBoll}" Content="BOLL(20,2)" />
+                            <CheckBox Style="{StaticResource ToggleCheck}"
+                                      IsChecked="{Binding ShowMACD}" Content="MACD" />
+                            <CheckBox Style="{StaticResource ToggleCheck}"
+                                      IsChecked="{Binding ShowRSI}" Content="RSI(14)" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- K 线 4 窗格 -->
+                <oxy:PlotView Grid.Row="1" Model="{Binding KLineModel}" />
+                <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch"
+                              Background="{StaticResource VsBorderLight}" />
+                <oxy:PlotView Grid.Row="3" Model="{Binding VolumeModel}" />
+                <GridSplitter Grid.Row="4" Height="4" HorizontalAlignment="Stretch"
+                              Background="{StaticResource VsBorderLight}" />
+                <oxy:PlotView Grid.Row="5" Model="{Binding MacdModel}" />
+                <GridSplitter Grid.Row="6" Height="4" HorizontalAlignment="Stretch"
+                              Background="{StaticResource VsBorderLight}" />
+                <oxy:PlotView Grid.Row="7" Model="{Binding RsiModel}" />
+            </Grid>
         </Grid>
 
-        <!-- 底部状态栏 -->
-        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{StaticResource VsStatusBar}"
-                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,1,0,0" Padding="8,3">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Style="{StaticResource StatusText}" Text="TradingStudio.Terminal" />
-                <TextBlock Style="{StaticResource StatusText}" Text="|" />
-                <TextBlock Style="{StaticResource StatusText}" Foreground="{StaticResource VsFgSecondary}"
-                           Text="K 线 Demo · VS Code 风格" />
-            </StackPanel>
+        <!-- ── 状态栏 ── -->
+        <Border Grid.Row="2" Background="{StaticResource VsStatusBar}"
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,1,0,0" Padding="8,0">
+            <Grid>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <!-- 连接状态指示 -->
+                    <Ellipse Width="8" Height="8" Fill="#4EC9B0" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="已连接" Foreground="White" FontSize="11" VerticalAlignment="Center" />
+
+                    <TextBlock Style="{StaticResource StatusItem}" Text="|" Margin="12,0" />
+
+                    <!-- 交易时段 -->
+                    <TextBlock Text="📅" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="日盘" Foreground="White" FontSize="11" VerticalAlignment="Center" Margin="4,0,0,0" />
+
+                    <TextBlock Style="{StaticResource StatusItem}" Text="|" Margin="12,0" />
+
+                    <!-- 权益 -->
+                    <TextBlock Text="💰 权益 ¥102,345" Foreground="White" FontSize="11" VerticalAlignment="Center" />
+
+                    <TextBlock Style="{StaticResource StatusItem}" Text="|" Margin="12,0" />
+
+                    <!-- 品种数 -->
+                    <TextBlock Text="品种 45" Foreground="White" FontSize="11" VerticalAlignment="Center" />
+
+                    <TextBlock Style="{StaticResource StatusItem}" Text="|" Margin="12,0" />
+
+                    <!-- 告警数 -->
+                    <TextBlock Text="⚠ 3" Foreground="{StaticResource VsAccentYellow}" FontSize="11" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock Text="OxyPlot | MVVM | VS Code Theme" Foreground="{StaticResource VsFgMuted}"
+                               FontSize="10" VerticalAlignment="Center" Margin="0,0,12,0" />
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>
