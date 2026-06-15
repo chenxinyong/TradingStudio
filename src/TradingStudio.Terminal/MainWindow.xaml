@@ -230,7 +230,7 @@
                                             <Button Content="✕" FontSize="10" Cursor="Hand"
                                                     Foreground="{StaticResource VsFgMuted}" Background="Transparent"
                                                     BorderThickness="0" Margin="8,0,0,0" Padding="2,0"
-                                                    Click="CloseTab_Click" Tag="{TemplateBinding Name}" />
+                                                    Click="CloseTab_Click" Tag="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
                                         </StackPanel>
                                     </Border>
                                     <ControlTemplate.Triggers>

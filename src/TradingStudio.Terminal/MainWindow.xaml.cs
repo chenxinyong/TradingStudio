@@ -33,19 +33,19 @@ public partial class MainWindow : Window
     {
         // 已有同标题标签 → 切换到它
         foreach (TabItem tab in MainTabs.Items)
-            if (tab.Header?.ToString() == title) { tab.IsSelected = true; return; }
+            if (tab.Tag?.ToString() == title) { tab.IsSelected = true; return; }
 
-        var item = new TabItem { Header = title, Name = title, Content = factory() };
+        var item = new TabItem { Header = title, Tag = title, Content = factory() };
         MainTabs.Items.Add(item);
         item.IsSelected = true;
     }
 
     void CloseTab_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is string name)
+        if (sender is Button btn && btn.Tag is string title)
         {
             foreach (TabItem tab in MainTabs.Items)
-                if (tab.Name == name) { MainTabs.Items.Remove(tab); break; }
+                if (tab.Tag?.ToString() == title) { MainTabs.Items.Remove(tab); break; }
         }
     }
 
