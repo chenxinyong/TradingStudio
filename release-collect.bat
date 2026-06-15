@@ -17,7 +17,7 @@ REM    release\start.ps1            PowerShell version
 REM ================================================================
 setlocal enabledelayedexpansion
 set ROOT=%~dp0
-set RELEASE=%ROOT%release
+set RELEASE=%ROOT%release\collect
 set LOG=%TEMP%\release-collect.log
 
 echo.
