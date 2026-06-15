@@ -157,8 +157,12 @@
         <!-- ── 内容区 ── -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="48" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="48" />       <!-- 导航 -->
+                <ColumnDefinition Width="220" />      <!-- 左侧面板 -->
+                <ColumnDefinition Width="Auto" MinWidth="4" />
+                <ColumnDefinition Width="*" />        <!-- 主内容 -->
+                <ColumnDefinition Width="Auto" MinWidth="4" />
+                <ColumnDefinition Width="280" />      <!-- 右侧面板 -->
             </Grid.ColumnDefinitions>
 
             <!-- 左侧导航 -->
@@ -166,9 +170,7 @@
                     BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,1,0">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <StackPanel Grid.Row="0" Margin="0,8,0,0">
                         <Button Style="{StaticResource NavButton}" Content="📊" ToolTip="仪表盘 (Ctrl+1)" Click="NavDashboard_Click" />
@@ -183,8 +185,45 @@
                 </Grid>
             </Border>
 
+            <!-- 左侧面板 (资源树/品种列表/策略树) -->
+            <Border Grid.Column="1" Background="{StaticResource VsBgSecondary}"
+                    BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,1,0" Padding="8">
+                <StackPanel>
+                    <TextBlock Text="资源管理器" FontSize="11" Foreground="{StaticResource VsFgSecondary}"
+                               FontWeight="Bold" Margin="0,0,0,8" />
+                    <TextBlock Text="📂 品种列表" FontSize="12" Foreground="{StaticResource VsFgPrimary}" />
+                    <TextBlock Text="  rb2608" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
+                    <TextBlock Text="  cu2607" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
+                    <TextBlock Text="  ag2608" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
+                    <TextBlock Text="📂 策略列表" FontSize="12" Foreground="{StaticResource VsFgPrimary}" Margin="0,12,0,0"/>
+                    <TextBlock Text="  MA趋势" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
+                    <TextBlock Text="  网格策略" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
+                    <TextBlock Text="📂 服务器" FontSize="12" Foreground="{StaticResource VsFgPrimary}" Margin="0,12,0,0"/>
+                    <TextBlock Text="  localhost:5199" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 分隔线 -->
+            <GridSplitter Grid.Column="2" Width="4" HorizontalAlignment="Stretch"
+                          Background="{StaticResource VsBorderLight}" />
+
             <!-- 主内容区 -->
-            <ContentControl Grid.Column="1" x:Name="MainContent" />
+            <ContentControl Grid.Column="3" x:Name="MainContent" />
+
+            <!-- 分隔线 -->
+            <GridSplitter Grid.Column="4" Width="4" HorizontalAlignment="Stretch"
+                          Background="{StaticResource VsBorderLight}" />
+
+            <!-- 右侧面板 (详情/属性) -->
+            <Border Grid.Column="5" Background="{StaticResource VsBgSecondary}"
+                    BorderBrush="{StaticResource VsBorder}" BorderThickness="1,0,0,0" Padding="8">
+                <StackPanel>
+                    <TextBlock Text="详情" FontSize="11" Foreground="{StaticResource VsFgSecondary}"
+                               FontWeight="Bold" Margin="0,0,0,8" />
+                    <TextBlock Text="选择品种或策略查看详情" FontSize="12"
+                               Foreground="{StaticResource VsFgMuted}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
         </Grid>
 
         <!-- ── 状态栏 (绑定 DashboardViewModel) ── -->
