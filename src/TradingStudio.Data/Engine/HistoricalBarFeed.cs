@@ -81,10 +81,10 @@ public class HistoricalBarFeed : IDataFeed
                 if (bars.Count > 0) { lists.Add(bars); indices.Add(0); }
             }
 
-            DateTime? prevTime = null;
+            DateTime? globalPrevTime = null;
+            var prevTimes = new Dictionary<string, DateTime>();  // 按品种跟踪
             while (true)
             {
-                // 找所有列表中最早的下一个 Bar
                 int minIdx = -1;
                 DateTime minTime = DateTime.MaxValue;
                 for (int i = 0; i < lists.Count; i++)
@@ -101,13 +101,18 @@ public class HistoricalBarFeed : IDataFeed
                 var bar = lists[minIdx][indices[minIdx]];
                 indices[minIdx]++;
 
-                if (IsWeekend(bar.BarTime)) continue;  // 跳过周末
-                var isNew = prevTime == null || bar.BarTime != prevTime.Value;
+                if (IsWeekend(bar.BarTime)) continue;
+
+                // 品种内 IsNewBar：该品种自身上一根 Bar 的时间不同
+                var instId = bar.InstrumentId;
+                var isNew = !prevTimes.TryGetValue(instId, out var pt)
+                    || bar.BarTime != pt;
+                prevTimes[instId] = bar.BarTime;
+
                 yield return new BarEvent { Bar = bar, Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero), IsNewBar = isNew };
-                prevTime = bar.BarTime;
+            }
             }
         }
-    }
 
     private List<Bar> MultiAggregate(IReadOnlyList<Bar> bars)
         => new MultiBarAggregator(_periodMinutes).Aggregate(bars).ToList();

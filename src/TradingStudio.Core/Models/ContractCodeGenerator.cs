@@ -132,7 +132,7 @@ public static class ContractCodeGenerator
         return instrumentId;
     }
 
-    private static (string sym, int year, int month) ParseCode(string code)
+    public static (string sym, int year, int month) ParseCode(string code)
     {
         // cu2607 → (cu, 2026, 7)
         // TA608 → (TA, 2026, 8)

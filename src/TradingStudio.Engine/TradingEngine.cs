@@ -175,6 +175,10 @@ public class TradingEngine
                     // 按市价更新持仓未实现盈亏
                     if (inst != null) _portfolio.UpdateMarketPrice(bar, inst);
 
+                    // 交割月检查：到期前强制平仓（防止进入交割月）
+                    if (inst != null && !_options.IsLive)
+                        _portfolio.ForceCloseNearDelivery(bar, inst, _registry);
+
                     foreach (var slot in _strategies.AllSlots)
                         ((EngineStrategyContext)slot.Context).SetCurrentTime(barEvt.Time);
 

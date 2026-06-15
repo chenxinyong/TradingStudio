@@ -72,6 +72,51 @@ public class PortfolioManager : IPortfolioState
         Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
     }
 
+    /// <summary>交割月检查：到期前 2 个月强制平仓，模拟真实交易规则</summary>
+    public List<OrderEvent> ForceCloseNearDelivery(Bar bar, Future future, FutureRegistry registry)
+    {
+        var closes = new List<OrderEvent>();
+        var toClose = new List<string>();
+
+        foreach (var (instId, pos) in _positions)
+        {
+            if (pos.Quantity == 0) continue;
+            var parsed = ContractCodeGenerator.ParseCode(instId);
+            var year = parsed.year;
+            var month = parsed.month;
+            var deliveryDate = new DateTime(year < 100 ? 2000 + year : year, month, 1);
+            var monthsToDelivery = (deliveryDate.Year - bar.BarTime.Year) * 12
+                + deliveryDate.Month - bar.BarTime.Month;
+
+            if (monthsToDelivery <= 2)
+            {
+                var closeDir = pos.Quantity > 0 ? OrderDirection.Sell : OrderDirection.Buy;
+                var closeQty = Math.Abs(pos.Quantity);
+                var fill = new OrderEvent
+                {
+                    OrderId = -1, // 系统强平
+                    InstrumentId = instId,
+                    StrategyId = pos.StrategyId,
+                    Direction = closeDir,
+                    Quantity = closeQty,
+                    OrderQty = closeQty,
+                    FilledQty = closeQty,
+                    Type = OrderEventType.Filled,
+                    FillPrice = bar.CloseDouble > 0 ? (decimal)bar.CloseDouble : (decimal)bar.OpenDouble,
+                    Fee = 0, // 强平不扣手续费
+                    Slippage = 0,
+                    Message = $"Delivery forced close ({monthsToDelivery}mo to delivery)",
+                    Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero),
+                };
+                var trade = ProcessFill(fill, registry);
+                closes.Add(fill);
+                toClose.Add(instId);
+            }
+        }
+
+        return closes;
+    }
+
     /// <summary>
     /// 处理成交。更新持仓/资金/分账，产生 Trade 记录。
     /// 多仓：做多 × 做空分开。简化处理：同品种同方向合并。
@@ -99,7 +144,7 @@ public class PortfolioManager : IPortfolioState
                 AvgPrice = fill.FillPrice,
                 Commission = fill.Fee,
                 Margin = margin,
-                CreatedTime = DateTimeOffset.UtcNow,
+                CreatedTime = fill.Time,
                 StrategyId = fill.StrategyId,
             };
             _positions[key] = pos;
@@ -139,7 +184,7 @@ public class PortfolioManager : IPortfolioState
                         Fee = pos.Commission + fill.Fee,
                         Slippage = fill.Slippage,
                         EntryTime = pos.CreatedTime.DateTime,
-                        ExitTime = DateTime.UtcNow,
+                        ExitTime = fill.Time.DateTime,
                         StrategyId = fill.StrategyId,
                     };
                     Cash += pnl - fill.Fee + pos.Margin;
@@ -183,7 +228,7 @@ public class PortfolioManager : IPortfolioState
                     Fee = closeFee + fill.Fee,
                     Slippage = fill.Slippage,
                     EntryTime = pos.CreatedTime.DateTime,
-                    ExitTime = DateTime.UtcNow,
+                    ExitTime = fill.Time.DateTime,
                     StrategyId = fill.StrategyId,
                 };
                 Cash += pnl - fill.Fee + pos.Margin;
@@ -200,7 +245,7 @@ public class PortfolioManager : IPortfolioState
                     AvgPrice = fill.FillPrice,
                     Commission = fill.Fee,
                     Margin = newMargin,
-                    CreatedTime = DateTimeOffset.UtcNow,
+                    CreatedTime = fill.Time,
                     StrategyId = fill.StrategyId,
                 };
                 _positions[key] = pos;
