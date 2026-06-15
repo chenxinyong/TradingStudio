@@ -3,12 +3,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
-using TradingStudio.UI.ViewModels;
+using TradingStudio.Terminal.ViewModels;
 
-namespace TradingStudio.UI;
+namespace TradingStudio.Terminal;
 
 /// <summary>
-/// TradingStudio.UI — K线图表 + 监控面板。
+/// TradingStudio.Terminal — K线图表 + 监控面板。
 /// 启动时初始化 Serilog + IConfiguration + DI 容器。
 /// </summary>
 public partial class App : Application
@@ -30,7 +30,7 @@ public partial class App : Application
             .ReadFrom.Configuration(config)
             .CreateLogger();
 
-        Log.Information("TradingStudio.UI starting...");
+        Log.Information("TradingStudio.Terminal starting...");
 
         // 3. DI 容器
         var services = new ServiceCollection();
@@ -55,7 +55,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        Log.Information("TradingStudio.UI shutting down");
+        Log.Information("TradingStudio.Terminal shutting down");
         Log.CloseAndFlush();
         base.OnExit(e);
     }

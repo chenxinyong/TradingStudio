@@ -5,7 +5,7 @@ using OxyPlot.Series;
 using TradingStudio.Engine;
 using TradingStudio.Engine.Statistics;
 
-namespace TradingStudio.UI.Services;
+namespace TradingStudio.Terminal.Services;
 
 /// <summary>
 /// EngineReport → OxyPlot 图表数据转换。

@@ -37,9 +37,9 @@ findstr /V "info :" "%LOG%"
 
 echo.
 echo ========================================
-echo  3/7  TradingStudio.UI (Desktop)
+echo  3/7  TradingStudio.Terminal (WPF Terminal)
 echo ========================================
-dotnet publish "%ROOT%src\TradingStudio.UI\TradingStudio.UI.csproj" -c Release -o "%DIST%\Desktop" --self-contained true > "%LOG%" 2>&1
+dotnet publish "%ROOT%src\TradingStudio.Terminal\TradingStudio.Terminal.csproj" -c Release -o "%DIST%\Desktop" --self-contained true > "%LOG%" 2>&1
 if %ERRORLEVEL% NEQ 0 (
     type "%LOG%"
     echo FAIL & exit /b 1
@@ -97,7 +97,7 @@ if exist "%DIST%\Server\TradingStudio.exe" (
 )
 echo.
 echo  dist/Desktop/ (Desktop)
-if exist "%DIST%\Desktop\TradingStudio.UI.exe" (
+if exist "%DIST%\Desktop\TradingStudio.Terminal.exe" (
     dir /b "%DIST%\Desktop" 2>nul | findstr /V ".pdb$"
 ) else (
     echo   (empty)
@@ -121,6 +121,6 @@ echo  Install: powershell dist\install.ps1
 echo  Run:
 echo    Engine:  dist\Server\TradingStudio.exe collect [SHFE] [ag2608]
 echo    一键:    dist\Server\start.bat / start.ps1  (右键 PowerShell 运行)
-echo    Desktop: dist\Desktop\TradingStudio.UI.exe
+echo    Desktop: dist\Desktop\TradingStudio.Terminal.exe
 echo    ToolBox: dist\ToolBox\TradingStudio.ToolBox.exe import -i ^<csv^>
 echo    ToolBox: dist\ToolBox\TradingStudio.ToolBox.exe info

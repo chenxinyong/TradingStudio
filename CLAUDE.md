@@ -56,7 +56,7 @@ TradingStudio.Strategy      — 策略引擎
 TradingStudio.Execution    — CTP 执行网关
 TradingStudio.Backtest     — 回测引擎
 TradingStudio.Mind           — LLM 模块（研究助手、策略解释、异常诊断）
-TradingStudio.UI              — 监控与管理界面
+TradingStudio.Terminal              — 监控与管理界面
 ```
 
 ### 当前实现 (2026-06-12)

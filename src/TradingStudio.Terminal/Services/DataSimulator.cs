@@ -1,6 +1,6 @@
 using TradingStudio.Core.Models;
 
-namespace TradingStudio.UI.Services;
+namespace TradingStudio.Terminal.Services;
 
 /// <summary>
 /// 价格数据模拟器 — 随机游走 + 均值回归，生成逼真的 OHLC 数据。

@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Windows.Data;
 
-namespace TradingStudio.UI.Converters;
+namespace TradingStudio.Terminal.Converters;
 
 /// <summary>
 /// bool → ▶ / ⏸ 图标文本

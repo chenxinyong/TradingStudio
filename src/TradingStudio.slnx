@@ -1,5 +1,5 @@
 <Solution>
-  <Project DefaultStartup="true" Path="TradingStudio.UI/TradingStudio.UI.csproj" />
+  <Project DefaultStartup="true" Path="TradingStudio.UI/TradingStudio.Terminal.csproj" />
   <Configurations>
     <Platform Name="Any CPU" />
     <Platform Name="x64" />

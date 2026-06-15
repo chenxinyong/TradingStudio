@@ -9,10 +9,10 @@ using OxyPlot.Axes;
 using OxyPlot.Series;
 using TradingStudio.Core.Indicators;
 using TradingStudio.Core.Models;
-using TradingStudio.UI.Services;
+using TradingStudio.Terminal.Services;
 using Bar = TradingStudio.Core.Models.Bar;
 
-namespace TradingStudio.UI.ViewModels;
+namespace TradingStudio.Terminal.ViewModels;
 
 /// <summary>
 /// K线图表 ViewModel — 四窗格布局 (K线主图 / 成交量 / MACD / RSI)。
