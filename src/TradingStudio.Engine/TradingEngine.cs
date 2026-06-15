@@ -58,25 +58,35 @@ public class TradingEngine
         var globalTrades = new List<Trade>();
         var tradesLock = new object();
 
-        var barHistories = new Dictionary<string, List<Bar>>();
+        var barHistories = new Dictionary<string, List<Bar>>();                       // key=StrategyId
+        var strategyInstruments = new Dictionary<string, HashSet<string>>();          // 策略→品种映射
+
+        // 预热去重：多策略共享品种时只加载一次
+        var allWarmupInstruments = _options.StrategyConfigs
+            .SelectMany(c => c.Instruments).Distinct().ToList();
+        var warmupCache = new Dictionary<string, List<Bar>>();
+
         foreach (var config in _options.StrategyConfigs)
         {
             var strategy = StrategyFactory.Create(config);
             _portfolio.CreateSubPortfolio(config.StrategyId, config.AllocatedCapital);
             var barHistory = new List<Bar>();
             barHistories[config.StrategyId] = barHistory;
+            strategyInstruments[config.StrategyId] = new HashSet<string>(config.Instruments);
 
-            // 预加载历史 Bar：回测模式加载全部，实盘按 WarmupDays 加载
             if (_dataFeed is Data.Engine.HistoricalBarFeed barFeed)
             {
-                // 预热窗口：加载 StartTime 前 WarmupDays 天的数据（回测/实盘统一）
                 var loadStart = _options.StartTime.AddDays(-Math.Max(_options.WarmupDays, 1));
                 var loadEnd = _options.StartTime;
 
                 foreach (var inst in config.Instruments)
                 {
-                    await barFeed.LoadBars(inst, loadStart, loadEnd);
-                    var loaded = barFeed.GetWarmupBars(inst);
+                    if (!warmupCache.TryGetValue(inst, out var loaded))
+                    {
+                        await barFeed.LoadBars(inst, loadStart, loadEnd);
+                        loaded = barFeed.GetWarmupBars(inst);
+                        warmupCache[inst] = loaded;
+                    }
                     barHistory.AddRange(loaded);
                 }
                 barHistory.Sort((a, b) => a.BarTime.CompareTo(b.BarTime));
@@ -142,7 +152,7 @@ public class TradingEngine
                     foreach (var fill in tickFills)
                     {
                         var trade = _portfolio.ProcessFill(fill, _registry);
-                        if (trade != null) globalTrades.Add(trade);
+                        lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
                         _feedback.RecordFill(fill, fill.StrategyId);
                         if (trade != null) _feedback.RecordTrade(trade, fill.StrategyId);
                         _strategies.DispatchOrderEvent(fill);
@@ -158,7 +168,7 @@ public class TradingEngine
                         foreach (var fill in newFills)
                         {
                             var trade = _portfolio.ProcessFill(fill, _registry);
-                            if (trade != null) globalTrades.Add(trade);
+                            lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
                             _feedback.RecordFill(fill, fill.StrategyId);
                             if (trade != null) _feedback.RecordTrade(trade, fill.StrategyId);
                             _strategies.DispatchOrderEvent(fill);
@@ -189,7 +199,7 @@ public class TradingEngine
                         foreach (var fill in barFills)
                         {
                             var trade = _portfolio.ProcessFill(fill, _registry);
-                            if (trade != null) globalTrades.Add(trade);
+                            lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
                             _feedback.RecordFill(fill, fill.StrategyId);
                             if (trade != null) _feedback.RecordTrade(trade, fill.StrategyId);
                             _strategies.DispatchOrderEvent(fill);
@@ -200,9 +210,13 @@ public class TradingEngine
                     _indicators.Feed(bar);
                     _strategies.DispatchBar(barEvt);
 
-                    // 追加到策略历史（供 GetBarHistory / GetRecentBars 查询）
-                    foreach (var history in barHistories.Values)
-                        history.Add(bar);
+                    // 追加到策略历史（仅该策略订阅的品种）
+                    foreach (var (strategyId, history) in barHistories)
+                    {
+                        if (strategyInstruments.TryGetValue(strategyId, out var insts)
+                            && insts.Contains(bar.InstrumentId))
+                            history.Add(bar);
+                    }
 
                     // 反馈采样 + 告警
                     _feedback.SamplePortfolio(_portfolio);
@@ -213,11 +227,12 @@ public class TradingEngine
                     equityCurve.Add((barEvt.Time, _portfolio.Equity));
                     foreach (var slot in _strategies.AllSlots)
                     {
-                        var sub = _portfolio.GetSubPortfolio(slot.Config.StrategyId);
-                        if (!strategyEquityCurves.ContainsKey(slot.Config.StrategyId))
-                            strategyEquityCurves[slot.Config.StrategyId] = new();
-                        strategyEquityCurves[slot.Config.StrategyId]
-                            .Add((barEvt.Time, sub?.Equity ?? 0));
+                        var sid = slot.Config.StrategyId;
+                        if (!strategyEquityCurves.ContainsKey(sid))
+                            strategyEquityCurves[sid] = new();
+                        var subEquity = _portfolio.TryGetSubPortfolio(sid, out var sub)
+                            ? sub!.Equity : 0;
+                        strategyEquityCurves[sid].Add((barEvt.Time, subEquity));
                     }
 
                     prevBar = bar;

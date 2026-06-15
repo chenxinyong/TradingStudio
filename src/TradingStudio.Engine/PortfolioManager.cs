@@ -49,6 +49,9 @@ public class PortfolioManager : IPortfolioState
         _subPortfolios.TryGetValue(strategyId, out var sp) ? sp :
         throw new InvalidOperationException($"Strategy not found: {strategyId}");
 
+    public bool TryGetSubPortfolio(string strategyId, out SubPortfolio? sp)
+        => _subPortfolios.TryGetValue(strategyId, out sp);
+
     public void CreateSubPortfolio(string strategyId, decimal allocatedCapital)
     {
         var sub = new SubPortfolio(strategyId, allocatedCapital);

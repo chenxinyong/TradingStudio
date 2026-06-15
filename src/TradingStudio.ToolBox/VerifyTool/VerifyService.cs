@@ -308,7 +308,7 @@ public class VerifyService
                 var gaps = (long)(await cmd.ExecuteScalarAsync())!;
                 if (gaps > 0)
                 {
-                    details.Add($"{inst}: {gaps} gaps >120s");
+                    details.Add($"{inst}: {gaps} gaps >30min");
                     totalGaps += (int)gaps;
                 }
             }
@@ -320,7 +320,7 @@ public class VerifyService
         }
 
         if (details.Count == 0)
-            details.Add($"Top {sample} instruments: no intraday gaps >120s");
+            details.Add($"Top {sample} instruments: no intraday gaps >30min");
 
         d.IssueCount = totalGaps;
         d.Status = totalGaps == 0 ? DimensionStatus.Pass : totalGaps > 50 ? DimensionStatus.Fail : DimensionStatus.Warn;
@@ -364,7 +364,7 @@ public class VerifyService
                             SUM(volume) vol
                         FROM bars_1min WHERE instrument_id = @inst
                         GROUP BY date(bar_time)
-                    ) m1 ON d.trading_day = m1.dt
+                    ) m1 ON replace(d.trading_day, '-', '') = replace(m1.dt, '-', '')
                     WHERE d.instrument_id = @inst
                     LIMIT 50", conn);
                 cmd.Parameters.AddWithValue("@inst", inst);
