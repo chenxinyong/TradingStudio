@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <Content Include="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" CopyToPublishDirectory="PreserveNewest" Link="CTPWrapper.dll" />
+    <Content Include="C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\10.0.9\runtimes\win-x64\native\ijwhost.dll"
+             CopyToPublishDirectory="PreserveNewest" Link="ijwhost.dll" />
     <Content Include="C:\Windows\System32\vcruntime140.dll" CopyToPublishDirectory="PreserveNewest" Link="vcruntime140.dll" />
     <Content Include="C:\Windows\System32\vcruntime140_1.dll" CopyToPublishDirectory="PreserveNewest" Link="vcruntime140_1.dll" />
     <Content Include="C:\Windows\System32\msvcp140.dll" CopyToPublishDirectory="PreserveNewest" Link="msvcp140.dll" />
