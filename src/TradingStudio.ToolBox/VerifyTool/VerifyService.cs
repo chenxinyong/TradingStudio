@@ -205,24 +205,21 @@ public class VerifyService
             else details.Add("Negative values: 0");
         }
 
-        // Zero volume (exclude auction period 08:55-09:00 and 20:55-21:00)
+        // Zero volume — count and assess (many futures contracts are illiquid during trading hours)
         using (var cmd = new SqliteCommand(
             $"SELECT COUNT(*) FROM {table} WHERE volume = 0", conn))
         {
             var totalZero = (long)(await cmd.ExecuteScalarAsync())!;
-            if (totalZero > 0)
+
+            using var totalCmd = new SqliteCommand($"SELECT COUNT(*) FROM {table}", conn);
+            var totalBars = (long)(await totalCmd.ExecuteScalarAsync())!;
+
+            if (totalZero > 0 && totalBars > 0)
             {
-                // Count zero-volume bars outside likely auction windows
-                var auctionCmd = new SqliteCommand($@"
-                    SELECT COUNT(*) FROM {table}
-                    WHERE volume = 0
-                      AND NOT (bar_time LIKE '% 08:5%' OR bar_time LIKE '% 09:00'
-                            OR bar_time LIKE '% 20:5%' OR bar_time LIKE '% 21:00')", conn);
-                var nonAuction = (long)(await auctionCmd.ExecuteScalarAsync())!;
-                var pct = totalZero > 0 ? 100.0 * nonAuction / totalZero : 0;
-                details.Add($"Zero volume: {totalZero:N0} total, {nonAuction:N0} outside auction ({pct:F1}%)");
-                // Only flag if significant non-auction zero volume (>5% of total zero-vol)
-                if (nonAuction > totalZero * 0.05 && nonAuction > 100) issues++;
+                var pct = 100.0 * totalZero / totalBars;
+                details.Add($"Zero volume: {totalZero:N0} bars ({pct:F1}% of {totalBars:N0} total)");
+                // Flag if >80% of bars are zero-volume (unusual for actively traded market)
+                if (pct > 80) { details.Add($"WARNING: {pct:F1}% zero-volume — possible data issue"); issues += 3; }
             }
             else details.Add("Zero volume: 0");
         }
@@ -280,17 +277,34 @@ public class VerifyService
         var details = new List<string>();
         int totalGaps = 0;
 
-        // Get top instruments for sampling
+        // Get instruments that have day bars (better coverage) for sampling
         var sampleInstruments = new List<string>();
+        // Prefer instruments with day bars (continuous contracts)
         using (var cmd2 = new SqliteCommand(
-            "SELECT instrument_id FROM bars_1min GROUP BY instrument_id ORDER BY COUNT(*) DESC LIMIT " + sample, conn))
+            "SELECT DISTINCT instrument_id FROM bars_day ORDER BY instrument_id LIMIT " + sample, conn))
         using (var r2 = await cmd2.ExecuteReaderAsync())
             while (await r2.ReadAsync()) sampleInstruments.Add(r2.GetString(0));
 
+        // Fallback to 1min top instruments
+        if (sampleInstruments.Count == 0)
+        {
+            using var cmd2b = new SqliteCommand(
+                "SELECT instrument_id FROM bars_1min GROUP BY instrument_id ORDER BY COUNT(*) DESC LIMIT " + sample, conn);
+            using var r2b = await cmd2b.ExecuteReaderAsync();
+            while (await r2b.ReadAsync()) sampleInstruments.Add(r2b.GetString(0));
+        }
+
+        long totalBars = 0;
         foreach (var inst in sampleInstruments)
         {
             try
             {
+                using var countCmd = new SqliteCommand(
+                    "SELECT COUNT(*) FROM bars_1min WHERE instrument_id = @inst", conn);
+                countCmd.Parameters.AddWithValue("@inst", inst);
+                var barCount = (long)(await countCmd.ExecuteScalarAsync())!;
+                totalBars += barCount;
+
                 using var cmd = new SqliteCommand($@"
                     SELECT COUNT(*) FROM (
                         SELECT bar_time,
@@ -299,7 +313,6 @@ public class VerifyService
                     ) WHERE prev_time IS NOT NULL
                         AND CAST((julianday(bar_time) - julianday(prev_time)) * 86400 AS INTEGER) > 1800
                         AND CAST((julianday(bar_time) - julianday(prev_time)) * 86400 AS INTEGER) < 86400
-                        -- skip: lunch break 11:30→13:30, day→night 15:00→21:00, night→day 02:30→09:00
                         AND NOT (substr(prev_time,12,5) = '11:30' AND substr(bar_time,12,5) = '13:31')
                         AND NOT (substr(prev_time,12,5) = '15:00' AND substr(bar_time,12,5) = '21:01')
                         AND NOT (substr(prev_time,12,5) = '02:30' AND substr(bar_time,12,5) = '09:01')
@@ -308,7 +321,8 @@ public class VerifyService
                 var gaps = (long)(await cmd.ExecuteScalarAsync())!;
                 if (gaps > 0)
                 {
-                    details.Add($"{inst}: {gaps} gaps >30min");
+                    var pct = barCount > 0 ? 100.0 * gaps / barCount : 0;
+                    details.Add($"{inst}: {gaps} gaps / {barCount:N0} bars ({pct:F3}%)");
                     totalGaps += (int)gaps;
                 }
             }
@@ -320,11 +334,14 @@ public class VerifyService
         }
 
         if (details.Count == 0)
-            details.Add($"Top {sample} instruments: no intraday gaps >30min");
+            details.Add($"Top {sampleInstruments.Count} instruments: no intraday gaps >30min");
 
+        var gapPct = totalBars > 0 ? 100.0 * totalGaps / totalBars : 0;
         d.IssueCount = totalGaps;
-        d.Status = totalGaps == 0 ? DimensionStatus.Pass : totalGaps > 50 ? DimensionStatus.Fail : DimensionStatus.Warn;
-        d.Summary = totalGaps == 0 ? "No gaps in sampled instruments" : $"{totalGaps} gaps in top {sample} instruments";
+        d.Status = gapPct < 0.5 ? DimensionStatus.Pass : gapPct < 2.0 ? DimensionStatus.Warn : DimensionStatus.Fail;
+        d.Summary = totalGaps == 0 ? "No gaps in sampled instruments"
+            : $"{totalGaps} gaps / {totalBars:N0} bars ({gapPct:F2}%), {sampleInstruments.Count} instruments";
+        if (gapPct > 0) details.Insert(0, $"Gap rate: {gapPct:F2}% across {sampleInstruments.Count} sampled instruments");
         d.Details = details;
         return d;
     }
@@ -346,35 +363,34 @@ public class VerifyService
         using (var r = await cmd.ExecuteReaderAsync())
             while (await r.ReadAsync()) commonInsts.Add(r.GetString(0));
 
+        if (commonInsts.Count == 0)
+        {
+            details.Add("No instruments found in both bars_1min and bars_day");
+        }
+
         foreach (var inst in commonInsts)
         {
             try
             {
-                // Aggregate 1min to daily and compare with bars_day
-                // Use simple subquery approach instead of LAST_VALUE window (SQLite compat)
+                // Use simple aggregation: per trading_day, get first/last/max/min/sum from 1min
                 using var cmd = new SqliteCommand(@"
                     SELECT d.trading_day, d.open, d.high, d.low, d.close, d.volume,
-                        m1.open, m1.high, m1.low, m1.close, m1.vol
+                        (SELECT open FROM bars_1min WHERE instrument_id = @inst AND date(bar_time) = date(d.bar_time) ORDER BY bar_time LIMIT 1),
+                        MAX(m1.high), MIN(m1.low),
+                        (SELECT close FROM bars_1min WHERE instrument_id = @inst AND date(bar_time) = date(d.bar_time) ORDER BY bar_time DESC LIMIT 1),
+                        SUM(m1.volume)
                     FROM bars_day d
-                    JOIN (
-                        SELECT date(bar_time) dt,
-                            (SELECT open FROM bars_1min WHERE instrument_id = @inst AND date(bar_time) = dt ORDER BY bar_time LIMIT 1) open,
-                            MAX(high) high, MIN(low) low,
-                            (SELECT close FROM bars_1min WHERE instrument_id = @inst AND date(bar_time) = dt ORDER BY bar_time DESC LIMIT 1) close,
-                            SUM(volume) vol
-                        FROM bars_1min WHERE instrument_id = @inst
-                        GROUP BY date(bar_time)
-                    ) m1 ON replace(d.trading_day, '-', '') = replace(m1.dt, '-', '')
+                    JOIN bars_1min m1 ON m1.instrument_id = d.instrument_id AND date(m1.bar_time) = date(d.bar_time)
                     WHERE d.instrument_id = @inst
-                    LIMIT 50", conn);
+                    GROUP BY d.trading_day, d.bar_time
+                    LIMIT 30", conn);
                 cmd.Parameters.AddWithValue("@inst", inst);
 
                 using var r2 = await cmd.ExecuteReaderAsync();
                 while (await r2.ReadAsync())
                 {
                     totalChecked++;
-                    // Skip NULL agg values (no 1min data for that day)
-                    if (r2.IsDBNull(6)) continue;
+                    if (r2.IsDBNull(6)) continue; // no 1min data for this day
 
                     var dOpen = r2.GetInt64(1); var aOpen = r2.GetInt64(6);
                     var dHigh = r2.GetInt64(2); var aHigh = r2.GetInt64(7);
@@ -395,17 +411,17 @@ public class VerifyService
                     }
                 }
             }
-            catch (SqliteException)
+            catch (Exception ex)
             {
-                details.Add("Cross-check: skipped (requires window function support)");
+                details.Add($"Cross-check failed for {inst}: {ex.Message}");
                 break;
             }
         }
 
         if (details.Count == 0 && totalChecked > 0)
             details.Add($"Cross-checked {totalChecked} days across {commonInsts.Count} instruments: OK");
-        else if (totalChecked == 0)
-            details.Add("No overlapping instruments for cross-check");
+        else if (totalChecked == 0 && details.Count == 0)
+            details.Add("No overlapping days for cross-check");
 
         d.IssueCount = mismatches;
         d.Status = mismatches == 0 ? DimensionStatus.Pass : mismatches > 20 ? DimensionStatus.Fail : DimensionStatus.Warn;
@@ -443,12 +459,13 @@ public class VerifyService
         }
 
         // Check trading_day != bar_time date for night sessions
+        // bar_time format: "2024-01-02 21:30:00" → hour at position 12
         try
         {
             using var cmd = new SqliteCommand(@"
                 SELECT COUNT(*) FROM bars_1min
-                WHERE substr(bar_time, 9, 2) IN ('20','21','22','23')
-                  AND substr(trading_day, 1, 10) = substr(bar_time, 1, 10)", conn);
+                WHERE CAST(substr(bar_time, 12, 2) AS INTEGER) >= 20
+                  AND trading_day = substr(bar_time, 1, 10)", conn);
             var sameDay = (long)(await cmd.ExecuteScalarAsync())!;
             if (sameDay > 0)
             {
