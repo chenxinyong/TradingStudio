@@ -145,6 +145,8 @@ static async Task RunLiveAsync(string[] args)
     var dbPath = cfg["Live:Database"] ?? "bars_live.db";
     var barStore = new BarStore(dbPath);
     builder.Services.AddSingleton(barStore);
+    var tickWriter = new TickCsvWriter("TickData");
+    builder.Services.AddSingleton(tickWriter);
 
     // 资金管理
     var startCapital = decimal.Parse(cfg["Live:StartingCapital"] ?? "100000");

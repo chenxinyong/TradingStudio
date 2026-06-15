@@ -20,13 +20,17 @@ public class LiveDataCollector : BackgroundService
     private long _tickCount;
     private long _barCount;
 
+    private readonly TickCsvWriter? _tickWriter;
+
     public LiveDataCollector(CtpLiveFeed feed, BarStore barStore,
-                             HealthMonitor health, ILogger<LiveDataCollector> log)
+                             HealthMonitor health, ILogger<LiveDataCollector> log,
+                             TickCsvWriter? tickWriter = null)
     {
         _feed = feed;
         _barStore = barStore;
         _health = health;
         _log = log;
+        _tickWriter = tickWriter;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -48,6 +52,7 @@ public class LiveDataCollector : BackgroundService
             {
                 var (instId, tick, tradingDay) = item;
                 Interlocked.Increment(ref _tickCount);
+                _tickWriter?.WriteTick(tick, instId, tradingDay, "");
                 barAgg.Feed(tick, instId, tradingDay);
             }
         }

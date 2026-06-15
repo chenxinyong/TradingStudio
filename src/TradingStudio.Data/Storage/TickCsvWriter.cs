@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
+using TradingStudio.Core.Models;
 
 namespace TradingStudio.Data.Storage;
 
@@ -104,6 +105,29 @@ public class TickCsvWriter : IDisposable
             Interlocked.Increment(ref _errors);
             try { _writers.TryRemove(key, out var old); SafeDispose(old.Writer); } catch { }
         }
+    }
+
+    /// <summary>便捷方法：TickRecord → 金数源 CSV (仅1档深度，其余填0)</summary>
+    public void WriteTick(TickRecord tick, string instrumentId, DateOnly tradingDay, string exchangeId)
+    {
+        var td = tradingDay.ToString("yyyyMMdd");
+        var dt = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp);
+        var price = tick.LastPrice / (double)TickRecord.PriceScale;
+        var bp1 = tick.BidPrice1 / (double)TickRecord.PriceScale;
+        var ap1 = tick.AskPrice1 / (double)TickRecord.PriceScale;
+
+        Write(instrumentId, exchangeId, td,
+            dt.ToString("HH:mm:ss"), dt.Millisecond,
+            price, 0, 0, 0,  // lastPrice, preSettle, preClose, preOI
+            price, 0, 0,      // open, high, low
+            (int)tick.Volume, tick.Turnover, tick.OpenInterest,
+            0, 0, 0, 0,       // close, settle, upper, lower
+            bp1, tick.BidVolume1, ap1, tick.AskVolume1,
+            0, 0, 0, 0,       // bid2
+            0, 0, 0, 0,       // bid3
+            0, 0, 0, 0,       // bid4
+            0, 0, 0, 0,       // bid5
+            0);                // avgPrice
     }
 
     public void FlushAll()
