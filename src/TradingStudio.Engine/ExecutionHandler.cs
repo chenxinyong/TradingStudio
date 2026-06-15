@@ -252,10 +252,20 @@ public class ExecutionHandler : IExecutionHandler
         var fillQty = order.Quantity - order.FilledQuantity;
         if (fillQty <= 0) return null;
 
+        // 涨跌停模拟：涨停买入/跌停卖出无法成交（无对手方）
+        var limitPct = (double)(future.PriceLimitPct > 0 ? future.PriceLimitPct : 0.10m);
+        var prevClose = bar.OpenDouble; // 近似：用开盘价替代前结算价
+        var upperLimit = prevClose * (1 + limitPct);
+        var lowerLimit = prevClose * (1 - limitPct);
+        var atUpperLimit = bar.HighDouble >= upperLimit;
+        var atLowerLimit = bar.LowDouble <= lowerLimit;
+
         switch (order.Type)
         {
             case OrderType.Market:
-                // 市价单 → 下一根 Bar Open 成交（策略看不到本 Bar）
+                // 涨停买不进 / 跌停卖不出
+                if (order.Direction == OrderDirection.Buy && atUpperLimit) return null;
+                if (order.Direction == OrderDirection.Sell && atLowerLimit) return null;
                 fillPrice = (decimal)bar.OpenDouble;
                 break;
 

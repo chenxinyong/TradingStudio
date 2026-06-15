@@ -7,8 +7,8 @@ using TradingStudio.Data.Storage;
 namespace TradingStudio.Data.Engine;
 
 /// <summary>
-/// Bar 回放数据源 — 从 SQLite bars_1min 读取，按需聚合为多周期 Bar。
-/// periodMinutes=1 直接输出, 5/15/30/60 即时聚合, 不落地存储。
+/// Bar 回放数据源 — 从 SQLite bars_1min 读取，按需聚合。
+/// 单品种直接流式输出，多品种 K-way merge 排序。
 /// </summary>
 public class HistoricalBarFeed : IDataFeed
 {
@@ -22,15 +22,12 @@ public class HistoricalBarFeed : IDataFeed
     public DateTime StartTime => _startTime;
     public DateTime EndTime => _endTime;
 
-    /// <param name="store">BarStore 实例</param>
-    /// <param name="periodMinutes">Bar 周期: 1=原始1min, 5/15/30/60=即时聚合</param>
     public HistoricalBarFeed(BarStore store, int periodMinutes = 1)
     {
         _store = store;
         _periodMinutes = periodMinutes;
     }
 
-    /// <summary>预热用：预加载 1min Bar（聚合后返回）</summary>
     public async Task LoadBars(string instrumentId, DateTime start, DateTime end)
     {
         var bars = await _store.QueryBarsAsync(instrumentId, start, end, "bars_1min");
@@ -56,33 +53,66 @@ public class HistoricalBarFeed : IDataFeed
     {
         if (_instruments.Count == 0) yield break;
 
-        var allBars = new List<Bar>();
-        foreach (var inst in _instruments)
+        if (_instruments.Count == 1)
         {
-            if (ct.IsCancellationRequested) yield break;
-            var bars = await _store.QueryBarsAsync(inst, _startTime, _endTime, "bars_1min", ct);
+            var bars = await _store.QueryBarsAsync(_instruments[0], _startTime, _endTime, "bars_1min", ct);
+            if (_periodMinutes > 1) bars = MultiAggregate(bars);
 
-            // 实时聚合
-            if (_periodMinutes > 1)
-                bars = new MultiBarAggregator(_periodMinutes).Aggregate(bars).ToList();
-
-            allBars.AddRange(bars);
-        }
-
-        allBars.Sort((a, b) => a.BarTime.CompareTo(b.BarTime));
-
-        DateTime? prevTime = null;
-        foreach (var bar in allBars)
-        {
-            if (ct.IsCancellationRequested) yield break;
-            var isNew = prevTime == null || bar.BarTime != prevTime.Value;
-            yield return new BarEvent
+            DateTime? prevTime = null;
+            foreach (var bar in bars)
             {
-                Bar = bar,
-                Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero),
-                IsNewBar = isNew,
-            };
-            prevTime = bar.BarTime;
+                if (ct.IsCancellationRequested) yield break;
+                if (IsWeekend(bar.BarTime)) continue;  // 跳过周末
+                var isNew = prevTime == null || bar.BarTime != prevTime.Value;
+                yield return new BarEvent { Bar = bar, Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero), IsNewBar = isNew };
+                prevTime = bar.BarTime;
+            }
+        }
+        else
+        {
+            // 多品种：加载每个品种的 Bar 列表，K-way merge
+            var lists = new List<List<Bar>>();
+            var indices = new List<int>();
+            foreach (var inst in _instruments)
+            {
+                if (ct.IsCancellationRequested) yield break;
+                var raw = await _store.QueryBarsAsync(inst, _startTime, _endTime, "bars_1min", ct);
+                var bars = _periodMinutes > 1 ? MultiAggregate(raw) : raw.ToList();
+                if (bars.Count > 0) { lists.Add(bars); indices.Add(0); }
+            }
+
+            DateTime? prevTime = null;
+            while (true)
+            {
+                // 找所有列表中最早的下一个 Bar
+                int minIdx = -1;
+                DateTime minTime = DateTime.MaxValue;
+                for (int i = 0; i < lists.Count; i++)
+                {
+                    if (indices[i] < lists[i].Count && lists[i][indices[i]].BarTime < minTime)
+                    {
+                        minTime = lists[i][indices[i]].BarTime;
+                        minIdx = i;
+                    }
+                }
+                if (minIdx < 0) break;
+                if (ct.IsCancellationRequested) yield break;
+
+                var bar = lists[minIdx][indices[minIdx]];
+                indices[minIdx]++;
+
+                if (IsWeekend(bar.BarTime)) continue;  // 跳过周末
+                var isNew = prevTime == null || bar.BarTime != prevTime.Value;
+                yield return new BarEvent { Bar = bar, Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero), IsNewBar = isNew };
+                prevTime = bar.BarTime;
+            }
         }
     }
+
+    private List<Bar> MultiAggregate(IReadOnlyList<Bar> bars)
+        => new MultiBarAggregator(_periodMinutes).Aggregate(bars).ToList();
+
+    /// <summary>是否为周末（周六/周日不交易）</summary>
+    private static bool IsWeekend(DateTime dt)
+        => dt.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
 }
