@@ -120,8 +120,11 @@ static async Task RunLiveAsync(string[] args)
     var liveFeed = new CtpLiveFeed(mdOpts);
     builder.Services.AddSingleton<IDataFeed>(liveFeed);
 
-    // 风控 + 执行
-    var risk = new RiskController();
+    // 风控阈值（从 appsettings.json Risk 段读取，缺失时使用安全默认值）
+    var risk = new RiskController(
+        maxPosition: int.Parse(cfg["Risk:MaxPositionPerInstrument"] ?? "5"),
+        maxOrderQty: int.Parse(cfg["Risk:MaxOrderQuantity"] ?? "100"),
+        maxDrawdown: decimal.Parse(cfg["Risk:MaxDrawdownPct"] ?? "0.25"));
     builder.Services.AddSingleton(risk);
     var execution = new ExecutionHandler(risk);
     builder.Services.AddSingleton<IExecutionHandler>(execution);

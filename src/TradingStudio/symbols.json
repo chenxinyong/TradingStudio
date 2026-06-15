@@ -1028,6 +1028,7 @@
     {
       "id": 65,
       "exchange": "CFFEX",
+      "feeRate": 0.000023,
       "code": "IF",
       "name": "沪深300",
       "category": "股指",
@@ -1044,6 +1045,7 @@
     {
       "id": 66,
       "exchange": "CFFEX",
+      "feeRate": 0.000023,
       "code": "IC",
       "name": "中证500",
       "category": "股指",
@@ -1060,6 +1062,7 @@
     {
       "id": 67,
       "exchange": "CFFEX",
+      "feeRate": 0.000023,
       "code": "IH",
       "name": "上证50",
       "category": "股指",
@@ -1076,6 +1079,7 @@
     {
       "id": 68,
       "exchange": "CFFEX",
+      "feeRate": 0.000023,
       "code": "IM",
       "name": "中证1000",
       "category": "股指",

@@ -136,17 +136,15 @@ public class CtpTraderBridge : IDisposable
 
     private static OrderEvent? ConvertOrder(CTP.Order ctpOrder)
     {
-        var isCancelled = ctpOrder.OrderStatus == '5';   // Canceled
-        var isRejected = ctpOrder.OrderStatus == '4';    // Rejected
-
-        // 成交回报走 OnTrade（有准确成交价），OnOrder 只处理拒绝/撤销
+        var isCancelled = ctpOrder.OrderStatus == '5';
+        var isRejected = ctpOrder.OrderStatus == '4';
         if (!isCancelled && !isRejected) return null;
 
         var type = isCancelled ? OrderEventType.Cancelled : OrderEventType.Rejected;
 
         return new OrderEvent
         {
-            OrderId = long.TryParse(ctpOrder.OrderRef, out var id) ? id : 0,
+            OrderId = ParseOrderRef(ctpOrder.OrderRef),
             InstrumentId = ctpOrder.InstrumentID ?? "",
             Direction = ctpOrder.Direction == '0' ? OrderDirection.Buy : OrderDirection.Sell,
             Quantity = ctpOrder.VolumeTotalOriginal,
@@ -163,7 +161,7 @@ public class CtpTraderBridge : IDisposable
 
         return new OrderEvent
         {
-            OrderId = long.TryParse(ctpTrade.OrderRef, out var id) ? id : 0,
+            OrderId = ParseOrderRef(ctpTrade.OrderRef),
             InstrumentId = ctpTrade.InstrumentID ?? "",
             Direction = ctpTrade.Direction == '0' ? OrderDirection.Buy : OrderDirection.Sell,
             Quantity = ctpTrade.Volume,
@@ -173,6 +171,13 @@ public class CtpTraderBridge : IDisposable
             FillPrice = (decimal)ctpTrade.Price,
             Time = DateTimeOffset.UtcNow,
         };
+    }
+
+    private static long ParseOrderRef(string? orderRef)
+    {
+        if (string.IsNullOrEmpty(orderRef) || orderRef == "0")
+            return -1;  // CTP 未分配 OrderRef
+        return long.TryParse(orderRef, out var id) ? id : -1;
     }
 
     public void Dispose()

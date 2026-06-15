@@ -5,18 +5,17 @@ namespace TradingStudio.Engine;
 
 /// <summary>
 /// 风控控制器 — 管理风控规则链，三级检查（Pre-Order / Post-Fill / Periodic）。
-/// Phase 2a: 内置基础规则，未来可扩展自定义 IRiskRule 注册。
+/// 阈值通过构造函数传入（Program.cs 从 appsettings.json Risk 段读取）。
 /// </summary>
 public class RiskController
 {
     private readonly List<IRiskRule> _rules = new();
 
-    public RiskController()
+    public RiskController(int maxPosition = 5, int maxOrderQty = 100, decimal maxDrawdown = 0.25m)
     {
-        // 内置基础风控规则（可通过 AddRule 覆盖/追加）
-        _rules.Add(new MaxPositionPerInstrumentRule(5));
-        _rules.Add(new MaxOrderQuantityRule(100));
-        _rules.Add(new MaxDrawdownRule(0.25m));
+        _rules.Add(new MaxPositionPerInstrumentRule(maxPosition));
+        _rules.Add(new MaxOrderQuantityRule(maxOrderQty));
+        _rules.Add(new MaxDrawdownRule(maxDrawdown));
     }
 
     public void AddRule(IRiskRule rule) => _rules.Add(rule);
