@@ -81,7 +81,6 @@ public class HistoricalBarFeed : IDataFeed
                 if (bars.Count > 0) { lists.Add(bars); indices.Add(0); }
             }
 
-            DateTime? globalPrevTime = null;
             var prevTimes = new Dictionary<string, DateTime>();  // 按品种跟踪
             while (true)
             {
