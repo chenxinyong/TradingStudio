@@ -4,7 +4,7 @@
 >
 > **版本**: v1.2 | **日期**: 2026-06-14 | **状态**: 设计文档，随 Phase 2-4 推进持续细化
 >
-> **v1.2 修订**: 新增 TradingStudio.ToolBox 作为第三进程（独立 CLI 工具）；SSE → SignalR Hub 统一推送（v1.1 修订）
+> **v1.3 修订**: 附录 B 新增 13-UI技术选型、14-WPF监控客户端设计；v1.2 新增 ToolBox 三进程；v1.1 SSE → SignalR
 
 ---
 
@@ -814,6 +814,8 @@ CTP 行情断了 = 数据缺口。应用层检测断线后自动重连；缺口�
 | [10-data-model-reconciled.md](design/10-data-model-reconciled.md) | PostgreSQL DDL + 数据模型 |
 | [TradingStudio架构设计-精简版.md](design/TradingStudio架构设计-精简版.md) | 5 项目精简架构 |
 | [11-implementation-roadmap-v2.md](design/11-implementation-roadmap-v2.md) | 实施路线图 v2 |
+| [13-ui-technology-selection.md](design/13-ui-technology-selection.md) | UI 技术选型 — WPF + OxyPlot |
+| [14-wpf-monitoring-client-design.md](design/14-wpf-monitoring-client-design.md) | WPF 监控客户端设计 |
 | [实际行情数据分析-CU1603.md](实际行情数据分析-CU1603.md) | Tick 数据实测 + 存储量计算 |
 | [[phase2-backtest-design]] | 内存：回测设计四条原则 |
 | [[phase2-multi-strategy-and-deployment]] | 内存：多策略 + 部署架构 |

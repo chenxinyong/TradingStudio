@@ -46,9 +46,10 @@
 | TradingSession 实体 | doc 10 DDL | **P1** |
 | ITickStore 接口 + 实现 | doc 02 | **P1** |
 | PostgreSQL 数据库 | doc 10 DDL | **P0** |
-| HandyControl UI 组件库 | doc 13 | Phase 4（推迟，FP4 复杂度最小化） |
-| LiveCharts2 绩效面板 | doc 13 | Phase 4（推迟，OxyPlot 先覆盖） |
-| SignalR 客户端实现 | doc 13 | P2 |
+| HandyControl UI 组件库 | [13](13-ui-technology-selection.md) | Phase 4（推迟） |
+| LiveCharts2 绩效面板 | [13](13-ui-technology-selection.md) | Phase 4（推迟） |
+| SignalR 客户端实现 | [14](14-wpf-monitoring-client-design.md) | **P2**（Phase 1-3） |
+| WPF 监控客户端 Dashboard | [14](14-wpf-monitoring-client-design.md) | **P2**（7 模块 28 功能） |
 
 ---
 

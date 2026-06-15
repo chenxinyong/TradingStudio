@@ -121,7 +121,7 @@ test/
 | 关系数据 | SQLite (Phase 1) → PostgreSQL (Phase 2) | 品种配置、订单记录 |
 | 回测框架 | 自研 | 通用回测框架不适合期货特性 |
 | 研究环境 | Python + Jupyter（可选） | pandas/numpy 做策略探索 |
-| 前端 | WPF | C# 生态，MVVM + OxyPlot + SignalR |
+| 前端 | WPF | C# 生态，MVVM + OxyPlot + SignalR ([设计: 14-wpf-monitoring-client-design](docs/design/14-wpf-monitoring-client-design.md)) |
 
 ---
 

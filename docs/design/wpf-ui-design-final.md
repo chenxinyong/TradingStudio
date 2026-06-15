@@ -1,8 +1,11 @@
 # TradingStudio WPF 量化终端 — 最终设计方案
 
 > 参考:
-> - [UI技术选型决策](./13-ui-technology-selection.md) — WPF + OxyPlot 选型依据
+> - [13 — UI 技术选型](./13-ui-technology-selection.md) — WPF + OxyPlot 决策依据
+> - [14 — WPF 监控客户端设计](./14-wpf-monitoring-client-design.md) — Dashboard-first 简化方案 (2026-06-15)
 > - AvalonDock 工作台布局 + Command Palette + EventAggregator + Workspace
+>
+> **注**: 2026-06-15 第一性原理验证后，设计方案从 "VS Code × Bloomberg Terminal" 简化为 Dashboard-first（14 号文档）。本文档保留完整工作台愿景，作为 Phase 4 参考。
 >
 > 目标体验: **VS Code × Bloomberg Terminal × TradingView Desktop**
 
