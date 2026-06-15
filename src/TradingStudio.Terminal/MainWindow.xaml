@@ -230,7 +230,11 @@
         <Border Grid.Row="3" Background="{StaticResource VsStatusBar}"
                 BorderBrush="{StaticResource VsBorder}" BorderThickness="0,1,0,0" Padding="8,0">
             <Grid>
-                <StackPanel Orientation="Horizontal">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0">
                         <Ellipse.Fill>
                             <SolidColorBrush Color="{Binding StatusColor, FallbackValue=#4EC9B0}" />
@@ -238,18 +242,12 @@
                     </Ellipse>
                     <TextBlock Text="{Binding StatusText, FallbackValue=● 已连接}" Foreground="White" FontSize="11" VerticalAlignment="Center" />
                     <TextBlock Style="{StaticResource StatusItem}" Text="{Binding Session, StringFormat='📅 {0}', FallbackValue='📅 休市'}" />
-                    <TextBlock Style="{StaticResource StatusItem}">
-                        <Run Text="💰 ¥"/><Run Text="{Binding TotalEquity, StringFormat=N0, FallbackValue=102345}"/>
-                    </TextBlock>
-                    <TextBlock Style="{StaticResource StatusItem}">
-                        <Run Text="品种 "/><Run Text="{Binding ConnectedInstruments, Mode=OneWay, FallbackValue=45}"/>
-                    </TextBlock>
-                    <TextBlock Style="{StaticResource StatusItem}" Foreground="{StaticResource VsAccentYellow}">
-                        <Run Text="⚠ "/><Run Text="{Binding RecentAlerts.Count, Mode=OneWay, FallbackValue=3}"/>
-                    </TextBlock>
+                    <TextBlock Style="{StaticResource StatusItem}"><Run Text="💰 ¥"/><Run Text="{Binding TotalEquity, StringFormat=N0, FallbackValue=102345}"/></TextBlock>
+                    <TextBlock Style="{StaticResource StatusItem}"><Run Text="品种 "/><Run Text="{Binding ConnectedInstruments, Mode=OneWay, FallbackValue=45}"/></TextBlock>
+                    <TextBlock Style="{StaticResource StatusItem}" Foreground="{StaticResource VsAccentYellow}"><Run Text="⚠ "/><Run Text="{Binding RecentAlerts.Count, Mode=OneWay, FallbackValue=3}"/></TextBlock>
                 </StackPanel>
-                <StackPanel HorizontalAlignment="Right" Margin="0,0,12,0">
-                    <TextBlock Text="Ctrl+1~5 切换视图" Foreground="{StaticResource VsFgMuted}" FontSize="10" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center">
+                    <TextBlock Text="Ctrl+1~5" Foreground="{StaticResource VsFgMuted}" FontSize="10" />
                 </StackPanel>
             </Grid>
         </Border>
