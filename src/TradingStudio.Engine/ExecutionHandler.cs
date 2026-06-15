@@ -142,8 +142,13 @@ public class ExecutionHandler : IExecutionHandler
                 fills.Add(fill);
         }
 
+        // TryMatchTick 已设置 order.FilledQuantity/Status — 仅移除完全成交的订单（保留部分成交）
         foreach (var f in fills)
-            _activeOrders.RemoveAll(o => o.OrderId == f.OrderId);
+        {
+            var order = _activeOrders.FirstOrDefault(o => o.OrderId == f.OrderId);
+            if (order != null && order.FilledQuantity >= order.Quantity)
+                _activeOrders.Remove(order);
+        }
 
         return fills;
     }
@@ -208,7 +213,7 @@ public class ExecutionHandler : IExecutionHandler
             FillPrice = fillPrice.Value,
             Fee = fee,
             Slippage = slippage,
-            Time = DateTimeOffset.UtcNow,
+            Time = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp),
         };
     }
 
@@ -227,7 +232,9 @@ public class ExecutionHandler : IExecutionHandler
             {
                 fills.Add(fill);
                 _orderHistory.Add(fill);
-                _activeOrders.Remove(order);
+                // MatchBar 已设置 order.FilledQuantity/Status — 仅移除完全成交的
+                if (order.FilledQuantity >= order.Quantity)
+                    _activeOrders.Remove(order);
             }
         }
 
@@ -305,7 +312,7 @@ public class ExecutionHandler : IExecutionHandler
             FillPrice = fillPrice,
             Fee = fee,
             Slippage = slippage,
-            Time = DateTimeOffset.UtcNow,
+            Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero),
         };
     }
 

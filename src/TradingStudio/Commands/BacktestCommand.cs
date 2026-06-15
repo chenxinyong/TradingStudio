@@ -18,7 +18,7 @@ public class BacktestCommand
     {
         var configPath = "";
         var mode = "bar";
-        var dbPath = "bars_history.db";
+        var dbPath = "bars.db";
         var dataDir = "";
         var symbolsPath = "symbols.json";
         var startStr = "";
