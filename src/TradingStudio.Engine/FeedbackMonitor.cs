@@ -93,6 +93,8 @@ public class FeedbackMonitor
     // 告警检查
     // ═══════════════════════════════════════════
 
+    private int _totalAlertCount;
+
     public IReadOnlyList<MonitorAlert> CheckAlerts()
     {
         _alerts.Clear();
@@ -168,6 +170,7 @@ public class FeedbackMonitor
             }
         }
 
+        _totalAlertCount += _alerts.Count;
         return _alerts;
     }
 
@@ -191,7 +194,7 @@ public class FeedbackMonitor
         return new MonitorSummary
         {
             TotalSlippage = totalSlippage,
-            AlertCount = _alerts.Count,
+            AlertCount = _totalAlertCount,
             MaxConsecutiveLosses = maxConsecutiveLosses,
         };
     }

@@ -225,6 +225,10 @@ public class PortfolioManager : IPortfolioState
         {
             sp.Cash -= fill.Fee;
             sp.MarginUsed = MarginUsed;
+            sp.Positions = _positions.Values
+                .Where(p => p.StrategyId == fill.StrategyId)
+                .ToList()
+                .AsReadOnly();
         }
 
         Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);

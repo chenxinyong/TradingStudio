@@ -68,10 +68,9 @@ public class TradingEngine
             // 预加载历史 Bar：回测模式加载全部，实盘按 WarmupDays 加载
             if (_dataFeed is Data.Engine.HistoricalBarFeed barFeed)
             {
-                var loadStart = _options.IsLive
-                    ? _options.StartTime.AddDays(-_options.WarmupDays)
-                    : _options.StartTime;
-                var loadEnd = _options.IsLive ? _options.StartTime : _options.EndTime;
+                // 预热窗口：加载 StartTime 前 WarmupDays 天的数据（回测/实盘统一）
+                var loadStart = _options.StartTime.AddDays(-Math.Max(_options.WarmupDays, 1));
+                var loadEnd = _options.StartTime;
 
                 foreach (var inst in config.Instruments)
                 {

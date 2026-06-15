@@ -2,7 +2,8 @@ using TradingStudio.Core.Strategy;
 
 namespace TradingStudio.Engine;
 
-/// <summary>引擎级报告 — 含各策略子报告 + 监控摘要</summary>
+/// <summary>引擎级报告 — 含各策略子报告 + 监控摘要。
+/// 报告由 TradingEngine.RunAsync 内联构建，此类的 Generate 方法已废弃。</summary>
 public class EngineReport
 {
     public PortfolioSnapshot FinalPortfolio { get; init; } = new();
@@ -11,18 +12,6 @@ public class EngineReport
     public IReadOnlyList<Statistics.PerformanceReport> StrategyReports { get; init; } = [];
     public MonitorSummary MonitorSummary { get; init; } = new();
     public IReadOnlyList<StrategyConfig> ConfigSnapshots { get; init; } = [];
-
-    public static EngineReport Generate(
-        PortfolioManager portfolio,
-        StrategyContainer strategies,
-        FeedbackMonitor feedback,
-        List<(DateTimeOffset Time, decimal Equity)> equityCurve,
-        List<Core.Engine.Trade> trades,
-        EngineOptions options)
-    {
-        // Phase 2a 实现
-        throw new NotImplementedException("Phase 2a: 实现报告生成");
-    }
 }
 
 /// <summary>总账快照（供 API 用）</summary>

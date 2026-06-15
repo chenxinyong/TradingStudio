@@ -5,11 +5,19 @@ namespace TradingStudio.Engine;
 
 /// <summary>
 /// 风控控制器 — 管理风控规则链，三级检查（Pre-Order / Post-Fill / Periodic）。
-/// Phase 2a: 最小实现，未来扩展规则注册。
+/// Phase 2a: 内置基础规则，未来可扩展自定义 IRiskRule 注册。
 /// </summary>
 public class RiskController
 {
     private readonly List<IRiskRule> _rules = new();
+
+    public RiskController()
+    {
+        // 内置基础风控规则（可通过 AddRule 覆盖/追加）
+        _rules.Add(new MaxPositionPerInstrumentRule(5));
+        _rules.Add(new MaxOrderQuantityRule(100));
+        _rules.Add(new MaxDrawdownRule(0.25m));
+    }
 
     public void AddRule(IRiskRule rule) => _rules.Add(rule);
 
@@ -49,5 +57,75 @@ public class RiskController
                 results.Add(result);
         }
         return results;
+    }
+
+    // ═══════════════════════════════════════════
+    // 内置规则
+    // ═══════════════════════════════════════════
+
+    /// <summary>单品种最大持仓手数限制</summary>
+    private class MaxPositionPerInstrumentRule : IRiskRule
+    {
+        private readonly int _maxPositions;
+        public string Name => "MaxPositionPerInstrument";
+
+        public MaxPositionPerInstrumentRule(int maxPositions) => _maxPositions = maxPositions;
+
+        public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
+        {
+            var existing = portfolio.GetPosition(order.InstrumentId);
+            var newQty = (existing?.Quantity ?? 0) + order.Quantity;
+            if (Math.Abs(newQty) > _maxPositions)
+                return RiskCheckResult.Reject(Name,
+                    $"Position limit: {Math.Abs(newQty)} > {_maxPositions} for {order.InstrumentId}");
+            return RiskCheckResult.Pass;
+        }
+
+        public RiskCheckResult CheckPostFill(OrderEvent fill, IPortfolioState portfolio) => RiskCheckResult.Pass;
+        public RiskCheckResult CheckPeriodic(IPortfolioState portfolio) => RiskCheckResult.Pass;
+    }
+
+    /// <summary>单笔最大下单手数限制</summary>
+    private class MaxOrderQuantityRule : IRiskRule
+    {
+        private readonly int _maxQty;
+        public string Name => "MaxOrderQuantity";
+
+        public MaxOrderQuantityRule(int maxQty) => _maxQty = maxQty;
+
+        public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
+        {
+            if (order.Quantity > _maxQty)
+                return RiskCheckResult.Reject(Name,
+                    $"Order quantity {order.Quantity} > max {_maxQty}");
+            return RiskCheckResult.Pass;
+        }
+
+        public RiskCheckResult CheckPostFill(OrderEvent fill, IPortfolioState portfolio) => RiskCheckResult.Pass;
+        public RiskCheckResult CheckPeriodic(IPortfolioState portfolio) => RiskCheckResult.Pass;
+    }
+
+    /// <summary>最大回撤风控：Drawdown > 阈值 → 拒绝新开仓</summary>
+    private class MaxDrawdownRule : IRiskRule
+    {
+        private readonly decimal _threshold;
+        public string Name => "MaxDrawdown";
+
+        public MaxDrawdownRule(decimal threshold) => _threshold = threshold;
+
+        public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
+        {
+            if (portfolio.StartingCapital > 0)
+            {
+                var drawdown = 1m - portfolio.Equity / portfolio.StartingCapital;
+                if (drawdown > _threshold)
+                    return RiskCheckResult.Reject(Name,
+                        $"Drawdown {drawdown:P2} > {_threshold:P2} — rejecting new orders");
+            }
+            return RiskCheckResult.Pass;
+        }
+
+        public RiskCheckResult CheckPostFill(OrderEvent fill, IPortfolioState portfolio) => RiskCheckResult.Pass;
+        public RiskCheckResult CheckPeriodic(IPortfolioState portfolio) => RiskCheckResult.Pass;
     }
 }
