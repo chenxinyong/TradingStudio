@@ -12,9 +12,9 @@ public class ToolRegistry
     {
         Register(new ImportTool.ImportTool());
         Register(new JinshuyuanTool.JinshuyuanTool());
+        Register(new VerifyTool.VerifyTool());
         // 未来扩展：只需加下面这类行
         // Register(new ExportTool.ExportTool());
-        // Register(new VerifyTool.VerifyTool());
         // Register(new InfoTool.InfoTool());
         // Register(new ConvertTool.ConvertTool());
     }

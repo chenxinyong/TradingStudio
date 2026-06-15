@@ -144,24 +144,20 @@ public class CollectService : BackgroundService
             _log.Information("[{Session}] Connected → Login", session);
             connected.TrySetResult(true);
             md.Login(_cfg.BrokerId, _cfg.UserId, _cfg.Password);
-        };
         md.OnFrontDisconnected += r =>
         {
             _log.Warning("[{Session}] Disconnected (0x{Reason:X})", session, r);
             lock (discLock) { disconnected = true; }
-        };
         md.OnLogin += (err, info) =>
         {
             if (err.IsOK()) { _log.Information("[{Session}] Login OK TradingDay={Day}", session, info?.TradingDay); loggedIn.TrySetResult(true); }
             else { _log.Error("[{Session}] Login FAIL [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg); loggedIn.TrySetResult(false); }
-        };
         md.OnError += (err, req) =>
         { if (err.ErrorID != 0) _log.Error("[{Session}] [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg); };
         md.OnQuote += q =>
         {
             try { HandleQuote(q, agg1Min, aggDay, tickWriter); _lastQuote = DateTime.Now; }
             catch (Exception ex) { _log.Error(ex, "Quote handler error"); }
-        };
 
         md.Connect(_cfg.MdFront);
         if (!await WaitFor(connected, 15000, ct)) throw new Exception("Connection timeout");
@@ -187,19 +183,8 @@ public class CollectService : BackgroundService
     {
         if (string.IsNullOrEmpty(q.InstrumentID)) return;
         var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
-        var tradingDay = DateOnly.TryParseExact(q.TradingDay, "yyyyMMdd", out var d)
-            ? d : DateOnly.FromDateTime(DateTime.Today);
-
-        var record = new TickRecord
-        {
-            ExchangeTimestamp = q.ExchangeTimestamp, LocalTimestamp = q.LocalTimestamp,
-            LastPrice = (long)(q.LastPrice * TickRecord.PriceScale),
-            Volume = q.Volume, Turnover = q.Turnover, OpenInterest = q.OpenInterest,
-            BidPrice1 = (long)(q.BidPrice1 * TickRecord.PriceScale), BidVolume1 = q.BidVolume1,
-            AskPrice1 = (long)(q.AskPrice1 * TickRecord.PriceScale), AskVolume1 = q.AskVolume1,
-            Flags = (q.LastPrice >= q.UpperLimitPrice && q.UpperLimitPrice > 0 ? 1 : 0)
-                  | (q.LastPrice <= q.LowerLimitPrice && q.LowerLimitPrice > 0 ? 2 : 0)
-        };
+        var record = QuoteConverter.FromQuote(q);
+        var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
 
         agg1Min.Feed(record, instId, tradingDay); aggDay.Feed(record, instId, tradingDay);
         tickWriter.Write(instId, q.ExchangeID, q.TradingDay,

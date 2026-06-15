@@ -90,18 +90,9 @@ public class CtpLiveFeed : IDataFeed, IDisposable
             _mdApi.OnQuote += q =>
             {
                 if (string.IsNullOrEmpty(q.InstrumentID)) return;
+                var record = QuoteConverter.FromQuote(q);
                 var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
-                var tradingDay = DateOnly.TryParseExact(q.TradingDay, "yyyyMMdd", out var d)
-                    ? d : DateOnly.FromDateTime(DateTime.Today);
-                var record = new TickRecord
-                {
-                    ExchangeTimestamp = q.ExchangeTimestamp,
-                    LocalTimestamp = q.LocalTimestamp,
-                    LastPrice = (long)(q.LastPrice * TickRecord.PriceScale),
-                    Volume = q.Volume, Turnover = q.Turnover, OpenInterest = q.OpenInterest,
-                    BidPrice1 = (long)(q.BidPrice1 * TickRecord.PriceScale), BidVolume1 = q.BidVolume1,
-                    AskPrice1 = (long)(q.AskPrice1 * TickRecord.PriceScale), AskVolume1 = q.AskVolume1,
-                };
+                var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
                 _merged.Writer.TryWrite((instId, record, tradingDay));
                 PersistChannel.Writer.TryWrite((instId, record, tradingDay));
             };

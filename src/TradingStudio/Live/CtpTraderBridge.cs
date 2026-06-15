@@ -50,14 +50,21 @@ public class CtpTraderBridge : IDisposable
                 Time = DateTimeOffset.UtcNow,
             });
 
-            // 自动重连（5s 后）
-            Task.Run(async () =>
+            // 自动重连（5s 后，异常不影响回调线程）
+            _ = Task.Run(async () =>
             {
-                await Task.Delay(5000);
-                if (!_disposed)
+                try
                 {
-                    _log.Information("CTP Trader reconnecting...");
-                    _trader?.Connect(_opts.TraderFront);
+                    await Task.Delay(5000);
+                    if (!_disposed)
+                    {
+                        _log.Information("CTP Trader reconnecting...");
+                        _trader?.Connect(_opts.TraderFront);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log.Error(ex, "CTP Trader reconnect failed");
                 }
             });
         };
