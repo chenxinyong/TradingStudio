@@ -3,11 +3,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:oxy="http://oxyplot.org/wpf"
         xmlns:converters="clr-namespace:TradingStudio.Terminal.Converters"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="TradingStudio.Terminal"
         Height="900" Width="1400"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None" AllowsTransparency="False"
+        ResizeMode="CanResizeWithGrip"
+        BorderBrush="{StaticResource VsBorder}" BorderThickness="1"
         Background="{StaticResource VsBgPrimary}">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="32" ResizeBorderThickness="6"
+                            GlassFrameThickness="0" CornerRadius="0" />
+    </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
         <converters:RunningToIconConverter x:Key="RunningToIcon" />
@@ -64,11 +72,12 @@
         <!-- 窗口控制按钮 -->
         <Style x:Key="WinButton" TargetType="Button">
             <Setter Property="Width" Value="46" />
-            <Setter Property="Height" Value="28" />
+            <Setter Property="Height" Value="32" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{StaticResource VsFgSecondary}" />
+            <Setter Property="Foreground" Value="{StaticResource VsFgPrimary}" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -79,6 +88,25 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Background" Value="{StaticResource VsBgHover}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CloseButton" TargetType="Button" BasedOn="{StaticResource WinButton}">
+            <Setter Property="Foreground" Value="{StaticResource VsFgSecondary}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E81123" />
+                                <Setter Property="Foreground" Value="White" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -117,7 +145,7 @@
          ═══════════════════════════════════════ -->
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="28" />   <!-- 标题栏 -->
+            <RowDefinition Height="32" />   <!-- 标题栏 -->
             <RowDefinition Height="*" />    <!-- 内容区 -->
             <RowDefinition Height="24" />   <!-- 状态栏 -->
         </Grid.RowDefinitions>
@@ -128,17 +156,19 @@
                 MouseDown="TitleBar_MouseDown">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                    <TextBlock Text="📈" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <TextBlock Text="TradingStudio" FontSize="12" Foreground="{StaticResource VsFgPrimary}"
+                    <TextBlock Text="📈" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="TradingStudio" FontSize="13" Foreground="{StaticResource VsFgPrimary}"
                                VerticalAlignment="Center" FontWeight="SemiBold" />
-                    <TextBlock Text="Terminal" FontSize="12" Foreground="{StaticResource VsFgMuted}"
+                    <TextBlock Text="Terminal" FontSize="13" Foreground="{StaticResource VsFgMuted}"
                                VerticalAlignment="Center" Margin="4,0,0,0" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                    <Button Style="{StaticResource WinButton}" Content="─" Click="Minimize_Click" />
-                    <Button Style="{StaticResource WinButton}" Content="□" Click="Maximize_Click" />
-                    <Button Style="{StaticResource WinButton}" Content="✕" Click="Close_Click"
-                            Foreground="{StaticResource VsFgSecondary}" />
+                    <Button Style="{StaticResource WinButton}" ToolTip="最小化" Content="&#xE921;"
+                            Click="Minimize_Click" />
+                    <Button Style="{StaticResource WinButton}" ToolTip="最大化" Content="&#xE922;"
+                            Click="Maximize_Click" />
+                    <Button Style="{StaticResource CloseButton}" ToolTip="关闭 (Alt+F4)" Content="&#xE8BB;"
+                            Click="Close_Click" />
                 </StackPanel>
             </Grid>
         </Border>
