@@ -54,6 +54,7 @@ public class TradingEngine
 
         // 1. 初始化策略
         var equityCurve = new List<(DateTimeOffset Time, decimal Equity)>();
+        var strategyEquityCurves = new Dictionary<string, List<(DateTimeOffset, decimal)>>();
         var globalTrades = new List<Trade>();
         var tradesLock = new object();
 
@@ -204,8 +205,16 @@ public class TradingEngine
                     var alerts = _feedback.CheckAlerts();
                     if (alerts.Count > 0) _strategies.DispatchAlert(alerts);
 
-                    // 权益采样
+                    // 权益采样（全局 + 按策略）
                     equityCurve.Add((barEvt.Time, _portfolio.Equity));
+                    foreach (var slot in _strategies.AllSlots)
+                    {
+                        var sub = _portfolio.GetSubPortfolio(slot.Config.StrategyId);
+                        if (!strategyEquityCurves.ContainsKey(slot.Config.StrategyId))
+                            strategyEquityCurves[slot.Config.StrategyId] = new();
+                        strategyEquityCurves[slot.Config.StrategyId]
+                            .Add((barEvt.Time, sub?.Equity ?? 0));
+                    }
 
                     prevBar = bar;
                     firstBar = false;
@@ -256,7 +265,8 @@ public class TradingEngine
                     slot.Config.StrategyId,
                     _portfolio.GetSubPortfolio(slot.Config.StrategyId),
                     globalTrades.Where(t => t.StrategyId == slot.Config.StrategyId).ToList(),
-                    equityCurve)).ToList(),
+                    strategyEquityCurves.TryGetValue(slot.Config.StrategyId, out var se)
+                        ? se : equityCurve)).ToList(),
             MonitorSummary = _feedback.ToSummary(),
             ConfigSnapshots = _options.StrategyConfigs.ToList(),
         };

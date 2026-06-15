@@ -40,7 +40,7 @@ public class CtpTraderBridge : IDisposable
         _trader.OnFrontDisconnected += _ =>
         {
             IsReady = false;
-            _log.Warning("CTP Trader disconnected — IsReady=false");
+            _log.Warning("CTP Trader disconnected — reconnecting in 5s...");
 
             // 通知引擎：交易已断
             _fillWriter.TryWrite(new OrderEvent
@@ -48,6 +48,17 @@ public class CtpTraderBridge : IDisposable
                 Type = OrderEventType.Rejected,
                 Message = "CTP交易连接断开",
                 Time = DateTimeOffset.UtcNow,
+            });
+
+            // 自动重连（5s 后）
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(5000);
+                if (!_disposed)
+                {
+                    _log.Information("CTP Trader reconnecting...");
+                    _trader?.Connect(_opts.TraderFront);
+                }
             });
         };
 

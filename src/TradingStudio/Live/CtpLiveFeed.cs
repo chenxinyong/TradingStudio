@@ -16,6 +16,11 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     private readonly CtpMdOptions _opts;
     private readonly ILogger<CtpLiveFeed> _log;
     private readonly Channel<(string InstId, TickRecord Tick, DateOnly TradingDay)> _merged;
+
+    /// <summary>数据持久化通道 — 独立于引擎消费，供 LiveDataCollector 读取</summary>
+    public Channel<(string InstId, TickRecord Tick, DateOnly TradingDay)> PersistChannel { get; }
+        = Channel.CreateBounded<(string, TickRecord, DateOnly)>(8192);
+
     private CTP.MdApi? _mdApi;
     private DateTime _startTime;
     private DateTime _endTime;
@@ -98,6 +103,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                     AskPrice1 = (long)(q.AskPrice1 * TickRecord.PriceScale), AskVolume1 = q.AskVolume1,
                 };
                 _merged.Writer.TryWrite((instId, record, tradingDay));
+                PersistChannel.Writer.TryWrite((instId, record, tradingDay));
             };
 
             try
