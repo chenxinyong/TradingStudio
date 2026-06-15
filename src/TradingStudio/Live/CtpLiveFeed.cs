@@ -3,7 +3,7 @@ using System.Threading.Channels;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Data.Aggregation;
-using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace TradingStudio.Live;
 
@@ -14,7 +14,7 @@ namespace TradingStudio.Live;
 public class CtpLiveFeed : IDataFeed, IDisposable
 {
     private readonly CtpMdOptions _opts;
-    private readonly ILogger<CtpLiveFeed> _log;
+    private readonly Serilog.ILogger _log;
     private readonly Channel<(string InstId, TickRecord Tick, DateOnly TradingDay)> _merged;
 
     /// <summary>数据持久化通道 — 独立于引擎消费，供 LiveDataCollector 读取</summary>
@@ -32,10 +32,10 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     public DateTime EndTime => _endTime;
     public bool IsConnected { get; private set; }
 
-    public CtpLiveFeed(CtpMdOptions opts, ILogger<CtpLiveFeed>? log = null)
+    public CtpLiveFeed(CtpMdOptions opts, Serilog.ILogger? log = null)
     {
         _opts = opts;
-        _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CtpLiveFeed>.Instance;
+        _log = (log ?? Serilog.Log.Logger).ForContext<CtpLiveFeed>();
         _merged = Channel.CreateBounded<(string, TickRecord, DateOnly)>(8192);
     }
 
@@ -83,7 +83,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
             _mdApi.OnLogin += (err, _) =>
             {
                 if (err.IsOK()) loggedIn.TrySetResult(true);
-                else { _log.Error("CTP login failed: {Err}", err.ErrorMsg()); loggedIn.TrySetResult(false); }
+                else { _log.Error("CTP login failed: {Err}", err.ErrorMsg); loggedIn.TrySetResult(false); }
             };
 
             // 行情回调 → 归并 Channel（使用 CTP 交易日字段）
@@ -106,6 +106,10 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                 PersistChannel.Writer.TryWrite((instId, record, tradingDay));
             };
 
+            // ── 消费循环（缓冲事件以避免 yield 在 try-catch 中）──
+            var sessionEvents = new List<DataEvent>();
+            Exception? streamError = null;
+
             try
             {
                 _mdApi.Connect(_opts.MdFront);
@@ -121,7 +125,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                     await Task.Delay(200, ct);
                 }
 
-                // ── 消费循环 ──
+                // 消费循环
                 var reader = _merged.Reader;
                 while (!ct.IsCancellationRequested)
                 {
@@ -132,30 +136,35 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                     {
                         var (instId, tick, tradingDay) = item;
 
-                        yield return new TickEvent
+                        sessionEvents.Add(new TickEvent
                         {
                             Tick = tick, InstrumentId = instId, TradingDay = tradingDay,
                             Time = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp),
-                        };
+                        });
 
                         barAgg.Feed(tick, instId, tradingDay);
 
                         lock (barQueue)
-                            while (barQueue.Count > 0) yield return barQueue.Dequeue();
+                            while (barQueue.Count > 0) sessionEvents.Add(barQueue.Dequeue());
                     }
                 }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
+                streamError = ex;
                 _log.Warning(ex, "CTP stream error — reconnecting in 5s...");
             }
             finally
             {
-                _merged.Writer.Complete();
+                _merged.Writer.TryComplete();
                 barAgg.Flush();
-                lock (barQueue) while (barQueue.Count > 0) yield return barQueue.Dequeue();
+                lock (barQueue) while (barQueue.Count > 0) sessionEvents.Add(barQueue.Dequeue());
                 _mdApi?.Dispose();
             }
+
+            // yield 在 try-catch 外部
+            foreach (var evt in sessionEvents)
+                yield return evt;
 
             if (ct.IsCancellationRequested) break;
 
@@ -174,7 +183,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     public void Dispose()
     {
         if (_disposed) return; _disposed = true;
-        _merged.Writer.Complete();
+        _merged.Writer.TryComplete();
         _mdApi?.Dispose();
     }
 }

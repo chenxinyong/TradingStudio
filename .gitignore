@@ -430,8 +430,9 @@ FodyWeavers.xsd
 # Runtime / temp
 ctp_flow/
 
-# Deploy output (regenerate with deploy.bat)
+# Deploy output (regenerate with deploy.bat / release-collect.bat)
 dist/
+release/
 
 # Raw data downloads
 data/

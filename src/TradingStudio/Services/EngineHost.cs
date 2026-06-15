@@ -1,4 +1,5 @@
 using TradingStudio.Engine;
+using Serilog;
 
 namespace TradingStudio.Services;
 
@@ -11,15 +12,15 @@ public class EngineHost : BackgroundService
     private readonly TradingEngine _engine;
     private readonly SessionScheduler _session;
     private readonly HealthMonitor _health;
-    private readonly ILogger<EngineHost> _log;
+    private readonly Serilog.ILogger _log;
 
     public EngineHost(TradingEngine engine, SessionScheduler session,
-                      HealthMonitor health, ILogger<EngineHost> log)
+                      HealthMonitor health, Serilog.ILogger log)
     {
         _engine = engine;
         _session = session;
         _health = health;
-        _log = log;
+        _log = log.ForContext<EngineHost>();
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -30,7 +31,8 @@ public class EngineHost : BackgroundService
             _log.Information("Waiting for next trading session...");
             _health.Update("Idle", 0, 0, 0, 0, "休市", null, null, null);
 
-            try { await _session.WaitUntilNextSession(ct); }
+            var wait = _session.WaitUntilNextSession();
+            try { await Task.Delay(wait, ct); }
             catch (OperationCanceledException) { break; }
 
             var sessionName = _session.SessionName();

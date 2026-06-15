@@ -35,6 +35,7 @@
     <Content Include="..\CTP\SDK\dll\thosttraderapi_se.dll" CopyToPublishDirectory="PreserveNewest" Link="thosttraderapi_se.dll" />
     <Content Include="..\..\tools\UnRAR.exe" CopyToPublishDirectory="PreserveNewest" Link="tools\UnRAR.exe" />
     <Content Include="start-collect.bat" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="start-collect.ps1" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

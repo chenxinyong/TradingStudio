@@ -1,6 +1,6 @@
 using System.Threading.Channels;
 using TradingStudio.Core.Engine;
-using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace TradingStudio.Live;
 
@@ -13,18 +13,18 @@ public class CtpTraderBridge : IDisposable
 {
     private readonly CtpTraderOptions _opts;
     private readonly ChannelWriter<OrderEvent> _fillWriter;
-    private readonly ILogger<CtpTraderBridge> _log;
+    private readonly Serilog.ILogger _log;
     private CTP.TraderApi? _trader;
     private bool _disposed;
 
     public bool IsReady { get; private set; }
 
     public CtpTraderBridge(Channel<OrderEvent> fillChannel, CtpTraderOptions opts,
-                           ILogger<CtpTraderBridge>? log = null)
+                           Serilog.ILogger? log = null)
     {
         _fillWriter = fillChannel.Writer;
         _opts = opts;
-        _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<CtpTraderBridge>.Instance;
+        _log = (log ?? Serilog.Log.Logger).ForContext<CtpTraderBridge>();
     }
 
     public void Connect()
@@ -37,7 +37,7 @@ public class CtpTraderBridge : IDisposable
             _trader.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
         };
 
-        _trader.OnFrontDisconnected += _ =>
+        _trader.OnFrontDisconnected += reason =>
         {
             IsReady = false;
             _log.Warning("CTP Trader disconnected — reconnecting in 5s...");
@@ -51,7 +51,7 @@ public class CtpTraderBridge : IDisposable
             });
 
             // 自动重连（5s 后）
-            _ = Task.Run(async () =>
+            Task.Run(async () =>
             {
                 await Task.Delay(5000);
                 if (!_disposed)
@@ -72,7 +72,7 @@ public class CtpTraderBridge : IDisposable
             }
             else
             {
-                _log.Error("CTP Trader login failed: {Err}", err.ErrorMsg());
+                _log.Error("CTP Trader login failed: {Err}", err.ErrorMsg);
             }
         };
 

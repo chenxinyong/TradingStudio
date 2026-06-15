@@ -120,6 +120,7 @@ echo.
 echo  Install: powershell dist\install.ps1
 echo  Run:
 echo    Engine:  dist\Server\TradingStudio.exe collect [SHFE] [ag2608]
+echo    一键:    dist\Server\start.bat / start.ps1  (右键 PowerShell 运行)
 echo    Desktop: dist\Desktop\TradingStudio.UI.exe
 echo    ToolBox: dist\ToolBox\TradingStudio.ToolBox.exe import -i ^<csv^>
 echo    ToolBox: dist\ToolBox\TradingStudio.ToolBox.exe info

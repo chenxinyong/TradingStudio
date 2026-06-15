@@ -3,6 +3,7 @@ using TradingStudio.Core.Models;
 using TradingStudio.Data.Aggregation;
 using TradingStudio.Data.Storage;
 using TradingStudio.Live;
+using Serilog;
 
 namespace TradingStudio.Services;
 
@@ -15,7 +16,7 @@ public class LiveDataCollector : BackgroundService
     private readonly CtpLiveFeed _feed;
     private readonly BarStore _barStore;
     private readonly HealthMonitor _health;
-    private readonly ILogger<LiveDataCollector> _log;
+    private readonly Serilog.ILogger _log;
 
     private long _tickCount;
     private long _barCount;
@@ -23,13 +24,13 @@ public class LiveDataCollector : BackgroundService
     private readonly TickCsvWriter? _tickWriter;
 
     public LiveDataCollector(CtpLiveFeed feed, BarStore barStore,
-                             HealthMonitor health, ILogger<LiveDataCollector> log,
+                             HealthMonitor health, Serilog.ILogger log,
                              TickCsvWriter? tickWriter = null)
     {
         _feed = feed;
         _barStore = barStore;
         _health = health;
-        _log = log;
+        _log = log.ForContext<LiveDataCollector>();
         _tickWriter = tickWriter;
     }
 
@@ -64,7 +65,7 @@ public class LiveDataCollector : BackgroundService
         finally
         {
             barAgg.Flush();
-            dailyAgg.Flush();
+            dailyAgg.FlushAll();
             barChannel.Writer.Complete();
             await writeTask;
         }
