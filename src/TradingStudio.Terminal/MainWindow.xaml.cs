@@ -1,54 +1,42 @@
 using System.Windows;
 using System.Windows.Input;
-using Microsoft.Extensions.DependencyInjection;
-using TradingStudio.Terminal.ViewModels;
+using TradingStudio.Terminal.Views;
 
 namespace TradingStudio.Terminal;
 
 public partial class MainWindow : Window
 {
+    private UIElement? _dashboardView, _chartView, _strategyView, _orderView, _logView;
+
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = App.Services.GetRequiredService<ChartViewModel>();
+        ShowDashboard();
 
-        // 键盘快捷键
-        KeyDown += (s, e) =>
+        KeyDown += (_, e) =>
         {
             if (e.KeyboardDevice.Modifiers != ModifierKeys.Control) return;
-            switch (e.Key)
-            {
-                case Key.D1: NavDashboard_Click(this, e);   break;
-                case Key.D2: NavChart_Click(this, e);        break;
-                case Key.D3: NavStrategies_Click(this, e);   break;
-                case Key.D4: NavOrders_Click(this, e);       break;
-                case Key.D5: NavLogs_Click(this, e);         break;
-            }
+            switch (e.Key) { case Key.D1: ShowDashboard(); break; case Key.D2: ShowChart(); break;
+                case Key.D3: ShowStrategies(); break; case Key.D4: ShowOrders(); break; case Key.D5: ShowLogs(); break; }
         };
     }
 
-    // ── 标题栏 — 窗口拖拽 ──
-    private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ClickCount == 2) { Maximize_Click(sender, e); return; }
-        if (e.ChangedButton == MouseButton.Left) DragMove();
-    }
+    void ShowDashboard() { _dashboardView ??= new DashboardView(); MainContent.Content = _dashboardView; }
+    void ShowChart()     { _chartView     ??= new ChartView();     MainContent.Content = _chartView; }
+    void ShowStrategies(){ _strategyView  ??= new PlaceholderView("📋", "策略管理", "Phase 2 — 策略列表、启停控制");     MainContent.Content = _strategyView; }
+    void ShowOrders()    { _orderView     ??= new PlaceholderView("📜", "订单监控", "Phase 2 — 活跃订单、持仓管理");     MainContent.Content = _orderView; }
+    void ShowLogs()      { _logView       ??= new PlaceholderView("⚙", "系统日志", "Phase 2 — 实时日志尾随");         MainContent.Content = _logView; }
 
-    // ── 窗口控制 ──
-    private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    // 标题栏
+    void TitleBar_MouseDown(object s, MouseButtonEventArgs e) { if (e.ClickCount == 2) Maximize_Click(s, e); else if (e.ChangedButton == MouseButton.Left) DragMove(); }
+    void Minimize_Click(object s, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    void Maximize_Click(object s, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    void Close_Click(object s, RoutedEventArgs e) => Close();
 
-    private void Maximize_Click(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState == WindowState.Maximized
-            ? WindowState.Normal : WindowState.Maximized;
-    }
-
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
-
-    // ── 左侧导航 — Step 3 实现内容切换 ──
-    private void NavDashboard_Click(object sender, RoutedEventArgs e) { /* Step 3 */ }
-    private void NavChart_Click(object sender, RoutedEventArgs e)      { /* 当前视图 */ }
-    private void NavStrategies_Click(object sender, RoutedEventArgs e) { /* Step 3 */ }
-    private void NavOrders_Click(object sender, RoutedEventArgs e)     { /* Step 3 */ }
-    private void NavLogs_Click(object sender, RoutedEventArgs e)       { /* Step 3 */ }
+    // 导航按钮
+    void NavDashboard_Click(object s, RoutedEventArgs e) => ShowDashboard();
+    void NavChart_Click(object s, RoutedEventArgs e)     => ShowChart();
+    void NavStrategies_Click(object s, RoutedEventArgs e) => ShowStrategies();
+    void NavOrders_Click(object s, RoutedEventArgs e)    => ShowOrders();
+    void NavLogs_Click(object s, RoutedEventArgs e)      => ShowLogs();
 }
