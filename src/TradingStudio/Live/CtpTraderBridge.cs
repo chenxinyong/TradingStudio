@@ -31,16 +31,40 @@ public class CtpTraderBridge : IDisposable
     {
         _trader = new CTP.TraderApi();
 
+        // ① OnFrontConnected → 先认证
         _trader.OnFrontConnected += () =>
         {
             _log.Information("CTP Trader connected: {Front}", _opts.TraderFront);
-            _trader.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
+            if (!string.IsNullOrEmpty(_opts.AuthCode))
+            {
+                _log.Information("CTP Trader authenticating...");
+                _trader.Authenticate(_opts.AuthCode, _opts.AppId ?? "simnow_client_test");
+            }
+            else
+            {
+                // 无需认证，直接登录
+                _trader.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
+            }
+        };
+
+        // ② OnAuth → 认证成功后登录
+        _trader.OnAuth += err =>
+        {
+            if (err.IsOK())
+            {
+                _log.Information("CTP Trader auth OK");
+                _trader.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
+            }
+            else
+            {
+                _log.Error("CTP Trader auth failed [{Code}] {Msg}", err.ErrorID, err.ErrorMsg);
+            }
         };
 
         _trader.OnFrontDisconnected += reason =>
         {
             IsReady = false;
-            _log.Warning("CTP Trader disconnected — reconnecting in 5s...");
+            _log.Warning("CTP Trader disconnected (0x{Reason:X}) — reconnecting in 5s...", reason);
 
             // 通知引擎：交易已断
             _fillWriter.TryWrite(new OrderEvent
@@ -69,6 +93,7 @@ public class CtpTraderBridge : IDisposable
             });
         };
 
+        // ③ OnLogin → 确认结算
         _trader.OnLogin += (err, _) =>
         {
             if (err.IsOK())
@@ -79,7 +104,7 @@ public class CtpTraderBridge : IDisposable
             }
             else
             {
-                _log.Error("CTP Trader login failed: {Err}", err.ErrorMsg);
+                _log.Error("CTP Trader login failed [{Code}] {Msg}", err.ErrorID, err.ErrorMsg);
             }
         };
 
@@ -97,7 +122,7 @@ public class CtpTraderBridge : IDisposable
         };
 
         _trader.OnError += (err, _) =>
-            _log.Warning("[CTP-Trader] {ErrorID}: {ErrorMsg}", err.ErrorID, err.ErrorMsg);
+            _log.Warning("[CTP-Trader] [{Code}] {Msg}", err.ErrorID, err.ErrorMsg);
 
         _trader.Connect(_opts.TraderFront);
     }
@@ -201,4 +226,6 @@ public class CtpTraderOptions
     public string BrokerId { get; init; } = "9999";
     public string UserId { get; init; } = "";
     public string Password { get; init; } = "";
+    public string? AuthCode { get; init; }
+    public string? AppId { get; init; }
 }

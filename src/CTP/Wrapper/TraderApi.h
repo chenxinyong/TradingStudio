@@ -45,6 +45,7 @@ namespace CTP
         !TraderApi();
 
         void Connect(System::String^ frontAddr);
+        void Authenticate(System::String^ authCode, System::String^ appId);
         void Login(System::String^ brokerId, System::String^ userId, System::String^ password);
         void Logout();
         bool IsConnected();

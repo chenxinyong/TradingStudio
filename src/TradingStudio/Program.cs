@@ -121,9 +121,10 @@ static async Task RunLiveAsync(string[] args)
         UserId = cfg["Live:UserId"]!,
         Password = cfg["Live:Password"]!,
     };
-    var liveFeed = new CtpLiveFeed(mdOpts);
-    builder.Services.AddSingleton<IDataFeed>(liveFeed);
-    builder.Services.AddSingleton(liveFeed);  // LiveDataCollector 直接依赖具体类型
+    // 工厂注入：ILogger 在 app.Build() 后才可用
+    builder.Services.AddSingleton<IDataFeed>(sp =>
+        new CtpLiveFeed(mdOpts, sp.GetRequiredService<Serilog.ILogger>()));
+    builder.Services.AddSingleton(sp => (CtpLiveFeed)sp.GetRequiredService<IDataFeed>());
 
     // 风控阈值（从 appsettings.json Risk 段读取，缺失时使用安全默认值）
     var risk = new RiskController(
@@ -171,6 +172,8 @@ static async Task RunLiveAsync(string[] args)
             BrokerId = cfg["Live:BrokerId"] ?? "9999",
             UserId = cfg["Live:UserId"] ?? "",
             Password = cfg["Live:Password"] ?? "",
+            AuthCode = cfg["Live:AuthCode"] ?? "0000000000000000",
+            AppId = cfg["Live:AppId"] ?? "simnow_client_test",
         };
         var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts);
         bridge.Connect();
@@ -212,10 +215,10 @@ static async Task RunLiveAsync(string[] args)
         }
     }
 
-    var engine = new TradingEngine(
-        liveFeed, execution, portfolio, indicators, strategies,
-        risk, feedback, tickSnapshot, engineOptions, registry);
-    builder.Services.AddSingleton(engine);
+    // 工厂创建引擎（IDataFeed 需延迟解析）
+    builder.Services.AddSingleton(sp => new TradingEngine(
+        sp.GetRequiredService<IDataFeed>(), execution, portfolio, indicators, strategies,
+        risk, feedback, tickSnapshot, engineOptions, registry));
 
     // 引擎后台运行 + SignalR 实时推送 + 数据落盘
     builder.Services.AddHostedService<EngineHost>();

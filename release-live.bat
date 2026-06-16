@@ -40,24 +40,32 @@ echo [5/5] start scripts + README...
 echo @echo off
 echo chcp 65001 ^>nul 2^>^&1
 echo cd /d "%%~dp0"
+echo title TradingStudio Live v0.3.0
 echo mkdir logs 2^>nul
 echo echo ========================================
-echo echo   TradingStudio - Live Engine v0.2.0
+echo echo   TradingStudio - Live Engine v0.3.0
 echo echo ========================================
 echo echo   .NET 10 x64 ^| CTP 6.7.13
-echo echo   Running as: Windows Service + SignalR
+echo echo   REST: http://localhost:5000/api/health
 echo echo ========================================
 echo echo.
 echo echo [Pre-flight]
-echo dotnet --version ^>nul 2^>^&1 ^|^| ^(echo [ERROR] .NET not found ^& pause ^& exit /b 1^)
+echo if not exist "TradingStudio.exe" ^(echo [ERROR] TradingStudio.exe not found ^& pause ^& exit /b 1^)
 echo if not exist "appsettings.json" ^(echo [ERROR] appsettings.json not found ^& pause ^& exit /b 1^)
 echo if not exist "symbols.json" ^(echo [ERROR] symbols.json not found ^& pause ^& exit /b 1^)
+echo echo [OK] All files present
 echo echo.
 echo echo Starting TradingStudio.exe live ...
 echo echo.
-echo TradingStudio.exe live
+echo "%%~dp0TradingStudio.exe" live
+echo set EXITCODE=%%ERRORLEVEL%%
+echo echo.
+echo echo ========================================
+echo echo   TradingStudio exited ^(code: %%EXITCODE%%^)
+echo echo ========================================
 echo echo.
 echo pause
+echo exit /b %%EXITCODE%%
 ) > "%RELEASE%\start.bat"
 echo   OK
 

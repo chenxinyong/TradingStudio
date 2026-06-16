@@ -16,8 +16,9 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     private readonly CtpMdOptions _opts;
     private readonly Serilog.ILogger _log;
 
-    public Channel<(string InstId, TickRecord Tick, DateOnly TradingDay)> PersistChannel { get; }
-        = Channel.CreateBounded<(string, TickRecord, DateOnly)>(8192);
+    /// <summary>数据持久化通道 — 传递原始 CTP Quote（全42字段），供 TickCsvWriter 落盘</summary>
+    public Channel<(string InstId, CTP.Quote Quote, DateOnly TradingDay)> PersistChannel { get; }
+        = Channel.CreateBounded<(string, CTP.Quote, DateOnly)>(8192);
 
     private DateTime _startTime;
     private DateTime _endTime;
@@ -127,7 +128,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                     var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
                     var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
                     merged.Writer.TryWrite((instId, record, tradingDay));
-                    PersistChannel.Writer.TryWrite((instId, record, tradingDay));
+                    PersistChannel.Writer.TryWrite((instId, q, tradingDay));  // 原始 Quote 全42字段
                 };
 
                 _log.Information("CTP: Connecting to {Front}...", _opts.MdFront);

@@ -49,5 +49,21 @@ public static class QuoteConverter
     /// <summary>CTP 交易日解析（yyyyMMdd → DateOnly，夜盘归属正确）</summary>
     public static DateOnly ParseTradingDay(string? tradingDay)
         => DateOnly.TryParseExact(tradingDay, "yyyyMMdd", out var d)
-            ? d : DateOnly.FromDateTime(DateTime.Today);
+            ? d : GetFuturesTradingDay(DateTime.Now);
+
+    /// <summary>
+    /// 按北京时间计算期货交易日。
+    /// 日盘 03:00-20:30 → 当天；
+    /// 凌晨 00:00-03:00 → 当天（前日 20:30 开始夜盘的延续）；
+    /// 夜盘 20:30-00:00 → 下一自然日。
+    /// </summary>
+    public static DateOnly GetFuturesTradingDay(DateTime localTime)
+    {
+        var t = localTime.TimeOfDay;
+        // 夜盘开始 (>=20:30) → 下一自然日
+        if (t >= new TimeSpan(20, 30, 0))
+            return DateOnly.FromDateTime(localTime.Date.AddDays(1));
+        // 凌晨 (00:00-03:00) 或日盘 (03:00-20:30) → 当天
+        return DateOnly.FromDateTime(localTime);
+    }
 }

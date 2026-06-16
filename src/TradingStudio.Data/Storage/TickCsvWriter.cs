@@ -176,7 +176,7 @@ public class TickCsvWriter : IDisposable
         return v.ToString("F2", CultureInfo.InvariantCulture);
     }
 
-    private static string GuessExchange(string inst)
+    public static string GuessExchange(string inst)
     {
         if (inst.Length == 0) return "??";
         // CFFEX (股指: IF/IC/IH/IM; 国债: T/TS/TF/TL, 其中 T 后直接跟数字)

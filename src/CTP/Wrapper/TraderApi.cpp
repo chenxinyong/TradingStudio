@@ -65,6 +65,21 @@ void TraderApi::Connect(String^ frontAddr)
     _api->Init();
 }
 
+void TraderApi::Authenticate(String^ authCode, String^ appId)
+{
+    if (!_api) throw gcnew ObjectDisposedException("TraderApi");
+
+    CThostFtdcReqAuthenticateField req;
+    memset(&req, 0, sizeof(req));
+
+    StringHelper::CopyToBuffer(_brokerId, req.BrokerID, sizeof(req.BrokerID));
+    StringHelper::CopyToBuffer(_userId,   req.UserID,   sizeof(req.UserID));
+    StringHelper::CopyToBuffer(appId,     req.AppID,    sizeof(req.AppID));
+    StringHelper::CopyToBuffer(authCode,  req.AuthCode, sizeof(req.AuthCode));
+
+    _api->ReqAuthenticate(&req, ++_requestId);
+}
+
 void TraderApi::Login(String^ brokerId, String^ userId, String^ password)
 {
     if (!_api) throw gcnew ObjectDisposedException("TraderApi");
