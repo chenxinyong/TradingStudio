@@ -40,8 +40,11 @@ echo   OK
 REM --- Step 3: CTP native DLLs ---
 echo.
 echo [3/3] CTP native DLLs...
-copy /Y "%ROOT%src\CTP\Wrapper\bin\Release\*.dll" "%OUTDIR%\" >nul 2>&1
-copy /Y "%ROOT%src\CTP\Wrapper\bin\Debug\*.dll" "%OUTDIR%\" >nul 2>&1
+if exist "%ROOT%src\CTP\Wrapper\bin\Release\*.dll" (
+    copy /Y "%ROOT%src\CTP\Wrapper\bin\Release\*.dll" "%OUTDIR%\" >nul 2>&1
+) else (
+    copy /Y "%ROOT%src\CTP\Wrapper\bin\Debug\*.dll" "%OUTDIR%\" >nul 2>&1
+)
 copy /Y "%ROOT%src\CTP\SDK\dll\*.dll" "%OUTDIR%\" >nul 2>&1
 echo   OK
 

@@ -22,7 +22,7 @@ TraderApi::TraderApi()
     Directory::CreateDirectory(flowDir);
 
     auto flowNative = StringHelper::ToNative(flowDir);
-    _api = CThostFtdcTraderApi::CreateFtdcTraderApi(flowNative.c_str(), true); // TLS enc
+    _api = CThostFtdcTraderApi::CreateFtdcTraderApi(flowNative.c_str(), false); // TLS off for simnow
 }
 
 TraderApi::~TraderApi()

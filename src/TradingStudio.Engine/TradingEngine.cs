@@ -84,7 +84,7 @@ public class TradingEngine
                     if (!warmupCache.TryGetValue(inst, out var loaded))
                     {
                         await barFeed.LoadBars(inst, loadStart, loadEnd);
-                        loaded = barFeed.GetWarmupBars(inst);
+                        loaded = barFeed.GetWarmupBars(inst).ToList();
                         warmupCache[inst] = loaded;
                     }
                     barHistory.AddRange(loaded);

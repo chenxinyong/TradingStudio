@@ -27,13 +27,16 @@ public class EngineHost : BackgroundService
     {
         while (!ct.IsCancellationRequested)
         {
-            // ── 等待交易时段 ──
-            _log.Information("Waiting for next trading session...");
-            _health.Update("Idle", 0, 0, 0, 0, "休市", null, null, null);
+            // ── 如果已在交易时段，直接启动；否则等待 ──
+            if (!_session.IsInSession())
+            {
+                _log.Information("Waiting for next trading session...");
+                _health.Update("Idle", 0, 0, 0, 0, "休市", null, null, null);
 
-            var wait = _session.WaitUntilNextSession();
-            try { await Task.Delay(wait, ct); }
-            catch (OperationCanceledException) { break; }
+                var wait = _session.WaitUntilNextSession();
+                try { await Task.Delay(wait, ct); }
+                catch (OperationCanceledException) { break; }
+            }
 
             var sessionName = _session.SessionName();
             _log.Information("Session starting: {Session}", sessionName);

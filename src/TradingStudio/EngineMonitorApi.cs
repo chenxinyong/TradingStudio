@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using TradingStudio.Engine;
 
 namespace TradingStudio;
@@ -13,7 +14,7 @@ public static class EngineMonitorApi
 
         // ═══ 快照查询 (GET) ═══
 
-        api.MapGet("/health", (PortfolioManager? portfolio, TickSnapshot? ticks) =>
+        api.MapGet("/health", ([FromServices] PortfolioManager? portfolio, [FromServices] TickSnapshot? ticks) =>
         {
             return Results.Ok(new
             {
@@ -24,7 +25,7 @@ public static class EngineMonitorApi
             });
         });
 
-        api.MapGet("/portfolio", (PortfolioManager portfolio) =>
+        api.MapGet("/portfolio", ([FromServices] PortfolioManager portfolio) =>
         {
             return Results.Ok(new
             {
@@ -38,18 +39,18 @@ public static class EngineMonitorApi
             });
         });
 
-        api.MapGet("/strategies", (StrategyContainer strategies) =>
+        api.MapGet("/strategies", ([FromServices] StrategyContainer strategies) =>
         {
             return Results.Ok(strategies.GetAllSnapshots());
         });
 
-        api.MapGet("/strategies/{id}", (string id, StrategyContainer strategies) =>
+        api.MapGet("/strategies/{id}", (string id, [FromServices] StrategyContainer strategies) =>
         {
             var s = strategies.GetSnapshot(id);
             return s != null ? Results.Ok(s) : Results.NotFound();
         });
 
-        api.MapGet("/orders", (ExecutionHandler execution) =>
+        api.MapGet("/orders", ([FromServices] ExecutionHandler execution) =>
         {
             return Results.Ok(new
             {
@@ -58,22 +59,22 @@ public static class EngineMonitorApi
             });
         });
 
-        api.MapGet("/trades", (PortfolioManager portfolio) =>
+        api.MapGet("/trades", ([FromServices] PortfolioManager portfolio) =>
         {
             return Results.Ok(portfolio.TradeHistory.TakeLast(100));
         });
 
-        api.MapGet("/alerts", (FeedbackMonitor feedback) =>
+        api.MapGet("/alerts", ([FromServices] FeedbackMonitor feedback) =>
         {
             return Results.Ok(feedback.RecentAlerts);
         });
 
-        api.MapGet("/ticks", (TickSnapshot ticks) =>
+        api.MapGet("/ticks", ([FromServices] TickSnapshot ticks) =>
         {
             return Results.Ok(ticks.GetAll());
         });
 
-        api.MapGet("/ticks/{instrumentId}", (string instrumentId, TickSnapshot ticks) =>
+        api.MapGet("/ticks/{instrumentId}", (string instrumentId, [FromServices] TickSnapshot ticks) =>
         {
             var t = ticks.Get(instrumentId);
             return t != null ? Results.Ok(t) : Results.NotFound();
@@ -87,13 +88,13 @@ public static class EngineMonitorApi
 
         // ═══ 控制命令 (POST) ═══
 
-        api.MapPost("/strategies/{id}/pause", (string id, StrategyContainer strategies) =>
+        api.MapPost("/strategies/{id}/pause", (string id, [FromServices] StrategyContainer strategies) =>
         {
             strategies.Pause(id);
             return Results.Ok(new { StrategyId = id, Action = "pause" });
         });
 
-        api.MapPost("/strategies/{id}/resume", (string id, StrategyContainer strategies) =>
+        api.MapPost("/strategies/{id}/resume", (string id, [FromServices] StrategyContainer strategies) =>
         {
             strategies.Resume(id);
             return Results.Ok(new { StrategyId = id, Action = "resume" });

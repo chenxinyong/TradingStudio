@@ -1,6 +1,7 @@
 using CTP;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using TradingStudio.Core.Storage;
 using TradingStudio.Data.Aggregation;
 using TradingStudio.Core.Models;
 using TradingStudio.Data.Storage;
@@ -63,7 +64,7 @@ public class CollectService : BackgroundService
         var tickDir = Path.GetDirectoryName(Path.GetFullPath(_cfg.TickData));
         if (tickDir != null) Directory.CreateDirectory(tickDir);
 
-        using var store = new BarStore(_cfg.Database);
+        using var store = new SqliteBarStore(_cfg.Database);
         using var tickWriter = new TickCsvWriter(_cfg.TickData);
 
         using var healthCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -144,20 +145,24 @@ public class CollectService : BackgroundService
             _log.Information("[{Session}] Connected → Login", session);
             connected.TrySetResult(true);
             md.Login(_cfg.BrokerId, _cfg.UserId, _cfg.Password);
+        };
         md.OnFrontDisconnected += r =>
         {
             _log.Warning("[{Session}] Disconnected (0x{Reason:X})", session, r);
             lock (discLock) { disconnected = true; }
+        };
         md.OnLogin += (err, info) =>
         {
             if (err.IsOK()) { _log.Information("[{Session}] Login OK TradingDay={Day}", session, info?.TradingDay); loggedIn.TrySetResult(true); }
             else { _log.Error("[{Session}] Login FAIL [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg); loggedIn.TrySetResult(false); }
+        };
         md.OnError += (err, req) =>
         { if (err.ErrorID != 0) _log.Error("[{Session}] [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg); };
         md.OnQuote += q =>
         {
             try { HandleQuote(q, agg1Min, aggDay, tickWriter); _lastQuote = DateTime.Now; }
             catch (Exception ex) { _log.Error(ex, "Quote handler error"); }
+        };
 
         md.Connect(_cfg.MdFront);
         if (!await WaitFor(connected, 15000, ct)) throw new Exception("Connection timeout");
@@ -200,7 +205,7 @@ public class CollectService : BackgroundService
         Interlocked.Increment(ref _quoteCount);
     }
 
-    private async Task HealthLoop(BarStore store, TickCsvWriter tickWriter, CancellationToken ct)
+    private async Task HealthLoop(IBarStore store, TickCsvWriter tickWriter, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {

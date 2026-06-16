@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Storage;
 using TradingStudio.Engine;
 using TradingStudio.Data.Storage;
 using TradingStudio.Live;
@@ -84,6 +85,9 @@ static async Task RunLiveAsync(string[] args)
 {
     var builder = WebApplication.CreateBuilder(args);
 
+    // 本地配置覆盖（含敏感凭证，不提交 Git）
+    builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
+
     // Windows Service
     builder.Host.UseWindowsService(o => o.ServiceName = "TradingStudio");
 
@@ -119,6 +123,7 @@ static async Task RunLiveAsync(string[] args)
     };
     var liveFeed = new CtpLiveFeed(mdOpts);
     builder.Services.AddSingleton<IDataFeed>(liveFeed);
+    builder.Services.AddSingleton(liveFeed);  // LiveDataCollector 直接依赖具体类型
 
     // 风控阈值（从 appsettings.json Risk 段读取，缺失时使用安全默认值）
     var risk = new RiskController(
@@ -128,6 +133,7 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddSingleton(risk);
     var execution = new ExecutionHandler(risk);
     builder.Services.AddSingleton<IExecutionHandler>(execution);
+    builder.Services.AddSingleton(execution);  // EngineMonitorApi 直接依赖具体类型
 
     // 反馈 + 行情快照
     var feedback = new FeedbackMonitor();
@@ -143,7 +149,10 @@ static async Task RunLiveAsync(string[] args)
 
     // ── 数据持久化 ──
     var dbPath = cfg["Live:Database"] ?? "bars_live.db";
-    var barStore = new BarStore(dbPath);
+    var useDuckDB = cfg["Live:UseDuckDB"]?.ToLowerInvariant() == "true";
+    IBarStore barStore = useDuckDB
+        ? new DuckDBStore(dbPath, enableTickPurge: true)
+        : new SqliteBarStore(dbPath);
     builder.Services.AddSingleton(barStore);
     var tickWriter = new TickCsvWriter("TickData");
     builder.Services.AddSingleton(tickWriter);

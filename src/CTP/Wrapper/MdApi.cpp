@@ -24,6 +24,7 @@ MdApi::MdApi()
 
     auto flowNative = StringHelper::ToNative(flowDir);
     _api = CThostFtdcMdApi::CreateFtdcMdApi(flowNative.c_str(), false, false, true); // bIsProduction=true → TLS enc
+    if (!_api) throw gcnew InvalidOperationException("CThostFtdcMdApi::CreateFtdcMdApi returned NULL");
 }
 
 MdApi::~MdApi()
