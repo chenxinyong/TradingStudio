@@ -36,12 +36,13 @@
 
 ```
 C:\Works\Datas\Jinshuyuan\
-├── FutAC_TickKZ_CTP_Daily_2020\
-│   ├── FutAC_TickKZ_CTP_Daily_202001.rar
-│   ├── FutAC_TickKZ_CTP_Daily_202002.rar
-│   └── ...
-├── FutAC_TickKZ_CTP_Daily_2021\
-└── ...
+├── FutAC_TickKZ_CTP_Daily_2020\   (2020-01~12, 已导入)
+├── FutAC_TickKZ_CTP_Daily_2021\   (云服务器导入中)
+├── FutAC_TickKZ_CTP_Daily_2022\
+├── FutAC_TickKZ_CTP_Daily_2023\
+├── FutAC_TickKZ_CTP_Daily_2024\
+├── FutAC_TickKZ_CTP_Daily_2025\
+└── FutAC_TickKZ_CTP_Daily_2026\   (1-5月已导入, 22M Bar, 1015品种)
 ```
 
 RAR内部结构: `{exchange}/{contract}_{YYYYMMDD}.csv`
