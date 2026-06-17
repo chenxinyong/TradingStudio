@@ -47,16 +47,15 @@
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
 
-  <!-- Debug 时强制拷贝 CTP DLL 到所有可能的输出目录 -->
+  <!-- Debug 时强制拷贝 CTP DLL 到 VS 可能使用的输出目录 -->
   <Target Name="CopyCtpNative" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
-    <Copy SourceFiles="..\CTP\Wrapper\bin\Debug\CTPWrapper.dll"
-          DestinationFiles="$(OutputPath)CTPWrapper.dll;$(MSBuildProjectDirectory)\bin\Debug\net10.0\CTPWrapper.dll"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\CTP\SDK\dll\thostmduserapi_se.dll"
-          DestinationFiles="$(OutputPath)thostmduserapi_se.dll;$(MSBuildProjectDirectory)\bin\Debug\net10.0\thostmduserapi_se.dll"
-          SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\CTP\SDK\dll\thosttraderapi_se.dll"
-          DestinationFiles="$(OutputPath)thosttraderapi_se.dll;$(MSBuildProjectDirectory)\bin\Debug\net10.0\thosttraderapi_se.dll"
-          SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <_CtpDlls Include="..\CTP\Wrapper\bin\Debug\CTPWrapper.dll" />
+      <_CtpDlls Include="..\CTP\SDK\dll\thostmduserapi_se.dll" />
+      <_CtpDlls Include="..\CTP\SDK\dll\thosttraderapi_se.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CtpDlls)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+    <MakeDir Directories="$(MSBuildProjectDirectory)\bin\Debug\net10.0\" />
+    <Copy SourceFiles="@(_CtpDlls)" DestinationFolder="$(MSBuildProjectDirectory)\bin\Debug\net10.0\" SkipUnchangedFiles="true" />
   </Target>
 </Project>
