@@ -3,8 +3,8 @@
     "tasks": [
         {
             "label": "build",
+            "type": "shell",
             "command": "dotnet",
-            "type": "process",
             "args": ["build", "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj", "-c", "Debug"],
             "problemMatcher": "$msCompile",
             "group": {
@@ -13,12 +13,16 @@
             }
         },
         {
-            "label": "build C++/CLI Wrapper",
-            "type": "shell",
-            "command": "${workspaceFolder}/src/CTP/Wrapper/build.bat",
-            "options": {
-                "cwd": "${workspaceFolder}/src/CTP/Wrapper"
-            },
+            "label": "build (Full MSBuild)",
+            "detail": "用 MSBuild 编译 Debug（含 C++/CLI）",
+            "type": "process",
+            "command": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Current\\Bin\\amd64\\MSBuild.exe",
+            "args": [
+                "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+                "/t:Build",
+                "/p:Configuration=Debug",
+                "/p:Platform=x64"
+            ],
             "problemMatcher": "$msCompile",
             "group": "build"
         },
@@ -26,36 +30,14 @@
             "label": "publish live",
             "type": "shell",
             "command": "${workspaceFolder}/release-live.bat",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "group": "build"
-        },
-        {
-            "label": "publish collect",
-            "type": "shell",
-            "command": "${workspaceFolder}/release-collect.bat",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "group": "build"
-        },
-        {
-            "label": "publish backtest",
-            "type": "shell",
-            "command": "${workspaceFolder}/release-backtest.bat",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
+            "options": { "cwd": "${workspaceFolder}" },
             "group": "build"
         },
         {
             "label": "publish all",
             "type": "shell",
             "command": "${workspaceFolder}/release-all.bat",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
+            "options": { "cwd": "${workspaceFolder}" },
             "group": "build"
         }
     ]

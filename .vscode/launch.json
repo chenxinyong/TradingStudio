@@ -3,9 +3,10 @@
     "configurations": [
         {
             "name": "▶ Live (实盘引擎)",
-            "type": "dotnet",
+            "type": "coreclr",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/TradingStudio/bin/x64/Debug/net10.0/TradingStudio.dll",
             "cwd": "${workspaceFolder}/src/TradingStudio",
             "args": ["live"],
             "console": "integratedTerminal",
@@ -15,9 +16,10 @@
         },
         {
             "name": "▶ Collect (行情采集)",
-            "type": "dotnet",
+            "type": "coreclr",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/TradingStudio/bin/x64/Debug/net10.0/TradingStudio.dll",
             "cwd": "${workspaceFolder}/src/TradingStudio",
             "args": ["collect"],
             "console": "integratedTerminal",
@@ -26,10 +28,11 @@
             }
         },
         {
-            "name": "▶ Collect SHFE (单交易所)",
-            "type": "dotnet",
+            "name": "▶ Collect SHFE",
+            "type": "coreclr",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/TradingStudio/bin/x64/Debug/net10.0/TradingStudio.dll",
             "cwd": "${workspaceFolder}/src/TradingStudio",
             "args": ["collect", "SHFE"],
             "console": "integratedTerminal",
@@ -39,9 +42,10 @@
         },
         {
             "name": "▶ Backtest (K线回测)",
-            "type": "dotnet",
+            "type": "coreclr",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/TradingStudio/bin/x64/Debug/net10.0/TradingStudio.dll",
             "cwd": "${workspaceFolder}/src/TradingStudio",
             "args": ["backtest", "--config", "strategies/live-test.json", "--db", "bars.db"],
             "console": "integratedTerminal",
@@ -51,9 +55,10 @@
         },
         {
             "name": "▶ Backtest (自定义参数)",
-            "type": "dotnet",
+            "type": "coreclr",
             "request": "launch",
-            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/TradingStudio/bin/x64/Debug/net10.0/TradingStudio.dll",
             "cwd": "${workspaceFolder}/src/TradingStudio",
             "args": [
                 "backtest",
@@ -71,25 +76,25 @@
     "inputs": [
         {
             "id": "strategyConfig",
-            "description": "策略配置文件路径",
+            "description": "策略配置",
             "type": "promptString",
             "default": "strategies/live-test.json"
         },
         {
             "id": "dbPath",
-            "description": "K线数据库路径",
+            "description": "K线数据库",
             "type": "promptString",
             "default": "bars.db"
         },
         {
             "id": "startDate",
-            "description": "回测起始日期 (yyyy-MM-dd)",
+            "description": "起始日期 (yyyy-MM-dd)",
             "type": "promptString",
             "default": "2025-01-01"
         },
         {
             "id": "endDate",
-            "description": "回测截止日期 (yyyy-MM-dd)",
+            "description": "截止日期 (yyyy-MM-dd)",
             "type": "promptString",
             "default": "2025-06-01"
         }
