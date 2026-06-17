@@ -34,11 +34,24 @@ public static class JinshuyuanEntryFilter
     public static EntryMeta ParseEntryPath(string entryPath)
     {
         var parts = entryPath.Split('/');
-        if (parts.Length != 2)
-            throw new FormatException($"Invalid entry path format: {entryPath}");
+        string exchangeDir, fileName;
 
-        var exchangeDir = parts[0];
-        var fileName = parts[1];
+        if (parts.Length == 1)
+        {
+            // 扁平结构: "ag2608_20260617.csv" → 从合约代码推断交易所
+            fileName = parts[0];
+            exchangeDir = GuessExchangeDirFromFileName(fileName);
+        }
+        else if (parts.Length == 2)
+        {
+            // 原始结构: "sc/ag2608_20260617.csv"
+            exchangeDir = parts[0];
+            fileName = parts[1];
+        }
+        else
+        {
+            throw new FormatException($"Invalid entry path format: {entryPath}");
+        }
 
         if (!fileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
             throw new FormatException($"Not a CSV: {entryPath}");
@@ -122,6 +135,30 @@ public static class JinshuyuanEntryFilter
     {
         try { meta = ParseEntryPath(entryPath); return true; }
         catch { meta = default; return false; }
+    }
+
+    /// <summary>从扁平文件名推断交易所目录代码</summary>
+    private static string GuessExchangeDirFromFileName(string fileName)
+    {
+        // 去掉 "_YYYYMMDD.csv" 获取合约代码
+        var stem = fileName[..^4]; // strip ".csv"
+        var lastUnderscore = stem.LastIndexOf('_');
+        var code = lastUnderscore > 0 ? stem[..lastUnderscore] : stem;
+
+        // 用 TickCsvWriter 的交易所推断逻辑
+        return code.ToLowerInvariant() switch
+        {
+            var c when c.StartsWith("if") || c.StartsWith("ic") || c.StartsWith("ih") || c.StartsWith("im")
+                || c.StartsWith("ts") || c.StartsWith("tf") || c.StartsWith("tl") => "cffex",
+            var c when c.StartsWith("sc") || c.StartsWith("lu") || c.StartsWith("bc")
+                || c.StartsWith("nr") || c.StartsWith("ec") => "ine",
+            var c when c.StartsWith("si") || c.StartsWith("lc") || c.StartsWith("ps") => "gfex",
+            var c when c.Length >= 2 && char.IsUpper(c[0]) && char.IsUpper(c[1]) => "zc",
+            // SHFE (小写前缀)
+            var c when "cualznpbnianauagrbwrhcssbufuruspfaobr".Contains(c[..2]) => "sc",
+            // DCE remainder
+            _ => "dc",
+        };
     }
 
     /// <summary>从合约代码提取品种代码</summary>
