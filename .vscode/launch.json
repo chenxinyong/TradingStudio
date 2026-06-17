@@ -1,0 +1,97 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "▶ Live (实盘引擎)",
+            "type": "dotnet",
+            "request": "launch",
+            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "cwd": "${workspaceFolder}/src/TradingStudio",
+            "args": ["live"],
+            "console": "integratedTerminal",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "▶ Collect (行情采集)",
+            "type": "dotnet",
+            "request": "launch",
+            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "cwd": "${workspaceFolder}/src/TradingStudio",
+            "args": ["collect"],
+            "console": "integratedTerminal",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "▶ Collect SHFE (单交易所)",
+            "type": "dotnet",
+            "request": "launch",
+            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "cwd": "${workspaceFolder}/src/TradingStudio",
+            "args": ["collect", "SHFE"],
+            "console": "integratedTerminal",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "▶ Backtest (K线回测)",
+            "type": "dotnet",
+            "request": "launch",
+            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "cwd": "${workspaceFolder}/src/TradingStudio",
+            "args": ["backtest", "--config", "strategies/live-test.json", "--db", "bars.db"],
+            "console": "integratedTerminal",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        },
+        {
+            "name": "▶ Backtest (自定义参数)",
+            "type": "dotnet",
+            "request": "launch",
+            "projectPath": "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj",
+            "cwd": "${workspaceFolder}/src/TradingStudio",
+            "args": [
+                "backtest",
+                "--config", "${input:strategyConfig}",
+                "--db", "${input:dbPath}",
+                "--start", "${input:startDate}",
+                "--end", "${input:endDate}"
+            ],
+            "console": "integratedTerminal",
+            "env": {
+                "DOTNET_ENVIRONMENT": "Development"
+            }
+        }
+    ],
+    "inputs": [
+        {
+            "id": "strategyConfig",
+            "description": "策略配置文件路径",
+            "type": "promptString",
+            "default": "strategies/live-test.json"
+        },
+        {
+            "id": "dbPath",
+            "description": "K线数据库路径",
+            "type": "promptString",
+            "default": "bars.db"
+        },
+        {
+            "id": "startDate",
+            "description": "回测起始日期 (yyyy-MM-dd)",
+            "type": "promptString",
+            "default": "2025-01-01"
+        },
+        {
+            "id": "endDate",
+            "description": "回测截止日期 (yyyy-MM-dd)",
+            "type": "promptString",
+            "default": "2025-06-01"
+        }
+    ]
+}

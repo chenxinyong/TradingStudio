@@ -1,0 +1,62 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "command": "dotnet",
+            "type": "process",
+            "args": ["build", "${workspaceFolder}/src/TradingStudio/TradingStudio.csproj", "-c", "Debug"],
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "build C++/CLI Wrapper",
+            "type": "shell",
+            "command": "${workspaceFolder}/src/CTP/Wrapper/build.bat",
+            "options": {
+                "cwd": "${workspaceFolder}/src/CTP/Wrapper"
+            },
+            "problemMatcher": "$msCompile",
+            "group": "build"
+        },
+        {
+            "label": "publish live",
+            "type": "shell",
+            "command": "${workspaceFolder}/release-live.bat",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        },
+        {
+            "label": "publish collect",
+            "type": "shell",
+            "command": "${workspaceFolder}/release-collect.bat",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        },
+        {
+            "label": "publish backtest",
+            "type": "shell",
+            "command": "${workspaceFolder}/release-backtest.bat",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        },
+        {
+            "label": "publish all",
+            "type": "shell",
+            "command": "${workspaceFolder}/release-all.bat",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build"
+        }
+    ]
+}
