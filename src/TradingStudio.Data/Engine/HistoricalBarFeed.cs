@@ -1,18 +1,18 @@
 using System.Runtime.CompilerServices;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Storage;
 using TradingStudio.Data.Aggregation;
-using TradingStudio.Data.Storage;
 
 namespace TradingStudio.Data.Engine;
 
 /// <summary>
-/// Bar 回放数据源 — 从 SQLite bars_1min 读取，按需聚合。
+/// Bar 回放数据源 — 从 IBarStore 读取，按需聚合。
 /// 单品种直接流式输出，多品种 K-way merge 排序。
 /// </summary>
 public class HistoricalBarFeed : IDataFeed
 {
-    private readonly BarStore _store;
+    private readonly IBarStore _store;
     private readonly int _periodMinutes;
     private DateTime _startTime;
     private DateTime _endTime;
@@ -22,7 +22,7 @@ public class HistoricalBarFeed : IDataFeed
     public DateTime StartTime => _startTime;
     public DateTime EndTime => _endTime;
 
-    public HistoricalBarFeed(BarStore store, int periodMinutes = 1)
+    public HistoricalBarFeed(IBarStore store, int periodMinutes = 1)
     {
         _store = store;
         _periodMinutes = periodMinutes;

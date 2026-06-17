@@ -1,4 +1,5 @@
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Storage;
 using TradingStudio.Data.Aggregation;
 using TradingStudio.Data.Storage;
 
@@ -66,7 +67,9 @@ public class TickImportService
         var dayBars = bars.Count(b => b.BarTime.TimeOfDay == TimeSpan.Zero);
 
         Console.Write($"  Writing {bars.Count:N0} bars to {dbPath}... ");
-        using var barStore = new BarStore(dbPath);
+        using IBarStore barStore = dbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase)
+            ? new DuckDBStore(dbPath)
+            : new SqliteBarStore(dbPath);
         await barStore.WriteBatchAsync(bars, ct);
         Console.WriteLine($"Done. (1min: {minBars}, day: {dayBars})");
 

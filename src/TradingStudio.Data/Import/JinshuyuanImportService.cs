@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Storage;
 using TradingStudio.Data.Aggregation;
 using TradingStudio.Data.Storage;
 
@@ -50,7 +51,9 @@ public class JinshuyuanImportService
 
         if (_opts.DryRun) { await DryRunAsync(rarFiles, ct); return; }
 
-        using var barStore = new BarStore(_opts.DbPath);
+        using IBarStore barStore = _opts.DbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase)
+            ? new DuckDBStore(_opts.DbPath)
+            : new SqliteBarStore(_opts.DbPath);
         long totalTicks = 0, totalBars = 0;
         int ok = 0, fail = 0;
         var sw = Stopwatch.StartNew();
@@ -88,7 +91,7 @@ public class JinshuyuanImportService
     /// 处理单个 RAR: 列出条目 → 批量解压到临时目录 → 遍历 CSV → 聚合 → 写库 → 清理。
     /// 整个 RAR 只需 1 次 UnRAR 调用（vs 旧方案每 CSV 一次，5000× 提速）。
     /// </summary>
-    private (long Ticks, long Bars) ProcessRar(string rarPath, BarStore barStore, CancellationToken ct)
+    private (long Ticks, long Bars) ProcessRar(string rarPath, IBarStore barStore, CancellationToken ct)
     {
         using var barAgg = new BarAggregator();
         using var dayAgg = new DailyBarAggregator();

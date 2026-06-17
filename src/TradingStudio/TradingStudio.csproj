@@ -7,27 +7,27 @@
     <Version>0.2.0</Version><VersionSuffix>collect</VersionSuffix>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier Condition="'$(Configuration)' == 'Debug'">win-x64</RuntimeIdentifier>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- CTPWrapper: 常规构建用 vcxproj（编译 C++/CLI），SelfContained 发布用预编译 DLL -->
-    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj"
-        Condition="'$(RuntimeIdentifier)' == ''" />
-    <Reference Include="CTPWrapper"
-        Condition="'$(RuntimeIdentifier)' != ''"
-        HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- C++/CLI: Debug/Release 都用项目引用 -->
+    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj">
+      <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+      <CopyLocal>true</CopyLocal>
+    </ProjectReference>
     <ProjectReference Include="..\TradingStudio.Core\TradingStudio.Core.csproj" />
     <ProjectReference Include="..\TradingStudio.Data\TradingStudio.Data.csproj" />
     <ProjectReference Include="..\TradingStudio.Engine\TradingStudio.Engine.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" CopyToPublishDirectory="PreserveNewest" Link="CTPWrapper.dll" />
-    <Content Include="C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\10.0.9\runtimes\win-x64\native\ijwhost.dll"
-             CopyToPublishDirectory="PreserveNewest" Link="ijwhost.dll" />
+    <Content Include="C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\10.0.9\runtimes\win-x64\native\ijwhost.dll" CopyToPublishDirectory="PreserveNewest" Link="ijwhost.dll" />
     <Content Include="C:\Windows\System32\vcruntime140.dll" CopyToPublishDirectory="PreserveNewest" Link="vcruntime140.dll" />
     <Content Include="C:\Windows\System32\vcruntime140_1.dll" CopyToPublishDirectory="PreserveNewest" Link="vcruntime140_1.dll" />
     <Content Include="C:\Windows\System32\msvcp140.dll" CopyToPublishDirectory="PreserveNewest" Link="msvcp140.dll" />
@@ -46,4 +46,17 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
+
+  <!-- Debug 时强制拷贝 CTP DLL 到所有可能的输出目录 -->
+  <Target Name="CopyCtpNative" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
+    <Copy SourceFiles="..\CTP\Wrapper\bin\Debug\CTPWrapper.dll"
+          DestinationFiles="$(OutputPath)CTPWrapper.dll;$(MSBuildProjectDirectory)\bin\Debug\net10.0\CTPWrapper.dll"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\CTP\SDK\dll\thostmduserapi_se.dll"
+          DestinationFiles="$(OutputPath)thostmduserapi_se.dll;$(MSBuildProjectDirectory)\bin\Debug\net10.0\thostmduserapi_se.dll"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="..\CTP\SDK\dll\thosttraderapi_se.dll"
+          DestinationFiles="$(OutputPath)thosttraderapi_se.dll;$(MSBuildProjectDirectory)\bin\Debug\net10.0\thosttraderapi_se.dll"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>

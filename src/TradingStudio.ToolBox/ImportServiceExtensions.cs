@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Storage;
 using TradingStudio.Data.Aggregation;
 using TradingStudio.Data.Import;
 using TradingStudio.Data.Storage;
@@ -19,8 +20,11 @@ public static class ImportServiceExtensions
     {
         var dbPath = config["Import:Database"] ?? config["db"] ?? "bars.db";
 
-        // 数据库（Singleton：连接可复用，BarStore 线程安全）
-        services.AddSingleton(new BarStore(dbPath));
+        // 数据库（Singleton: IBarStore，自动识别 SQLite / DuckDB）
+        IBarStore barStore = dbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase)
+            ? new DuckDBStore(dbPath)
+            : new SqliteBarStore(dbPath);
+        services.AddSingleton(barStore);
 
         // 品种注册表（Singleton：只读数据，全局共享）
         services.AddSingleton(sp =>

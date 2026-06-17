@@ -2,6 +2,7 @@ using System.Text.Json;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Strategy;
+using TradingStudio.Core.Storage;
 using TradingStudio.Data.Engine;
 using TradingStudio.Data.Storage;
 using TradingStudio.Engine;
@@ -97,7 +98,9 @@ public class BacktestCommand
         }
         else
         {
-            var store = new BarStore(dbPath);
+            IBarStore store = dbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase)
+                ? new DuckDBStore(dbPath)
+                : new SqliteBarStore(dbPath);
             var period = strategyConfig.BarPeriodMinutes > 0 ? strategyConfig.BarPeriodMinutes : 1;
             dataFeed = new HistoricalBarFeed(store, period);
         }

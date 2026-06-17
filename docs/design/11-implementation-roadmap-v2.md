@@ -3,10 +3,34 @@
 > 融合 docs/08-10 的分析结论，盘点现有代码，定义实施顺序。
 >
 > **更新 (2026-06-13):** 6/12 完成全市场采集管线部署，6/13 修复 6 个 Bug。
-> **更新 (2026-06-14):** 技术指标引擎完成 (SMA/EMA/MACD/RSI/BOLL) → Core.Indicators。
-> K线图表 Demo 完成 (OxyPlot + MVVM + 实时模拟) → TradingStudio.UI。
-> Phase 2a 引擎组件全部实现 (TradingEngine/ExecutionHandler/PortfolioManager 等)。
-> Step 1 (PostgreSQL + 实体) 尚未完成，其余 Step 2-3 的部分组件已超前实现。
+> **更新 (2026-06-16):** 2020-2025 六年全量数据验证完成。5908 万 Bar 质量可靠（0 倒挂/0 负值/0 NULL/0 重复）。Phase 1 数据基建正式关闭，进入 Phase 2 回测系统。
+> 此路线图的 6 步计划已与实际实施路径分叉，保留作为历史参考。实际采用 SQLite → DuckDB/PostgreSQL 渐进路线。
+
+---
+
+## ⚠️ 实际实施状态 (2026-06-16)
+
+此路线图制定于 6/10，与实际开发路径有显著差异：
+
+| Step | 计划 | 实际 |
+|------|------|------|
+| 1 | PostgreSQL + C# 实体 | SQLite 直接使用，DuckDB/PostgreSQL 推迟至 Phase 2b |
+| 2 | 修复 CTP Bridge (C++) | C++/CLI 自封装完整实现 |
+| 3 | 二进制 Tick 存储 | CSV 格式 (金数源兼容) + SQLite Bar |
+| 4 | Bar 聚合 + PG 存储 | BarAggregator + DailyBarAggregator → SQLite |
+| 5 | CSV 导入器 | ToolBox import / import-jinshuyuan 完整实现 |
+| 6 | 管线集成 | CollectService + LiveService + HealthMonitor 已部署 |
+
+**路线图之外实际完成的工作：**
+- 金数源 72 RAR 全量导入 (6 年度 9.13 GB)
+- ToolBox CLI 6 命令体系 (import/import-jinshuyuan/export/verify/info/convert)
+- 三种模式发布 (collect/live/backtest)
+- C# 六维度验证 + Python 跨年验证
+- Phase 2 回测引擎设计文档 (13 章)
+- WPF 监控客户端设计 (14-wpf-monitoring-client-design.md)
+- 技术指标引擎 (SMA/EMA/MACD/RSI/BOLL)
+
+**结论：** 路线图中的功能需求已全部覆盖，但技术选型路径不同（SQLite 优先 vs PostgreSQL 优先）。此文档存档，新的 Phase 2 实施计划将独立编写。
 
 ---
 

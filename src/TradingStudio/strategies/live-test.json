@@ -3,15 +3,15 @@
   "StrategyType": "MaCross",
   "Description": "双均线实盘测试 — simnow",
   "Version": 1,
-  "Instruments": ["rb2608"],
+  "Instruments": ["ag2608"],
   "PrimaryBarType": "bars_1min",
-  "AllocatedCapital": 100000,
+  "AllocatedCapital": 1000000,
   "MaxDrawdownPct": 0.20,
   "MaxPositionPerInstrument": 2,
   "Priority": 1,
   "Parameters": {
     "FastPeriod": 5,
-    "SlowPeriod": 20,
+    "SlowPeriod": 34,
     "Quantity": 1
   },
   "RiskRules": [],

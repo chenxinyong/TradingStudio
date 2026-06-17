@@ -1,15 +1,15 @@
 using System.Threading.Channels;
 using Microsoft.Data.Sqlite;
 using TradingStudio.Core.Models;
-using TradingStudio.Core.Models;
+using TradingStudio.Core.Storage;
 
 namespace TradingStudio.Data.Storage;
 
 /// <summary>
-/// Bar 存储器 — 将 Bar 写入 SQLite。
-/// 后续切 PostgreSQL 只需替换此类，接口不变。
+/// SQLite Bar 存储器 — 将 Bar 写入 SQLite。
+/// 实现 IBarStore，与 DuckDBStore 互换。
 /// </summary>
-public class BarStore : IDisposable, IAsyncDisposable
+public class SqliteBarStore : IBarStore
 {
     private readonly SqliteConnection _conn;
     private readonly Channel<Bar> _input = Channel.CreateBounded<Bar>(4096);
@@ -19,7 +19,7 @@ public class BarStore : IDisposable, IAsyncDisposable
 
     public long WrittenCount => Interlocked.Read(ref _written);
 
-    public BarStore(string dbPath = "bars.db")
+    public SqliteBarStore(string dbPath = "bars.db")
     {
         _conn = new SqliteConnection($"Data Source={dbPath}");
         _conn.Open();
