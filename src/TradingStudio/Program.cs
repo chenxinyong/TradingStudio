@@ -99,6 +99,7 @@ static async Task RunLiveAsync(string[] args)
     // Serilog
     builder.Services.AddSerilog((_, cfg) =>
         cfg.ReadFrom.Configuration(builder.Configuration));
+    builder.Host.UseSerilog();  // 配置静态 Log.Logger（CtpTraderBridge 回调需要）
 
     // ── 启动配置验证 ──
     var cfg = builder.Configuration;
@@ -175,8 +176,9 @@ static async Task RunLiveAsync(string[] args)
             AuthCode = cfg["Live:AuthCode"] ?? "0000000000000000",
             AppId = cfg["Live:AppId"] ?? "simnow_client_test",
         };
+        // CtpTraderBridge: 先注册，app.Build() 后由 EngineHost 调用 Connect
         var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts);
-        bridge.Connect();
+        builder.Services.AddSingleton(bridge);
         execution.SendToExchange = bridge.SendOrder;
     }
     execution.IsLive = true;
@@ -226,6 +228,11 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddHostedService<LiveDataCollector>();
 
     var app = builder.Build();
+
+    // app.Build() 后静态 Logger 已配置，启动交易桥接
+    var traderBridge = app.Services.GetService<CtpTraderBridge>();
+    traderBridge?.Connect();
+
     app.UseCors();
 
     // REST API

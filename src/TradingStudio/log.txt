@@ -1,0 +1,21 @@
+2026-06-17 13:22:51.971 [Information] Session starting: 日盘
+2026-06-17 13:22:52.047 [Information] CTP: Connecting to tcp://182.254.243.31:30011...
+2026-06-17 13:22:52.163 [Information] Now listening on: http://localhost:5001
+2026-06-17 13:22:52.173 [Information] CTP login OK TradingDay=20260617
+2026-06-17 13:22:52.175 [Information] CTP connected: tcp://182.254.243.31:30011
+2026-06-17 13:22:52.185 [Information] No action descriptors found. This may indicate an incorrectly configured application or missing application parts. To learn more, visit https://aka.ms/aspnet/mvc/app-parts
+2026-06-17 13:22:52.228 [Information] Application started. Press Ctrl+C to shut down.
+2026-06-17 13:22:52.229 [Information] Hosting environment: Development
+2026-06-17 13:22:52.231 [Information] Content root path: C:\Works\ClaudeCode\TradingStudio\src\TradingStudio
+2026-06-17 13:23:44.564 [Information] Request starting HTTP/1.1 GET http://127.0.0.1:5001/api/health - null null
+2026-06-17 13:23:44.641 [Information] Executing endpoint 'HTTP: GET /api/health'
+2026-06-17 13:23:44.652 [Information] Setting HTTP status code 200.
+2026-06-17 13:23:44.660 [Information] Writing value of type '<>f__AnonymousType0`4' as Json.
+2026-06-17 13:23:44.670 [Information] Executed endpoint 'HTTP: GET /api/health'
+2026-06-17 13:23:44.672 [Information] Request finished HTTP/1.1 GET http://127.0.0.1:5001/api/health - 200 null application/json; charset=utf-8 118.4784ms
+2026-06-17 13:23:44.710 [Information] Request starting HTTP/1.1 GET http://127.0.0.1:5001/api/ticks - null null
+2026-06-17 13:23:44.716 [Information] Executing endpoint 'HTTP: GET /api/ticks'
+2026-06-17 13:23:44.717 [Information] Setting HTTP status code 200.
+2026-06-17 13:23:44.721 [Information] Writing value of type 'List`1' as Json.
+2026-06-17 13:23:44.725 [Information] Executed endpoint 'HTTP: GET /api/ticks'
+2026-06-17 13:23:44.727 [Information] Request finished HTTP/1.1 GET http://127.0.0.1:5001/api/ticks - 200 null application/json; charset=utf-8 17.3791ms
