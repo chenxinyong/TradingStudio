@@ -65,9 +65,13 @@ void TraderApi::Connect(String^ frontAddr)
     _api->Init();
 }
 
-void TraderApi::Authenticate(String^ authCode, String^ appId)
+void TraderApi::Authenticate(String^ brokerId, String^ userId, String^ authCode, String^ appId)
 {
     if (!_api) throw gcnew ObjectDisposedException("TraderApi");
+
+    // 保存账号信息（后续 Login 也需要）
+    _brokerId = brokerId;
+    _userId   = userId;
 
     CThostFtdcReqAuthenticateField req;
     memset(&req, 0, sizeof(req));

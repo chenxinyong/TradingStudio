@@ -38,7 +38,7 @@ public class CtpTraderBridge : IDisposable
             if (!string.IsNullOrEmpty(_opts.AuthCode))
             {
                 _log.Information("CTP Trader authenticating...");
-                _trader.Authenticate(_opts.AuthCode, _opts.AppId ?? "simnow_client_test");
+                _trader.Authenticate(_opts.BrokerId, _opts.UserId, _opts.AuthCode, _opts.AppId ?? "simnow_client_test");
             }
             else
             {
