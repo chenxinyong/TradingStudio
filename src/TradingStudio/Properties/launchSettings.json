@@ -3,6 +3,7 @@
     "▶ Live (实盘引擎)": {
       "commandName": "Project",
       "commandLineArgs": "live",
+      "applicationUrl": "http://localhost:5001",
       "workingDirectory": "$(ProjectDir)",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
