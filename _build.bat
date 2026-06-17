@@ -26,10 +26,10 @@ echo   OK
 
 REM --- Step 2: TradingStudio Engine ---
 echo.
-echo [2/3] TradingStudio Engine (Release, SelfContained)...
+echo [2/3] TradingStudio Engine (Release)...
 if not exist "%OUTDIR%" mkdir "%OUTDIR%"
 dotnet restore "%ROOT%src\TradingStudio\TradingStudio.csproj" -r win-x64 >nul 2>&1
-msbuild "%ROOT%src\TradingStudio\TradingStudio.csproj" /t:Publish /p:Configuration=Release /p:PublishDir="%OUTDIR%" /p:SelfContained=true /p:RuntimeIdentifier=win-x64 > "%LOG%" 2>&1
+msbuild "%ROOT%src\TradingStudio\TradingStudio.csproj" /t:Publish /p:Configuration=Release /p:PublishDir="%OUTDIR%" /p:RuntimeIdentifier=win-x64 > "%LOG%" 2>&1
 if %ERRORLEVEL% NEQ 0 (
     type "%LOG%"
     echo FAIL: msbuild failed
