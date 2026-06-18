@@ -4,6 +4,7 @@ using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Data.Aggregation;
 using Serilog;
+using System.Linq;
 
 namespace TradingStudio.Live;
 
@@ -25,10 +26,17 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     private IReadOnlyList<string> _instruments = [];
     private bool _disposed;
 
+    /// <summary>活跃度追踪器：观察期后筛选高活跃合约，减少 CTP 订阅量</summary>
+    public ContractActivityTracker? ActivityTracker { get; set; }
+
     public IReadOnlyList<string> Instruments => _instruments;
     public DateTime StartTime => _startTime;
     public DateTime EndTime => _endTime;
     public bool IsConnected { get; private set; }
+
+    /// <summary>活跃品种集合（观察期后填充），用于引擎事件过滤，不影响数据落盘</summary>
+    private HashSet<string>? _activeProductSet;
+    private bool _filterReady;
 
     public CtpLiveFeed(CtpMdOptions opts, Serilog.ILogger? log = null)
     {
@@ -121,6 +129,8 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                     if (err.IsOK()) { _log.Information("CTP login OK TradingDay={Day}", info?.TradingDay); loggedIn.TrySetResult(true); }
                     else { _log.Error("CTP login FAIL [{Code}] {Msg}", err.ErrorID, err.ErrorMsg); loggedIn.TrySetResult(false); }
                 };
+                var firstQuote = true;
+                var tracker = ActivityTracker;
                 mdApi.OnQuote += q =>
                 {
                     if (string.IsNullOrEmpty(q.InstrumentID)) return;
@@ -129,6 +139,8 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                     var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
                     merged.Writer.TryWrite((instId, record, tradingDay));
                     PersistChannel.Writer.TryWrite((instId, q, tradingDay));  // 原始 Quote 全42字段
+                    tracker?.Feed(instId, q);
+                    if (firstQuote) { firstQuote = false; Console.WriteLine($"[CTP-MD] First tick: {instId} @ {q.LastPrice}"); }
                 };
 
                 _log.Information("CTP: Connecting to {Front}...", _opts.MdFront);
@@ -147,34 +159,85 @@ public class CtpLiveFeed : IDataFeed, IDisposable
 
                 _log.Information("CTP connected: {Front}", _opts.MdFront);
 
-                // 订阅
-                for (int i = 0; i < _instruments.Count && !ct.IsCancellationRequested; i += 50)
+                // 始终订阅全量合约（数据落盘不丢）
+                if (!_filterReady && tracker != null)
                 {
-                    mdApi.Subscribe(_instruments.Skip(i).Take(50).ToArray());
-                    await Task.Delay(200, ct);
+                    tracker.Start();
+                    _log.Information("Activity observation started ({Sec}s), full list: {Count} instruments",
+                        tracker.ObservationSeconds, _instruments.Count);
                 }
 
-                // 消费循环 — 向 writer 推送事件
+                _log.Information("Subscribing to {Count} instruments in batches of 50", _instruments.Count);
+                for (int i = 0; i < _instruments.Count && !ct.IsCancellationRequested; i += 50)
+                {
+                    var batch = _instruments.Skip(i).Take(50).ToArray();
+                    mdApi.Subscribe(batch);
+                    await Task.Delay(200, ct);
+                }
+                _log.Information("Subscription completed: {Count} instruments", _instruments.Count);
+
+                // 消费循环 — 软过滤：全量落盘，仅活跃品种推送引擎
                 var reader = merged.Reader;
+                var lastObserveCheck = DateTime.UtcNow;
                 while (!ct.IsCancellationRequested)
                 {
                     lock (discLock) { if (disconnected) break; }
 
-                    if (!await reader.WaitToReadAsync(ct)) break;
+                    // 观察期结束 → 计算活跃品种集合（不打断连接，零数据丢失）
+                    if (!_filterReady && tracker is { IsComplete: true })
+                    {
+                        var topProducts = tracker.GetTopProducts(30);
+                        var topRanking = tracker.GetTopProductRanking(30);
+                        _activeProductSet = new HashSet<string>(topProducts);
+                        var filteredCount = _instruments.Count(c => _activeProductSet.Contains(ProductOf(c)));
+                        _filterReady = true;
+
+                        _log.Information(
+                            "Activity soft filter: Top {ProductCount} products → {Filtered}/{Total} engine. " +
+                            "All {Total} persisted. Top5: {Top5}",
+                            topProducts.Count, filteredCount, _instruments.Count,
+                            string.Join(", ", topRanking.Take(5).Select(x =>
+                                $"{x.Product}(V{x.TotalVol},OI{x.TotalOI:F0},{x.Contracts}ct)")));
+                        Console.WriteLine(
+                            $"[Activity] Soft filter ready: engine {filteredCount}/{_instruments.Count} contracts. " +
+                            $"Top: {string.Join(", ", topRanking.Take(5).Select(x => x.Product))}");
+                    }
+
+                    // 过滤未就绪前：定期检查观察期（每 5s 超时一次）
+                    if (!_filterReady)
+                    {
+                        using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        readCts.CancelAfter(5000);
+                        try
+                        {
+                            if (!await reader.WaitToReadAsync(readCts.Token)) break;
+                        }
+                        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                        {
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        if (!await reader.WaitToReadAsync(ct)) break;
+                    }
+
                     while (reader.TryRead(out var item))
                     {
                         var (instId, tick, tradingDay) = item;
 
-                        writer.TryWrite(new TickEvent
+                        // 引擎推送：仅活跃品种（落盘 PersistChannel 已在 OnQuote 中全量写入）
+                        if (!_filterReady || _activeProductSet!.Contains(ProductOf(instId)))
                         {
-                            Tick = tick, InstrumentId = instId, TradingDay = tradingDay,
-                            Time = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp),
-                        });
-
-                        barAgg.Feed(tick, instId, tradingDay);
-
-                        lock (barQueue)
-                            while (barQueue.Count > 0) writer.TryWrite(barQueue.Dequeue());
+                            writer.TryWrite(new TickEvent
+                            {
+                                Tick = tick, InstrumentId = instId, TradingDay = tradingDay,
+                                Time = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp),
+                            });
+                            barAgg.Feed(tick, instId, tradingDay);
+                            lock (barQueue)
+                                while (barQueue.Count > 0) writer.TryWrite(barQueue.Dequeue());
+                        }
                     }
                 }
             }
@@ -203,6 +266,15 @@ public class CtpLiveFeed : IDataFeed, IDisposable
         }
 
         writer.TryComplete();
+    }
+
+    /// <summary>从合约代码提取品种代码（ag2608 → ag, TA608 → TA, IF2606 → IF）</summary>
+    private static string ProductOf(string instId)
+    {
+        var span = instId.AsSpan();
+        int i = 0;
+        while (i < span.Length && !char.IsDigit(span[i])) i++;
+        return i > 0 ? span[..i].ToString() : instId;
     }
 
     private static async Task<bool> WaitFor(TaskCompletionSource<bool> tcs, int ms, CancellationToken ct)

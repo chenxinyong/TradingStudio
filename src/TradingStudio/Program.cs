@@ -123,8 +123,14 @@ static async Task RunLiveAsync(string[] args)
         Password = cfg["Live:Password"]!,
     };
     // 工厂注入：ILogger 在 app.Build() 后才可用
+    var activityTracker = new ContractActivityTracker(observationSeconds: 60);
+    builder.Services.AddSingleton(activityTracker);
     builder.Services.AddSingleton<IDataFeed>(sp =>
-        new CtpLiveFeed(mdOpts, sp.GetRequiredService<Serilog.ILogger>()));
+    {
+        var feed = new CtpLiveFeed(mdOpts, sp.GetRequiredService<Serilog.ILogger>());
+        feed.ActivityTracker = activityTracker;
+        return feed;
+    });
     builder.Services.AddSingleton(sp => (CtpLiveFeed)sp.GetRequiredService<IDataFeed>());
 
     // 风控阈值（从 appsettings.json Risk 段读取，缺失时使用安全默认值）
@@ -183,13 +189,17 @@ static async Task RunLiveAsync(string[] args)
     }
     execution.IsLive = true;
 
-    // 引擎
+    // 引擎 — Live 模式全品种订阅（数据采集需全量 Tick）
+    // ContractCodeGenerator 将品种代码展开为实际合约代码（如 "ag" → "ag2608","ag2609"...）
+    var allInstruments = ContractCodeGenerator.BatchSubscribe(registry.All.Values, 50)
+        .SelectMany(b => b)
+        .ToList();
+    Console.WriteLine($"Live: {allInstruments.Count} contracts from {registry.All.Count} products");
     var engineOptions = new EngineOptions
     {
         StartTime = DateTime.Today,
         EndTime = DateTime.Today.AddDays(1),
-        Instruments = registry.All.Values.Select(f => f.Code + "??")
-            .Take(10).ToList(), // 默认前10个品种, 实际由策略配置覆盖
+        Instruments = allInstruments,
         StartingCapital = startCapital,
         IsLive = true,
     };
@@ -208,7 +218,7 @@ static async Task RunLiveAsync(string[] args)
             {
                 StartTime = DateTime.Today,
                 EndTime = DateTime.Today.AddDays(1),
-                Instruments = strategyConfig.Instruments,
+                Instruments = allInstruments, // 全品种订阅（数据采集），策略只处理 StrategyConfig.Instruments
                 StrategyConfigs = [strategyConfig],
                 StartingCapital = strategyConfig.AllocatedCapital > 0 ? strategyConfig.AllocatedCapital : startCapital,
                 IsLive = true,
