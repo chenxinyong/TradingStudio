@@ -15,9 +15,12 @@ public class CtpTraderBridge : IDisposable
     private readonly ChannelWriter<OrderEvent> _fillWriter;
     private readonly Serilog.ILogger _log;
     private CTP.TraderApi? _trader;
+    private CancellationTokenSource? _reconnectCts;
+    private readonly object _sync = new();
     private bool _disposed;
 
-    public bool IsReady { get; private set; }
+    public bool IsReady { get { lock (_sync) return _isReady; } private set { lock (_sync) _isReady = value; } }
+    private bool _isReady;
 
     public CtpTraderBridge(Channel<OrderEvent> fillChannel, CtpTraderOptions opts,
                            Serilog.ILogger? log = null)
@@ -83,18 +86,34 @@ public class CtpTraderBridge : IDisposable
                 Time = DateTimeOffset.UtcNow,
             });
 
-            // 自动重连（5s 后，异常不影响回调线程）
+            // 防竞态重连：取消前次重连，创建新实例
+            CancellationTokenSource cts;
+            lock (_sync)
+            {
+                _reconnectCts?.Cancel();
+                _reconnectCts = new CancellationTokenSource();
+                cts = _reconnectCts;
+            }
+
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await Task.Delay(5000);
-                    if (!_disposed)
+                    await Task.Delay(5000, cts.Token);
+                    if (_disposed || cts.IsCancellationRequested) return;
+
+                    // 销毁旧实例，创建新实例重连（CTP 不允许同一实例重复 Connect）
+                    lock (_sync)
                     {
-                        _log.Information("CTP Trader reconnecting...");
-                        _trader?.Connect(_opts.TraderFront);
+                        var oldTrader = _trader;
+                        _trader = null;
+                        try { oldTrader?.Dispose(); } catch { }
                     }
+
+                    _log.Information("CTP Trader reconnecting with new instance...");
+                    Connect(); // 创建新 TraderApi 并连接
                 }
+                catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
                     _log.Error(ex, "CTP Trader reconnect failed");
@@ -138,10 +157,14 @@ public class CtpTraderBridge : IDisposable
         _trader.Connect(_opts.TraderFront);
     }
 
-    /// <summary>ExecutionHandler.SendToExchange → CTP InsertOrder</summary>
+    /// <summary>ExecutionHandler.SendToExchange → CTP InsertOrder（线程安全）</summary>
     public void SendOrder(Order order)
     {
-        if (!IsReady || _trader == null)
+        CTP.TraderApi? trader;
+        bool ready;
+        lock (_sync) { trader = _trader; ready = _isReady; }
+
+        if (!ready || trader == null)
         {
             _log.Warning("Order rejected — CTP not ready (OrderId={Id}, Inst={Inst})",
                 order.OrderId, order.InstrumentId);
@@ -172,7 +195,7 @@ public class CtpTraderBridge : IDisposable
             OrderRef = order.OrderId.ToString(),
         };
 
-        _trader.InsertOrder(req);
+        trader.InsertOrder(req);
     }
 
     // ── 回报转换 ──
@@ -226,8 +249,15 @@ public class CtpTraderBridge : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
-        _trader?.Dispose();
+        lock (_sync)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _reconnectCts?.Cancel();
+            _reconnectCts?.Dispose();
+            _trader?.Dispose();
+            _trader = null;
+        }
     }
 }
 

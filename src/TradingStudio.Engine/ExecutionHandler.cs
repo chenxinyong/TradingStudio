@@ -13,6 +13,7 @@ public class ExecutionHandler : IExecutionHandler
     private readonly List<OrderEvent> _orderHistory = new();
     private readonly RiskController _risk;
     private readonly Dictionary<string, int> _lastCumulativeVolume = new();
+    private readonly object _sync = new();  // 保护 _activeOrders / _orderHistory 并发访问（Submit 和 REST API 可能并发）
     private long _nextOrderId = 1;
 
     /// <summary>实盘模式：市价单发往 CTP 而非本地撮合</summary>
@@ -29,10 +30,12 @@ public class ExecutionHandler : IExecutionHandler
     public System.Threading.Channels.Channel<OrderEvent> OrderOutbox { get; }
         = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
 
-    public IReadOnlyList<Order> ActiveOrders => _activeOrders;
-    public IReadOnlyList<Order> GetActiveOrders(string strategyId) =>
-        _activeOrders.Where(o => o.StrategyId == strategyId).ToList();
-    public IReadOnlyList<OrderEvent> OrderHistory => _orderHistory;
+    public IReadOnlyList<Order> ActiveOrders { get { lock (_sync) return _activeOrders.ToList(); } }
+    public IReadOnlyList<Order> GetActiveOrders(string strategyId)
+    {
+        lock (_sync) return _activeOrders.Where(o => o.StrategyId == strategyId).ToList();
+    }
+    public IReadOnlyList<OrderEvent> OrderHistory { get { lock (_sync) return _orderHistory.ToList(); } }
 
     public ExecutionHandler(RiskController risk)
     {
@@ -64,21 +67,21 @@ public class ExecutionHandler : IExecutionHandler
             if (!riskResult.Passed)
             {
                 order.Status = OrderStatus.Rejected;
-                _orderHistory.Add(new OrderEvent
+                lock (_sync) { _orderHistory.Add(new OrderEvent
                 {
                     OrderId = id, InstrumentId = order.InstrumentId,
                     StrategyId = strategyId, Direction = order.Direction,
                     Quantity = order.Quantity, OrderQty = order.Quantity,
                     FilledQty = 0, Type = OrderEventType.Rejected,
                     Message = riskResult.Reason, Time = DateTimeOffset.UtcNow,
-                });
+                }); }
                 return new OrderTicket { OrderId = id, Status = OrderStatus.Rejected };
             }
         }
 
-        _activeOrders.Add(order);
+        lock (_sync) { _activeOrders.Add(order); }
 
-        // 实盘模式：发往交易所
+        // 实盘模式：发往交易所（锁外调用，避免 CTP 回调导致死锁）
         if (IsLive && order.Type == OrderType.Market)
             SendToExchange?.Invoke(order);
 
@@ -94,27 +97,30 @@ public class ExecutionHandler : IExecutionHandler
             Type = OrderEventType.Submitted,
             Time = DateTimeOffset.UtcNow,
         };
-        _orderHistory.Add(evt);
+        lock (_sync) { _orderHistory.Add(evt); }
 
         return new OrderTicket { OrderId = id, Status = OrderStatus.Submitted };
     }
 
     public bool Cancel(long orderId)
     {
-        var order = _activeOrders.FirstOrDefault(o => o.OrderId == orderId);
-        if (order == null) return false;
-
-        order.Status = OrderStatus.Cancelled;
-        _activeOrders.Remove(order);
-        _orderHistory.Add(new OrderEvent
+        lock (_sync)
         {
-            OrderId = orderId, InstrumentId = order.InstrumentId,
-            StrategyId = order.StrategyId, Direction = order.Direction,
-            Quantity = order.Quantity, OrderQty = order.Quantity,
-            FilledQty = order.FilledQuantity,
-            Type = OrderEventType.Cancelled, Time = DateTimeOffset.UtcNow,
-        });
-        return true;
+            var order = _activeOrders.FirstOrDefault(o => o.OrderId == orderId);
+            if (order == null) return false;
+
+            order.Status = OrderStatus.Cancelled;
+            _activeOrders.Remove(order);
+            _orderHistory.Add(new OrderEvent
+            {
+                OrderId = orderId, InstrumentId = order.InstrumentId,
+                StrategyId = order.StrategyId, Direction = order.Direction,
+                Quantity = order.Quantity, OrderQty = order.Quantity,
+                FilledQty = order.FilledQuantity,
+                Type = OrderEventType.Cancelled, Time = DateTimeOffset.UtcNow,
+            });
+            return true;
+        }
     }
 
     public IReadOnlyList<OrderEvent> ProcessTick(TickRecord tick, string instrumentId, Future future)
@@ -127,11 +133,13 @@ public class ExecutionHandler : IExecutionHandler
 
         int remainingVolume = incrementalVolume;
 
-        // 按策略优先级排序
-        var pending = _activeOrders
+        // 在锁内获取快照，锁外撮合（避免锁持有时间过长）
+        List<Order> pending;
+        lock (_sync) { pending = _activeOrders
             .Where(o => o.InstrumentId == instrumentId)
             .OrderBy(o => o.OrderId)
             .ToList();
+        }
 
         foreach (var order in pending)
         {
@@ -142,12 +150,15 @@ public class ExecutionHandler : IExecutionHandler
                 fills.Add(fill);
         }
 
-        // TryMatchTick 已设置 order.FilledQuantity/Status — 仅移除完全成交的订单（保留部分成交）
-        foreach (var f in fills)
+        // 移除完全成交的订单
+        lock (_sync)
         {
-            var order = _activeOrders.FirstOrDefault(o => o.OrderId == f.OrderId);
-            if (order != null && order.FilledQuantity >= order.Quantity)
-                _activeOrders.Remove(order);
+            foreach (var f in fills)
+            {
+                var order = _activeOrders.FirstOrDefault(o => o.OrderId == f.OrderId);
+                if (order != null && order.FilledQuantity >= order.Quantity)
+                    _activeOrders.Remove(order);
+            }
         }
 
         return fills;
@@ -221,10 +232,14 @@ public class ExecutionHandler : IExecutionHandler
     public IReadOnlyList<OrderEvent> ProcessBar(Bar bar, Future future)
     {
         var fills = new List<OrderEvent>();
-        var pending = _activeOrders
+
+        // 锁内获取快照
+        List<Order> pending;
+        lock (_sync) { pending = _activeOrders
             .Where(o => o.InstrumentId == bar.InstrumentId)
             .OrderBy(o => o.OrderId)
             .ToList();
+        }
 
         foreach (var order in pending)
         {
@@ -232,10 +247,10 @@ public class ExecutionHandler : IExecutionHandler
             if (fill != null)
             {
                 fills.Add(fill);
-                _orderHistory.Add(fill);
+                lock (_sync) { _orderHistory.Add(fill); }
                 // MatchBar 已设置 order.FilledQuantity/Status — 仅移除完全成交的
                 if (order.FilledQuantity >= order.Quantity)
-                    _activeOrders.Remove(order);
+                    lock (_sync) { _activeOrders.Remove(order); }
             }
         }
 

@@ -13,36 +13,54 @@ public class PortfolioManager : IPortfolioState
     private readonly Dictionary<string, Position> _positions = new();      // key = instId
     private readonly SortedDictionary<string, SubPortfolio> _subPortfolios = new();
     private readonly List<Trade> _trades = new();
+    private readonly object _sync = new();  // 保护 _positions / _subPortfolios / _trades / Cash / MarginUsed / Equity / PeakEquity 并发访问
 
-    // IPortfolioState
-    public decimal Cash { get; private set; }
-    public decimal Equity { get; private set; }
-    public decimal MarginUsed { get; private set; }
+    // IPortfolioState — 属性读写均加锁（实盘中 FillChannel 线程和事件循环线程并发访问）
+    // 注：lock 内对属性的读写因 Monitor 可重入而安全（方法体已持锁时，getter/setter 重入同一锁）
+    public decimal Cash { get { lock (_sync) return _cash; } private set { lock (_sync) _cash = value; } }
+    public decimal Equity { get { lock (_sync) return _equity; } private set { lock (_sync) _equity = value; } }
+    public decimal MarginUsed { get { lock (_sync) return _marginUsed; } private set { lock (_sync) _marginUsed = value; } }
     public decimal StartingCapital { get; }
-    public decimal PeakEquity { get; private set; }
-    public decimal TodayPnL { get; private set; }
+    public decimal PeakEquity { get { lock (_sync) return _peakEquity; } private set { lock (_sync) _peakEquity = value; } }
+    public decimal TodayPnL { get { lock (_sync) return _todayPnL; } private set { lock (_sync) _todayPnL = value; } }
     public decimal TotalPnL => Equity - StartingCapital;
-    public Position? GetPosition(string instrumentId) =>
-        _positions.GetValueOrDefault(instrumentId);
-    public IReadOnlyList<Position> AllPositions => _positions.Values.ToList();
+    private decimal _cash, _equity, _marginUsed, _peakEquity, _todayPnL;
+
+    public Position? GetPosition(string instrumentId)
+    {
+        lock (_sync) return _positions.GetValueOrDefault(instrumentId);
+    }
+    public IReadOnlyList<Position> AllPositions
+    {
+        get { lock (_sync) return _positions.Values.ToList(); }
+    }
     public IReadOnlyList<Order> ActiveOrders => []; // Phase 2b
-    public IReadOnlyList<Trade> TradeHistory => _trades;
-    public IReadOnlyList<SubPortfolioState> SubPortfolios =>
-        _subPortfolios.Values.Select(sp => new SubPortfolioState
+    public IReadOnlyList<Trade> TradeHistory
+    {
+        get { lock (_sync) return _trades.ToList(); }
+    }
+    public IReadOnlyList<SubPortfolioState> SubPortfolios
+    {
+        get
         {
-            StrategyId = sp.StrategyId,
-            AllocatedCapital = sp.AllocatedCapital,
-            Equity = sp.Equity,
-            PeakEquity = sp.PeakEquity,
-            TodayPnL = sp.TodayPnL,
-        }).ToList();
+            lock (_sync)
+                return _subPortfolios.Values.Select(sp => new SubPortfolioState
+                {
+                    StrategyId = sp.StrategyId,
+                    AllocatedCapital = sp.AllocatedCapital,
+                    Equity = sp.Equity,
+                    PeakEquity = sp.PeakEquity,
+                    TodayPnL = sp.TodayPnL,
+                }).ToList();
+        }
+    }
 
     public PortfolioManager(decimal totalCapital)
     {
         StartingCapital = totalCapital;
-        Cash = totalCapital;
-        Equity = totalCapital;
-        PeakEquity = totalCapital;
+        _cash = totalCapital;
+        _equity = totalCapital;
+        _peakEquity = totalCapital;
     }
 
     public SubPortfolio GetSubPortfolio(string strategyId) =>
@@ -58,30 +76,34 @@ public class PortfolioManager : IPortfolioState
         _subPortfolios[strategyId] = sub;
     }
 
-    /// <summary>按 Bar 收盘价更新持仓未实现盈亏</summary>
+    /// <summary>按 Bar 收盘价更新持仓未实现盈亏（线程安全）</summary>
     public void UpdateMarketPrice(Bar bar, Future future)
     {
-        var price = (decimal)bar.CloseDouble;
-        if (!_positions.TryGetValue(bar.InstrumentId, out var pos)) return;
-        var mult = future.TradingUnit;
-        pos.MarketPrice = (double)price;
-        if (pos.Quantity > 0)
-            pos.UnrealizedPnl = (double)((price - pos.AvgPrice) * pos.Quantity * mult);
-        else if (pos.Quantity < 0)
-            pos.UnrealizedPnl = (double)((pos.AvgPrice - price) * Math.Abs(pos.Quantity) * mult);
-        else
-            pos.UnrealizedPnl = 0;
-        _positions[bar.InstrumentId] = pos;
-        Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
+        lock (_sync)
+        {
+            var price = (decimal)bar.CloseDouble;
+            if (!_positions.TryGetValue(bar.InstrumentId, out var pos)) return;
+            var mult = future.TradingUnit;
+            pos.MarketPrice = (double)price;
+            if (pos.Quantity > 0)
+                pos.UnrealizedPnl = (double)((price - pos.AvgPrice) * pos.Quantity * mult);
+            else if (pos.Quantity < 0)
+                pos.UnrealizedPnl = (double)((pos.AvgPrice - price) * Math.Abs(pos.Quantity) * mult);
+            else
+                pos.UnrealizedPnl = 0;
+            _positions[bar.InstrumentId] = pos;
+            Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
+        }
     }
 
-    /// <summary>交割月检查：到期前 2 个月强制平仓，模拟真实交易规则</summary>
+    /// <summary>交割月检查：到期前 2 个月强制平仓，模拟真实交易规则（线程安全）</summary>
     public List<OrderEvent> ForceCloseNearDelivery(Bar bar, Future future, FutureRegistry registry)
     {
         var closes = new List<OrderEvent>();
-        var toClose = new List<string>();
+        List<(string instId, Position pos)> snapshot;
+        lock (_sync) { snapshot = _positions.Select(kv => (kv.Key, kv.Value)).ToList(); }
 
-        foreach (var (instId, pos) in _positions)
+        foreach (var (instId, pos) in snapshot)
         {
             if (pos.Quantity == 0) continue;
             var parsed = ContractCodeGenerator.ParseCode(instId);
@@ -111,9 +133,8 @@ public class PortfolioManager : IPortfolioState
                     Message = $"Delivery forced close ({monthsToDelivery}mo to delivery)",
                     Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero),
                 };
-                var trade = ProcessFill(fill, registry);
+                ProcessFill(fill, registry); // ProcessFill 内部有 lock(_sync)，因可重入安全
                 closes.Add(fill);
-                toClose.Add(instId);
             }
         }
 
@@ -121,10 +142,18 @@ public class PortfolioManager : IPortfolioState
     }
 
     /// <summary>
-    /// 处理成交。更新持仓/资金/分账，产生 Trade 记录。
-    /// 多仓：做多 × 做空分开。简化处理：同品种同方向合并。
+    /// 处理成交。更新持仓/资金/分账，产生 Trade 记录。（线程安全）
+    /// 实盘中从 FillChannel 线程和事件循环线程并发调用，lock(_sync) 保护。
     /// </summary>
     public Trade? ProcessFill(OrderEvent fill, FutureRegistry registry)
+    {
+        lock (_sync)
+        {
+            return ProcessFillLocked(fill, registry);
+        }
+    }
+
+    private Trade? ProcessFillLocked(OrderEvent fill, FutureRegistry registry)
     {
         var future = registry.Resolve(fill.InstrumentId);
         if (future == null) return null;
