@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TradingStudio.Strategy</RootNamespace>
+    <AssemblyName>TradingStudio.Strategy</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TradingStudio.Core\TradingStudio.Core.csproj" />
+  </ItemGroup>
+
+</Project>

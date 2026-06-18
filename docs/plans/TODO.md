@@ -12,13 +12,10 @@
 > 详细方案：[数据准备方案](../analysis/数据准备方案.md)
 > 核心问题：6 个 per-year DB 存在但回测引擎只打开一个文件 → 无法跑跨年回测
 
-- [ ] **合并 6 年 DB → `bars_history.db`**（P0 阻塞）
-  - 当前：`bars_2020.db` ~ `bars_2025.db`（6 文件 / 9.5 GB），`bars_history.db` 仅 2020（3.4 GB）
-  - 目标：一个完整的 `bars_history.db`（2020-2025, ~10 GB）
-  - 方式：写 `ToolBox merge` 命令 或 直接 SQLite ATTACH + INSERT
-  - 工时：1-2h 开发 + 30min 合并
-- [ ] **验证 bars_history.db 当前状态**
-  - 6/14 是 5.2 GB → 6/16 变成 3.4 GB，查明原因（VACUUM？误删？）
+- [x] **合并 6 年 DB → `bars_merged.duckdb`** ✅ 2026-06-18
+  - DuckDB 5.0 GB（SQLite 9.1 GB → 压缩 45%），5926 万行，0 数据异常
+  - 4 索引（inst+time / trading_day），查询 < 50ms
+  - 新增命令：`ToolBox merge`（alias: `m`）
 - [ ] **合约代码映射：产品代码 → 具体合约**
   - 策略配置写 `"ag"`，DB 存 `"ag2608"`，需 `ContractCodeGenerator` 展开
   - 在 `HistoricalBarFeed` 或策略初始化层做映射

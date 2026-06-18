@@ -13,6 +13,9 @@ public sealed class FutureRegistry
     public IReadOnlyDictionary<string, Future> All => _byCode;
     public int Count => _byCode.Count;
 
+    /// <summary>Top 30 品种快速查找（O(1) HashSet，大小写无关）</summary>
+    public HashSet<string> Top30Codes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     private FutureRegistry() { }
 
     public static FutureRegistry Load(string jsonPath)
@@ -45,8 +48,11 @@ public sealed class FutureRegistry
                 MarginRate     = s.GetProperty("marginRate").GetDecimal(),
                 Months         = s.GetProperty("months").GetString()!,
                 TradingHours   = TryGet(s, "tradingHours", ""),
+                IsTop30        = TryGetBool(s, "isTop30"),
+                ContractCycle  = TryGet(s, "contractCycle", ""),
             };
             reg._byCode[p.Code] = p;
+            if (p.IsTop30) reg.Top30Codes.Add(p.Code);
             if (!reg._byExchange.TryGetValue(p.Exchange, out var list))
                 reg._byExchange[p.Exchange] = list = [];
             list.Add(p);
@@ -76,4 +82,7 @@ public sealed class FutureRegistry
 
     private static string TryGet(JsonElement el, string key, string def) =>
         el.TryGetProperty(key, out var v) ? v.GetString() ?? def : def;
+
+    private static bool TryGetBool(JsonElement el, string key) =>
+        el.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.True;
 }

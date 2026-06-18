@@ -8,12 +8,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
   </ItemGroup>
+  <!-- CTPWrapper: VS 构建用 vcxproj（编译 C++/CLI），dotnet CLI / SelfContained 发布用预编译 DLL -->
   <ItemGroup>
-    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj" />
-  </ItemGroup>
-
-  <!-- CTPWrapper: 常规构建用 vcxproj（编译 C++/CLI），SelfContained 发布用预编译 DLL -->
-  <ItemGroup>
-    <Reference Include="CTPWrapper" Condition="'$(RuntimeIdentifier)' != ''" HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
+    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj" Condition="Exists('$(VCTargetsPath)\Microsoft.Cpp.Default.props')" />
+    <Reference Include="CTPWrapper" Condition="!Exists('$(VCTargetsPath)\Microsoft.Cpp.Default.props')" HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
   </ItemGroup>
 </Project>

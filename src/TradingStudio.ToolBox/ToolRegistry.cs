@@ -14,6 +14,8 @@ public class ToolRegistry
         Register(new JinshuyuanTool.JinshuyuanTool());
         Register(new ImportUrlTool.ImportUrlTool());
         Register(new VerifyTool.VerifyTool());
+        Register(new MergeTool.MergeTool());
+        Register(new AnalyzeTool.AnalyzeTool());
         // 未来扩展：只需加下面这类行
         // Register(new InfoTool.InfoTool());
         // Register(new ConvertTool.ConvertTool());

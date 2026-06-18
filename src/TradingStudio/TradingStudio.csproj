@@ -28,11 +28,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- C++/CLI: Debug/Release 都用项目引用 -->
-    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj">
+    <!-- C++/CLI: VS构建用vcxproj，dotnet CLI用预编译DLL -->
+    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj" Condition="Exists('$(VCTargetsPath)\Microsoft.Cpp.Default.props')">
       <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
       <CopyLocal>true</CopyLocal>
     </ProjectReference>
+    <Reference Include="CTPWrapper" Condition="!Exists('$(VCTargetsPath)\Microsoft.Cpp.Default.props')" HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
     <ProjectReference Include="..\TradingStudio.Core\TradingStudio.Core.csproj" />
     <ProjectReference Include="..\TradingStudio.Data\TradingStudio.Data.csproj" />
     <ProjectReference Include="..\TradingStudio.Engine\TradingStudio.Engine.csproj" />

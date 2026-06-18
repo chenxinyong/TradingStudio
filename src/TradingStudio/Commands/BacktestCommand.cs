@@ -81,11 +81,14 @@ public class BacktestCommand
         var startTime = string.IsNullOrEmpty(startStr) ? DateTime.Parse("2020-01-01") : DateTime.Parse(startStr);
         var endTime = string.IsNullOrEmpty(endStr) ? DateTime.Parse("2030-01-01") : DateTime.Parse(endStr);
 
+        // 3.5 展开产品代码 → 具体合约代码
+        var expandedInstruments = ExpandInstruments(strategyConfig.Instruments, registry, startTime, endTime);
+
         var options = new EngineOptions
         {
             StartTime = startTime,
             EndTime = endTime,
-            Instruments = strategyConfig.Instruments,
+            Instruments = expandedInstruments,
             StrategyConfigs = [strategyConfig],
             StartingCapital = startCapital,
         };
@@ -167,5 +170,54 @@ public class BacktestCommand
             Console.Error.WriteLine($"Backtest failed: {ex}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// 将产品代码（如 "ag"）展开为回测期间内所有可能的合约代码。
+    /// 已是完整合约代码的（含数字）直接保留。
+    /// </summary>
+    private static IReadOnlyList<string> ExpandInstruments(
+        IReadOnlyList<string> instruments, FutureRegistry registry,
+        DateTime start, DateTime end)
+    {
+        var expanded = new List<string>();
+
+        foreach (var inst in instruments)
+        {
+            // 如果包含数字 → 已是完整合约代码，直接使用
+            if (inst.Any(char.IsDigit))
+            {
+                expanded.Add(inst);
+                continue;
+            }
+
+            // 产品代码 → 展开为合约代码
+            var future = registry.All.Values.FirstOrDefault(f =>
+                f.Code.Equals(inst, StringComparison.OrdinalIgnoreCase));
+            if (future == null)
+            {
+                Console.Error.WriteLine($"  Warning: unknown product code '{inst}', using as-is.");
+                expanded.Add(inst);
+                continue;
+            }
+
+            // 生成回测期间所有可能的合约
+            var contracts = new List<string>();
+            for (int year = start.Year; year <= end.Year + 1; year++)
+            {
+                foreach (var code in ContractCodeGenerator.Generate(future, year))
+                {
+                    // 标准化（郑商所短码→标准码）
+                    var normalized = ContractCodeGenerator.Normalize(code);
+                    if (!contracts.Contains(normalized))
+                        contracts.Add(normalized);
+                }
+            }
+
+            Console.WriteLine($"  Expanded '{inst}' → {contracts.Count} contracts: [{string.Join(", ", contracts.Take(8))}{(contracts.Count > 8 ? ", ..." : "")}]");
+            expanded.AddRange(contracts);
+        }
+
+        return expanded;
     }
 }

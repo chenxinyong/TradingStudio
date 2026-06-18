@@ -27,6 +27,10 @@ public sealed record Future
     public string Months { get; init; } = "";        // "1～12月" | "1,3,5,7,9,11" | "季月(3,6,9,12)"
     public string TradingHours { get; init; } = "";  // 交易时间描述
 
+    // === Phase 3 品种研究 ===
+    public bool IsTop30 { get; init; }
+    public string ContractCycle { get; init; } = "";   // "三主力轮换" | "多月活跃" | "单合约主导" | "少合约(新品种)"
+
     // === 计算 ===
     public decimal ContractValue(decimal price) => price * TradingUnit;
     public decimal RoundToTick(decimal price) => Math.Round(price / TickSize) * TickSize;

@@ -16,8 +16,9 @@ public class CollectService : BackgroundService
     private readonly HealthMonitor _health;
     private readonly Serilog.ILogger _log;
 
-    private long _quoteCount, _reconnectCount;
+    private long _quoteCount, _reconnectCount, _tickSkipped;
     private DateTime _lastConnect, _lastQuote, _lastHealth;
+    private HashSet<string> _top30Codes = new(StringComparer.OrdinalIgnoreCase);
 
     public CollectService(IOptions<CollectOptions> options, Serilog.ILogger logger)
     {
@@ -33,6 +34,8 @@ public class CollectService : BackgroundService
         _log.Information("════════════════════════════════");
 
         var registry = FutureRegistry.Load(_cfg.SymbolsPath);
+        _top30Codes = registry.Top30Codes;
+        _log.Information("Top 30 filter loaded: {Count} varieties", _top30Codes.Count);
 
         // 命令行过滤
         var futures = registry.All.Values.AsEnumerable();
@@ -191,7 +194,18 @@ public class CollectService : BackgroundService
         var record = QuoteConverter.FromCTPQuote(q);
         var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
 
+        // 所有品种：1min + Day Bar 聚合
         agg1Min.Feed(record, instId, tradingDay); aggDay.Feed(record, instId, tradingDay);
+        Interlocked.Increment(ref _quoteCount);
+
+        // Phase 3 数据分层：仅 Top 30 品种写 Tick CSV
+        var productCode = instId.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
+        if (!_top30Codes.Contains(productCode))
+        {
+            Interlocked.Increment(ref _tickSkipped);
+            return;
+        }
+
         tickWriter.Write(instId, q.ExchangeID, q.TradingDay,
             q.UpdateTime, q.UpdateMillisec, q.LastPrice, q.PreSettlementPrice, q.PreClosePrice,
             q.PreOpenInterest, q.OpenPrice, q.HighestPrice, q.LowestPrice,
@@ -202,7 +216,6 @@ public class CollectService : BackgroundService
             q.BidPrice3, q.BidVolume3, q.AskPrice3, q.AskVolume3,
             q.BidPrice4, q.BidVolume4, q.AskPrice4, q.AskVolume4,
             q.BidPrice5, q.BidVolume5, q.AskPrice5, q.AskVolume5, q.AveragePrice);
-        Interlocked.Increment(ref _quoteCount);
     }
 
     private async Task HealthLoop(IBarStore store, TickCsvWriter tickWriter, CancellationToken ct)
@@ -216,8 +229,8 @@ public class CollectService : BackgroundService
                 _scheduler.IsInSession() ? "Connected" : "Idle",
                 _quoteCount, store.WrittenCount, tickWriter.WrittenCount,
                 _reconnectCount, session, _lastConnect, _lastQuote, _lastHealth);
-            _log.Information("quotes={Quotes} bars={Bars} reconnect={Reconnects} csv={Csv} csvErr={CsvErr} [{Session}]",
-                _quoteCount, store.WrittenCount, _reconnectCount, tickWriter.WrittenCount, tickWriter.ErrorCount, session);
+            _log.Information("quotes={Quotes} bars={Bars} reconnect={Reconnects} csv={Csv} csvErr={CsvErr} tickSkipped={Skipped} [{Session}]",
+                _quoteCount, store.WrittenCount, _reconnectCount, tickWriter.WrittenCount, tickWriter.ErrorCount, _tickSkipped, session);
         }
     }
 
