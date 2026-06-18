@@ -13,6 +13,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ctp_flow\**" />
+    <Compile Remove="TickData\**" />
+    <Content Remove="ctp_flow\**" />
+    <Content Remove="TickData\**" />
+    <EmbeddedResource Remove="ctp_flow\**" />
+    <EmbeddedResource Remove="TickData\**" />
+    <None Remove="ctp_flow\**" />
+    <None Remove="TickData\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="bars_live.db" />
   </ItemGroup>
 
   <ItemGroup>

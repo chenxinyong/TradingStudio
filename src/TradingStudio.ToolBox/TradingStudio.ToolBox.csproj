@@ -7,6 +7,11 @@
     <AssemblyName>TradingStudio.ToolBox</AssemblyName>
     <RootNamespace>TradingStudio.ToolBox</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="logs\**" />
+    <EmbeddedResource Remove="logs\**" />
+    <None Remove="logs\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\TradingStudio.Data\TradingStudio.Data.csproj" />
@@ -23,8 +28,6 @@
   <!-- Configuration + data files copied to output -->
   <ItemGroup>
     <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\TradingStudio\symbols.json"
-          Link="symbols.json"
-          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\TradingStudio\symbols.json" Link="symbols.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
