@@ -259,7 +259,25 @@
       "Bash(start dotnet *)",
       "Bash(rm -rf data/tick data/tick_backfill_progress.txt)",
       "Bash(python scripts/tick_backfill.py -f 202001 -t 202001)",
-      "Bash(python scripts/tick_backfill.py --dry-run -f 202001 -t 202001)"
+      "Bash(python scripts/tick_backfill.py --dry-run -f 202001 -t 202001)",
+      "Bash(python scripts/tick_backfill.py -f 202001 -t 202012)",
+      "Bash(dotnet script *)",
+      "Bash(dotnet TradingStudio.dll backtest --config \"../../../../../configs/chanlun_sa_30min.json\" --db \"../../../../../data/bars_history.duckdb\" --symbols \"../../../../../src/TradingStudio/symbols.json\" --start \"2025-06-01\" --end \"2025-08-01\")",
+      "Bash(python scripts/tick_backfill.py -f 202101 -t 202212)",
+      "PowerShell(Set-Location \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\bin\\\\x64\\\\Debug\"; $p = Start-Process -FilePath \"dotnet\" -ArgumentList \"TradingStudio.dll live\" -PassThru -NoNewWindow -RedirectStandardOutput \"C:\\\\temp\\\\live_stdout.txt\" -RedirectStandardError \"C:\\\\temp\\\\live_stderr.txt\"; Start-Sleep -Seconds 30; if \\(-not $p.HasExited\\) { $p.Kill\\(\\); Write-Host \"--- Process killed after 30s ---\" }; Write-Host \"=== STDOUT ===\"; Get-Content \"C:\\\\temp\\\\live_stdout.txt\" | Select-Object -Last 30; Write-Host \"=== STDERR ===\"; Get-Content \"C:\\\\temp\\\\live_stderr.txt\" | Select-Object -Last 10)",
+      "Bash(timeout 3 bash -c 'echo > /dev/tcp/182.254.243.31/30011 && echo \"30011: OK\" || echo \"30011: FAIL\"')",
+      "Bash(timeout 3 bash -c 'echo > /dev/tcp/182.254.243.31/30001 && echo \"30001: OK\" || echo \"30001: FAIL\"')",
+      "PowerShell(Copy-Item \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\CTP\\\\Wrapper\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.dll\" \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.dll\" -Force)",
+      "PowerShell(Copy-Item \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\CTP\\\\Wrapper\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.pdb\" \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.pdb\" -Force)",
+      "Bash(python3 -c ' *)",
+      "PowerShell(Copy-Item \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\CTP\\\\Wrapper\\\\bin\\\\Debug\\\\CTPWrapper.dll\" \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.dll\" -Force)",
+      "PowerShell(Copy-Item \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\CTP\\\\Wrapper\\\\bin\\\\Debug\\\\CTPWrapper.pdb\" \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.pdb\" -Force -ErrorAction SilentlyContinue)",
+      "Bash(taskkill /f /im TradingStudio.exe)",
+      "Bash(taskkill /f /im dotnet.exe)",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'dotnet|TradingStudio' } | Stop-Process -Force; Start-Sleep 1; Copy-Item \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\CTP\\\\Wrapper\\\\bin\\\\Debug\\\\CTPWrapper.dll\" \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.dll\" -Force; Write-Host \"OK: CTPWrapper.dll copied\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\chenx\\.claude\\projects\\c--Works-ClaudeCode-TradingStudio\\memory"
     ]
   }
 }
