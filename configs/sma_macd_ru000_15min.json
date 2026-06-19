@@ -1,0 +1,17 @@
+{
+    "StrategyId": "sma-macd-ru000-15min",
+    "StrategyType": "SmaMacd",
+    "Instruments": ["ru000"],
+    "PrimaryBarType": "bars_1min",
+    "BarPeriodMinutes": 1,
+    "AllocatedCapital": 1000000,
+    "MaxDrawdownPct": 0.20,
+    "MaxPositionPerInstrument": 50,
+    "Parameters": {
+        "SmaPeriodsStr": "5,13,34,89,233",
+        "MacdFast": 12, "MacdSlow": 26, "MacdSignal": 9,
+        "MaxPositionRatio": 0.25, "StopLossPct": 0.02, "MaxLots": 20,
+        "RequireSmaAlignment": true, "RequireMacdConfirm": true,
+        "RequireDailyTrend": false, "Require1minConfirm": false
+    }
+}

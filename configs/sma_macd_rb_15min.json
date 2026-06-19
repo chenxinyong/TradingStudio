@@ -1,0 +1,27 @@
+{
+    "StrategyId": "sma-macd-rb-15min",
+    "StrategyType": "SmaMacd",
+    "Description": "15min SMA233核心 + 多TF MACD/SMA过滤 — RB测试",
+    "Instruments": ["rb000"],
+    "PrimaryBarType": "bars_1min",
+    "BarPeriodMinutes": 1,
+    "AllocatedCapital": 1000000,
+    "MaxDrawdownPct": 0.20,
+    "MaxPositionPerInstrument": 50,
+    "Priority": 1,
+    "SessionFilter": "All",
+    "SkipAuction": true,
+    "Parameters": {
+        "SmaPeriodsStr": "5,13,34,89,233",
+        "MacdFast": 12,
+        "MacdSlow": 26,
+        "MacdSignal": 9,
+        "MaxPositionRatio": 0.25,
+        "StopLossPct": 0.02,
+        "MaxLots": 20,
+        "RequireSmaAlignment": true,
+        "RequireMacdConfirm": true,
+        "RequireDailyTrend": false,
+        "Require1minConfirm": false
+    }
+}

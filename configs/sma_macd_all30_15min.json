@@ -1,0 +1,22 @@
+{
+    "StrategyId": "sma-macd-all30-15min",
+    "StrategyType": "SmaMacd",
+    "Description": "15min SMA233核心 -5%止损+日线趋势 — 全市场30品种 2021-2025",
+    "Instruments": ["ag000","al000","bu000","c000","cf000","eb000","eg000","fg000","fu000","hc000","i000","jm000","l000","m000","ma000","ni000","oi000","p000","pp000","rb000","rm000","ru000","sa000","sm000","sp000","sr000","ta000","v000","y000","zn000"],
+    "PrimaryBarType": "bars_1min",
+    "BarPeriodMinutes": 1,
+    "AllocatedCapital": 5000000,
+    "MaxDrawdownPct": 0.50,
+    "MaxPositionPerInstrument": 50,
+    "Priority": 1,
+    "SessionFilter": "All",
+    "SkipAuction": true,
+    "Parameters": {
+        "SmaPeriodsStr": "5,13,34,89,233",
+        "MacdFast": 12, "MacdSlow": 26, "MacdSignal": 9,
+        "MaxPositionRatio": 0.10, "StopLossPct": 0.05, "MaxLots": 20,
+        "RequireSmaAlignment": true, "RequireMacdConfirm": true,
+        "RequireDailyTrend": true, "Require1minConfirm": false,
+        "AllowShort": true
+    }
+}

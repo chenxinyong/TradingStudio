@@ -71,7 +71,9 @@ public class BacktestCommand
         StrategyFactory.DiscoverFromAssembly(typeof(TradingEngine).Assembly);
         StrategyFactory.DiscoverFromAssembly(typeof(TradingStudio.Strategy.ChanLunStrategy).Assembly);
 
-        var risk = new RiskController();
+        var risk = new RiskController(
+            maxPosition: strategyConfig.MaxPositionPerInstrument > 0 ? strategyConfig.MaxPositionPerInstrument : 5,
+            maxDrawdown: strategyConfig.MaxDrawdownPct > 0 ? strategyConfig.MaxDrawdownPct : 0.25m);
         var feedback = new FeedbackMonitor();
         var tickSnapshot = new TickSnapshot();
         var execution = new ExecutionHandler(risk);
