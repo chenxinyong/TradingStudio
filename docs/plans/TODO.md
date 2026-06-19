@@ -26,12 +26,15 @@
 
 ### Simnow 实盘验证（挂了三天 ⚠️）
 
-- [ ] 注册 simnow 账号
-- [ ] 配置 `appsettings.live.json`（行情/交易前置 + 凭据）
-- [ ] 启动 `TradingStudio live` 连线验证
+- [x] 注册 simnow 账号 ✅ 13961193449 (已注册)
+- [x] 配置 `appsettings.local.json` ✅ 2026-06-19 (密码修正 + TraderFront/AuthCode/MdFront 补全)
+- [ ] 启动 `TradingStudio live` 连线验证 ⚠️ 端午节休市 (6/19), 待交易日
+  - TraderApi TLS: 0x1001 错误待排查 (TLS true/false?)
+  - MdApi: EngineHost 在 SessionScheduler 等待交易时段开始
 - [ ] CTP TraderApi 下单字段映射（待 C++/CLI 封准确认）
 
-> 6/14 列 → 6/15 列 → 6/16 列，每次都被其他事情挤掉。
+> 6/14 列 → 6/15 列 → 6/16 列 → 6/19 端午节阻塞。
+> 密码修正 + 配置补全完成, 待交易日连线验证。
 > 回测引擎再漂亮，不跑一次实盘链路不知道 TraderApi 封装有没有坑。
 
 ### Phase 2 回测 — 端到端验证
