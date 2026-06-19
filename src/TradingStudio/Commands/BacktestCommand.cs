@@ -24,12 +24,14 @@ public class BacktestCommand
         var symbolsPath = "symbols.json";
         var startStr = "";
         var endStr = "";
+        var continuousDir = "";
 
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i] is "--config" or "-c" && i + 1 < args.Length) configPath = args[++i];
             else if (args[i] is "--mode" or "-m" && i + 1 < args.Length) mode = args[++i];
             else if (args[i] is "--db" or "-d" && i + 1 < args.Length) dbPath = args[++i];
+            else if (args[i] is "--continuous-dir" && i + 1 < args.Length) continuousDir = args[++i];
             else if (args[i] is "--data-dir" && i + 1 < args.Length) dataDir = args[++i];
             else if (args[i] is "--symbols" && i + 1 < args.Length) symbolsPath = args[++i];
             else if (args[i] is "--start" && i + 1 < args.Length) startStr = args[++i];
@@ -108,9 +110,14 @@ public class BacktestCommand
         }
         else
         {
-            IBarStore store = dbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase)
-                ? new DuckDBStore(dbPath)
-                : new SqliteBarStore(dbPath);
+            IBarStore store;
+            if (!string.IsNullOrEmpty(continuousDir))
+                store = new ContinuousBarStore(continuousDir);
+            else if (dbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase))
+                store = new DuckDBStore(dbPath);
+            else
+                store = new SqliteBarStore(dbPath);
+
             var period = strategyConfig.BarPeriodMinutes > 0 ? strategyConfig.BarPeriodMinutes : 1;
             var barTable = !string.IsNullOrEmpty(strategyConfig.PrimaryBarType) ? strategyConfig.PrimaryBarType : "bars_1min";
             dataFeed = new HistoricalBarFeed(store, period, barTable);
