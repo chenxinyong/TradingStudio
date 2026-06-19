@@ -124,7 +124,7 @@ public class DuckDBStore : IBarStore, ITickStore
         string whereClause;
         if (isProduct)
             whereClause = string.Format(
-                "instrument_id LIKE '{0}%' AND bar_time >= '{1}' AND bar_time <= '{2}'",
+                "instrument_id ILIKE '{0}%' AND bar_time >= '{1}' AND bar_time <= '{2}'",
                 instrumentId, startStr, endStr);
         else
             whereClause = string.Format(
