@@ -257,6 +257,9 @@ public class ExecutionHandler : IExecutionHandler
         return fills;
     }
 
+    /// <summary>单笔订单最大成交量占 Bar 成交量的比例（防止吃光整根 Bar）</summary>
+    private const double MaxVolumeParticipation = 0.10;
+
     /// <summary>用 Bar 撮合一个订单。前进偏差防护：用本 Bar Open 成交市价单。</summary>
     private OrderEvent? MatchBar(Order order, Bar bar, Future future)
     {
@@ -264,8 +267,12 @@ public class ExecutionHandler : IExecutionHandler
         if (IsLive && order.Type == OrderType.Market) return null;
 
         decimal fillPrice;
-        var fillQty = order.Quantity - order.FilledQuantity;
-        if (fillQty <= 0) return null;
+        var requestedQty = order.Quantity - order.FilledQuantity;
+        if (requestedQty <= 0) return null;
+
+        // Volume 约束：单笔订单最多成交 Bar.Volume 的 10%（模拟对手方流动性限制）
+        var maxFillByVolume = Math.Max(1, (int)(bar.Volume * MaxVolumeParticipation));
+        var fillQty = Math.Min(requestedQty, maxFillByVolume);
 
         // 涨跌停模拟：涨停买入/跌停卖出无法成交（无对手方）
         var limitPct = (double)(future.PriceLimitPct > 0 ? future.PriceLimitPct : 0.10m);
