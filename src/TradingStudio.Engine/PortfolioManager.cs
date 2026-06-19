@@ -167,6 +167,7 @@ public class PortfolioManager : IPortfolioState
         var marginRate = future.MarginRate > 0 ? future.MarginRate : 0.08m;
         var contractValue = fill.FillPrice * future.TradingUnit * fill.Quantity;
         var margin = contractValue * marginRate;
+        var marginDelta = margin;  // 默认：新开仓 = 全额保证金
 
         if (!hasPosition)
         {
@@ -182,7 +183,7 @@ public class PortfolioManager : IPortfolioState
                 StrategyId = fill.StrategyId,
             };
             _positions[key] = pos;
-            Cash -= fill.Fee;
+            Cash -= fill.Fee + margin;  // 保证金必须从现金扣除，否则 Equity=Cash+Margin 双重计算
             MarginUsed += margin;
         }
         else
@@ -200,7 +201,6 @@ public class PortfolioManager : IPortfolioState
                         / totalQty;
                     pos.Quantity = newQty;
                     pos.Commission += fill.Fee;
-                    pos.Margin = contractValue * marginRate;
                 }
                 else
                 {
@@ -298,6 +298,7 @@ public class PortfolioManager : IPortfolioState
                 var newMargin = future.TradingUnit * fill.FillPrice * remainingQty * marginRate;
                 // 新仓开仓费使用标准费率（不是平今费率）
                 var openFee = Math.Max(1m, future.TradingUnit * fill.FillPrice * remainingQty * (decimal)future.FeeRate);
+                var releasedMargin = pos.Margin;  // 保存旧仓保证金（pos 即将被新仓覆盖）
                 pos = new Position
                 {
                     InstrumentId = key,
@@ -310,26 +311,29 @@ public class PortfolioManager : IPortfolioState
                 };
                 _positions[key] = pos;
                 MarginUsed += newMargin;
+                Cash -= newMargin + openFee;  // 新仓保证金+手续费从现金扣除
 
                 if (_subPortfolios.TryGetValue(fill.StrategyId, out var sub))
                 {
-                    sub.Cash += pnl - exitFee - openFee + pos.Margin - newMargin;
-                    sub.MarginUsed = sub.MarginUsed - pos.Margin + newMargin;
+                    sub.Cash += pnl - exitFee - openFee + releasedMargin - newMargin;
+                    sub.MarginUsed = sub.MarginUsed - releasedMargin + newMargin;
                 }
 
                 return trade;
             }
 
-            // 加仓：更新 Margin
-            pos.Margin = contractValue * marginRate;
+            // 加仓：更新 Margin，差额从现金扣除（用均价×总手数重算，而非仅新仓手数）
+            var oldMargin = pos.Margin;
+            pos.Margin = pos.AvgPrice * future.TradingUnit * Math.Abs(pos.Quantity) * marginRate;
+            marginDelta = pos.Margin - oldMargin;
             MarginUsed = _positions.Values.Sum(p => p.Margin);
-            Cash -= fill.Fee; // 只扣手续费，本金已通过保证金占用
+            Cash -= fill.Fee + marginDelta;
         }
 
         if (_subPortfolios.TryGetValue(fill.StrategyId, out var sp))
         {
-            sp.Cash -= fill.Fee;
-            sp.MarginUsed = MarginUsed;
+            sp.Cash -= fill.Fee + marginDelta;
+            sp.MarginUsed += marginDelta;
             sp.Positions = _positions.Values
                 .Where(p => p.StrategyId == fill.StrategyId)
                 .ToList()

@@ -103,6 +103,7 @@ public class ChanLunStrategy : IStrategy
         if (_ctx.IsWarmup)
         {
             s.UpdateAtr(bar);
+            s.LastBarTime = bar.BarTime;  // 推进时间线，防止回测首根Bar回放所有预热期BI事件
             return;
         }
 
