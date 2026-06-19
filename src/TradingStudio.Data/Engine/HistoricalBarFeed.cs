@@ -14,6 +14,7 @@ public class HistoricalBarFeed : IDataFeed
 {
     private readonly IBarStore _store;
     private readonly int _periodMinutes;
+    private readonly string _barTable;
     private DateTime _startTime;
     private DateTime _endTime;
     private IReadOnlyList<string> _instruments = [];
@@ -22,15 +23,16 @@ public class HistoricalBarFeed : IDataFeed
     public DateTime StartTime => _startTime;
     public DateTime EndTime => _endTime;
 
-    public HistoricalBarFeed(IBarStore store, int periodMinutes = 1)
+    public HistoricalBarFeed(IBarStore store, int periodMinutes = 1, string barTable = "bars_1min")
     {
         _store = store;
         _periodMinutes = periodMinutes;
+        _barTable = barTable;
     }
 
     public async Task LoadBars(string instrumentId, DateTime start, DateTime end)
     {
-        var bars = await _store.QueryBarsAsync(instrumentId, start, end, "bars_1min");
+        var bars = await _store.QueryBarsAsync(instrumentId, start, end, _barTable);
         if (_periodMinutes > 1)
             bars = new MultiBarAggregator(_periodMinutes).Aggregate(bars).ToList();
         _warmupBars.AddRange(bars);
@@ -55,7 +57,7 @@ public class HistoricalBarFeed : IDataFeed
 
         if (_instruments.Count == 1)
         {
-            var bars = await _store.QueryBarsAsync(_instruments[0], _startTime, _endTime, "bars_1min", ct);
+            var bars = await _store.QueryBarsAsync(_instruments[0], _startTime, _endTime, _barTable, ct);
             if (_periodMinutes > 1) bars = MultiAggregate(bars);
 
             DateTime? prevTime = null;
@@ -76,7 +78,7 @@ public class HistoricalBarFeed : IDataFeed
             foreach (var inst in _instruments)
             {
                 if (ct.IsCancellationRequested) yield break;
-                var raw = await _store.QueryBarsAsync(inst, _startTime, _endTime, "bars_1min", ct);
+                var raw = await _store.QueryBarsAsync(inst, _startTime, _endTime, _barTable, ct);
                 var bars = _periodMinutes > 1 ? MultiAggregate(raw) : raw.ToList();
                 if (bars.Count > 0) { lists.Add(bars); indices.Add(0); }
             }

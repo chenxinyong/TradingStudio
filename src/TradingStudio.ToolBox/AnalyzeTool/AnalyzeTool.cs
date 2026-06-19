@@ -47,7 +47,7 @@ public class AnalyzeTool : IToolCommand
 
     // ──────────── helpers ────────────
 
-    /// <summary>向上遍历目录树，查找 data/bars_merged.duckdb</summary>
+    /// <summary>向上遍历目录树，查找 data/bars_history.duckdb</summary>
     private static string ResolveDbPath(string dbPath)
     {
         if (Path.IsPathRooted(dbPath)) return dbPath;
@@ -70,7 +70,7 @@ public class AnalyzeTool : IToolCommand
 
     private async Task<int> RunRankAsync(IServiceProvider sp, string[] args, CancellationToken ct)
     {
-        var db = ResolveDbPath("data/bars_merged.duckdb");
+        var db = ResolveDbPath("data/bars_history.duckdb");
         var dim = RankDimension.Volume;
         var top = 50;
         var output = "";
@@ -120,7 +120,7 @@ public class AnalyzeTool : IToolCommand
 
     private async Task<int> RunClassifyAsync(IServiceProvider sp, string[] args, CancellationToken ct)
     {
-        var db = ResolveDbPath("data/bars_merged.duckdb");
+        var db = ResolveDbPath("data/bars_history.duckdb");
         string? year = "2025";  // 默认按最近完整年度分类，避免六年汇总稀释 Top3
         var output = "";
 
@@ -167,7 +167,7 @@ public class AnalyzeTool : IToolCommand
 
     private async Task<int> RunReportAsync(IServiceProvider sp, string[] args, CancellationToken ct)
     {
-        var db = ResolveDbPath("data/bars_merged.duckdb");
+        var db = ResolveDbPath("data/bars_history.duckdb");
         var top = 30;
         var outputDir = "docs/analysis";
 

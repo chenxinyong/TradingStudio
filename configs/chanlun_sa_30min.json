@@ -1,0 +1,23 @@
+{
+  "StrategyId": "ChanLun-SA-30min",
+  "StrategyType": "ChanLun",
+  "Description": "SA 缠论多级别策略: 日线笔定方向 + 30min BI转折入场",
+  "Version": 1,
+  "Instruments": ["SA"],
+  "PrimaryBarType": "bars_sa_1min",
+  "BarPeriodMinutes": 30,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.30,
+  "MaxPositionPerInstrument": 1,
+  "Priority": 0,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "AtrPeriod": 20,
+    "StopAtrMult": 2.0,
+    "MinBiPower": 200,
+    "MinBiLen": 3,
+    "RiskPerTrade": 0.02,
+    "MaxMarginRatio": 0.6
+  }
+}

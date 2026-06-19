@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TradingStudio.Core\TradingStudio.Core.csproj" />
+    <ProjectReference Include="..\TradingStudio.Data\TradingStudio.Data.csproj" />
   </ItemGroup>
 
   <ItemGroup>

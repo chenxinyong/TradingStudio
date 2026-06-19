@@ -5,9 +5,10 @@ namespace TradingStudio.Core.Models;
 /// </summary>
 public static class ContractCodeGenerator
 {
-    public static IReadOnlyList<string> Generate(Future f, int? year = null)
+    public static IReadOnlyList<string> Generate(Future f, int? year = null, DateTime? referenceDate = null)
     {
         year ??= DateTime.Today.Year;
+        var refDate = referenceDate ?? DateTime.Today;
         var months = ParseMonths(f.Months);
         var codes = new List<string>();
 
@@ -20,17 +21,16 @@ public static class ContractCodeGenerator
             }
         }
 
-        // 过滤：只保留当前已上市的合约
-        var now = DateTime.Today;
-        return codes.Where(c => !IsExpired(c, now)).ToList();
+        // 过滤：只保留相对于 referenceDate 未过期的合约
+        return codes.Where(c => !IsExpired(c, refDate)).ToList();
     }
 
     /// <summary>生成所有品种的合约代码</summary>
-    public static IReadOnlyList<string> GenerateAll(IEnumerable<Future> futures, int? year = null)
+    public static IReadOnlyList<string> GenerateAll(IEnumerable<Future> futures, int? year = null, DateTime? referenceDate = null)
     {
         var all = new List<string>();
         foreach (var f in futures)
-            all.AddRange(Generate(f, year));
+            all.AddRange(Generate(f, year, referenceDate));
         return all;
     }
 
@@ -134,6 +134,10 @@ public static class ContractCodeGenerator
 
     public static (string sym, int year, int month) ParseCode(string code)
     {
+        // 产品代码（无数字）→ 无法解析，返回哨兵值
+        if (!code.Any(char.IsDigit))
+            return (code, 2099, 12);
+
         // cu2607 → (cu, 2026, 7)
         // TA608 → (TA, 2026, 8)
         var numPart = code[^4..]; // "2607" or "A608" — need to handle CZCE

@@ -115,24 +115,40 @@ public class DuckDBStore : IBarStore, ITickStore
         var bars = new List<Bar>();
         using var conn = OpenConnection();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = $@"
-            SELECT instrument_id, trading_day, bar_time,
-                   open, high, low, close, volume, turnover, open_interest, tick_count
-            FROM {table}
-            WHERE instrument_id = $inst AND bar_time >= $start AND bar_time <= $end
-            ORDER BY bar_time";
-        cmd.Parameters.Add(new DuckDBParameter("inst", instrumentId));
-        cmd.Parameters.Add(new DuckDBParameter("start", start));
-        cmd.Parameters.Add(new DuckDBParameter("end", end));
 
-        using var reader = await cmd.ExecuteReaderAsync(ct);
+        // 产品代码（无数字）→ LIKE 匹配所有合约; 合约代码 → 精确匹配
+        bool isProduct = !instrumentId.Any(char.IsDigit);
+        var startStr = start.ToString("yyyy-MM-dd HH:mm:ss");
+        var endStr = end.ToString("yyyy-MM-dd HH:mm:ss");
+
+        string whereClause;
+        if (isProduct)
+            whereClause = string.Format(
+                "instrument_id LIKE '{0}%' AND bar_time >= '{1}' AND bar_time <= '{2}'",
+                instrumentId, startStr, endStr);
+        else
+            whereClause = string.Format(
+                "instrument_id = '{0}' AND bar_time >= '{1}' AND bar_time <= '{2}'",
+                instrumentId, startStr, endStr);
+
+        cmd.CommandText = string.Format(
+            "SELECT instrument_id, trading_day, bar_time, " +
+            "open, high, low, close, volume, turnover, open_interest, tick_count " +
+            "FROM {0} WHERE {1} ORDER BY bar_time",
+            table, whereClause);
+
+        using var reader = (DuckDBDataReader)await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
+            var instId = reader.GetString(0);
+            // 产品级查询时，将所有合约代码归一化为产品代码（如 SA601 → SA）
+            if (isProduct) instId = instrumentId;
+
             bars.Add(new Bar
             {
-                InstrumentId = reader.GetString(0),
-                TradingDay = DateOnly.Parse(reader.GetString(1)),
-                BarTime = reader.GetDateTime(2),
+                InstrumentId = instId,
+                TradingDay = ReadDateOnly(reader, 1),
+                BarTime = DateTime.Parse(reader.GetString(2)),
                 Open = reader.GetInt64(3),
                 High = reader.GetInt64(4),
                 Low = reader.GetInt64(5),
@@ -140,10 +156,19 @@ public class DuckDBStore : IBarStore, ITickStore
                 Volume = reader.GetInt64(7),
                 Turnover = reader.GetDouble(8),
                 OpenInterest = reader.GetDouble(9),
-                TickCount = reader.GetInt32(10),
+                TickCount = (int)reader.GetInt64(10),
             });
         }
         return bars;
+    }
+
+    private static DateOnly ReadDateOnly(DuckDBDataReader reader, int ordinal)
+    {
+        // trading_day may be VARCHAR (bars_1min) or DATE (bars_sa_1min)
+        var type = reader.GetFieldType(ordinal);
+        if (type == typeof(string))
+            return DateOnly.Parse(reader.GetString(ordinal));
+        return DateOnly.FromDateTime(reader.GetDateTime(ordinal));
     }
 
     public async Task<IReadOnlyList<string>> QueryInstrumentsAsync(
@@ -153,7 +178,7 @@ public class DuckDBStore : IBarStore, ITickStore
         using var conn = OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT DISTINCT instrument_id FROM {table} ORDER BY instrument_id";
-        using var reader = await cmd.ExecuteReaderAsync(ct);
+        using var reader = (DuckDBDataReader)await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
             list.Add(reader.GetString(0));
         return list;
@@ -288,7 +313,7 @@ public class DuckDBStore : IBarStore, ITickStore
         cmd.Parameters.Add(new DuckDBParameter("end",
             new DateTimeOffset(end).ToUnixTimeMilliseconds()));
 
-        using var reader = await cmd.ExecuteReaderAsync(ct);
+        using var reader = (DuckDBDataReader)await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
             ticks.Add(new TickRecord

@@ -67,6 +67,7 @@ public class BacktestCommand
 
         // 3. 构建引擎组件
         StrategyFactory.DiscoverFromAssembly(typeof(TradingEngine).Assembly);
+        StrategyFactory.DiscoverFromAssembly(typeof(TradingStudio.Strategy.ChanLunStrategy).Assembly);
 
         var risk = new RiskController();
         var feedback = new FeedbackMonitor();
@@ -82,7 +83,12 @@ public class BacktestCommand
         var endTime = string.IsNullOrEmpty(endStr) ? DateTime.Parse("2030-01-01") : DateTime.Parse(endStr);
 
         // 3.5 展开产品代码 → 具体合约代码
+        // 注：纯字母代码（如 "SA"）作为产品级查询，不展开
         var expandedInstruments = ExpandInstruments(strategyConfig.Instruments, registry, startTime, endTime);
+
+        // 预热天数：策略需要历史数据来初始化缠论分析（至少覆盖全回测期 + 额外缓冲）
+        var totalDays = (int)(endTime - startTime).TotalDays + 10;
+        var warmupDays = Math.Max(totalDays, 365);  // 最少1年，确保缠论笔/中枢有足够数据
 
         var options = new EngineOptions
         {
@@ -91,6 +97,7 @@ public class BacktestCommand
             Instruments = expandedInstruments,
             StrategyConfigs = [strategyConfig],
             StartingCapital = startCapital,
+            WarmupDays = warmupDays,
         };
 
         // 4. 构建数据源
@@ -105,7 +112,8 @@ public class BacktestCommand
                 ? new DuckDBStore(dbPath)
                 : new SqliteBarStore(dbPath);
             var period = strategyConfig.BarPeriodMinutes > 0 ? strategyConfig.BarPeriodMinutes : 1;
-            dataFeed = new HistoricalBarFeed(store, period);
+            var barTable = !string.IsNullOrEmpty(strategyConfig.PrimaryBarType) ? strategyConfig.PrimaryBarType : "bars_1min";
+            dataFeed = new HistoricalBarFeed(store, period, barTable);
         }
 
         // 5. 创建引擎并运行
@@ -191,31 +199,20 @@ public class BacktestCommand
                 continue;
             }
 
-            // 产品代码 → 展开为合约代码
+            // 产品代码 → 检查是否在品种注册表中
             var future = registry.All.Values.FirstOrDefault(f =>
                 f.Code.Equals(inst, StringComparison.OrdinalIgnoreCase));
             if (future == null)
             {
-                Console.Error.WriteLine($"  Warning: unknown product code '{inst}', using as-is.");
+                // 未知代码: 可能是产品级别名（如 "SA" → LIKE 查询），直接透传
+                Console.WriteLine($"  Product-level: '{inst}' (not in registry, passing through)");
                 expanded.Add(inst);
                 continue;
             }
 
-            // 生成回测期间所有可能的合约
-            var contracts = new List<string>();
-            for (int year = start.Year; year <= end.Year + 1; year++)
-            {
-                foreach (var code in ContractCodeGenerator.Generate(future, year))
-                {
-                    // 标准化（郑商所短码→标准码）
-                    var normalized = ContractCodeGenerator.Normalize(code);
-                    if (!contracts.Contains(normalized))
-                        contracts.Add(normalized);
-                }
-            }
-
-            Console.WriteLine($"  Expanded '{inst}' → {contracts.Count} contracts: [{string.Join(", ", contracts.Take(8))}{(contracts.Count > 8 ? ", ..." : "")}]");
-            expanded.AddRange(contracts);
+            // 产品代码在注册表中 → 作为产品级查询透传（由 BarStore 用 LIKE 匹配所有合约）
+            Console.WriteLine($"  Product-level: '{inst}' → will match all {inst}% contracts");
+            expanded.Add(inst);
         }
 
         return expanded;

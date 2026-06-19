@@ -10,7 +10,7 @@ namespace TradingStudio.ToolBox.MergeTool;
 /// 数据合并工具 — 将多个 per-year SQLite DB 合并为单个 DuckDB。
 ///
 /// 用法:
-///   ToolBox merge [--source-dir data/] [--output data/bars_merged.duckdb] [--tables bars_1min,bars_day]
+///   ToolBox merge [--source-dir data/] [--output data/bars_history.duckdb] [--tables bars_1min,bars_day]
 ///
 /// 示例:
 ///   ToolBox merge
@@ -31,7 +31,7 @@ public class MergeTool : IToolCommand
     public async Task<int> ExecuteAsync(IServiceProvider sp, string[] args, CancellationToken ct)
     {
         var sourceDir = "data";
-        var outputPath = "data/bars_merged.duckdb";
+        var outputPath = "data/bars_history.duckdb";
         var tables = new[] { "bars_1min", "bars_day" };
 
         // 参数解析
@@ -99,7 +99,7 @@ public class MergeTool : IToolCommand
         Console.WriteLine();
         Console.WriteLine("选项:");
         Console.WriteLine("  --source-dir, -s  <dir>  源 SQLite 目录 (默认 data/)");
-        Console.WriteLine("  --output,     -o  <path> 输出 DuckDB 路径 (默认 data/bars_merged.duckdb)");
+        Console.WriteLine("  --output,     -o  <path> 输出 DuckDB 路径 (默认 data/bars_history.duckdb)");
         Console.WriteLine("  --tables,     -t  <list> 合并表名，逗号分隔 (默认 bars_1min,bars_day)");
         Console.WriteLine("  --help,       -h         显示此帮助");
         Console.WriteLine();

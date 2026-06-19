@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DuckDB.NET.Data;
 using Microsoft.Extensions.Logging;
 using OxyPlot;
 using OxyPlot.Annotations;
@@ -60,6 +61,11 @@ public partial class ChartViewModel : ObservableObject
     [ObservableProperty] private bool _showMACD = true;
     [ObservableProperty] private bool _showRSI = true;
 
+    // === DuckDB 配置 ===
+    private const string DefaultDbPath = @"C:\Works\ClaudeCode\TradingStudio\data\bars_history.duckdb";
+    private const string DefaultProduct = "SA";
+    private const string DefaultFreq = "15min";
+
     public ChartViewModel(ILogger<ChartViewModel> logger)
     {
         _logger = logger;
@@ -74,12 +80,124 @@ public partial class ChartViewModel : ObservableObject
         InitializePlotModels();
         _logger.LogDebug("PlotModels initialized (4 panes)");
 
-        LoadHistoricalData();
+        // 尝试从 DuckDB 加载真实数据，失败则 fallback 到模拟器
+        if (!TryLoadFromDuckDB(DefaultDbPath, DefaultProduct, DefaultFreq))
+        {
+            LoadHistoricalData();
+            _logger.LogInformation("ChartViewModel ready (simulated): {bars} bars",
+                _simulator.HistoryBars.Count);
+        }
+    }
 
-        _logger.LogInformation("ChartViewModel ready: {bars} bars, indicators ready={ma5},{ma20},{ma60},{boll},{macd},{rsi}",
-            _simulator.HistoryBars.Count,
-            _ma5.IsReady, _ma20.IsReady, _ma60.IsReady,
-            _boll.IsReady, _macd.IsReady, _rsi.IsReady);
+    /// <summary>
+    /// 从 DuckDB 加载成交量加权价格指数。
+    /// 返回 true 表示成功加载，false 表示 fallback 到模拟数据。
+    /// </summary>
+    private bool TryLoadFromDuckDB(string dbPath, string product, string freq)
+    {
+        try
+        {
+            if (!System.IO.File.Exists(dbPath))
+            {
+                _logger.LogWarning("DuckDB not found: {path}, fallback to simulator", dbPath);
+                return false;
+            }
+
+            using var conn = new DuckDBConnection($"Data Source={dbPath}");
+            conn.Open();
+
+            var table = $"bars_{product.ToLower()}_1min";
+            string sql;
+
+            // 按频率聚合
+            if (freq == "day")
+            {
+                sql = $@"
+                    SELECT trading_day::TIMESTAMP as dt,
+                           FIRST(open)/1e7 as open, MAX(high)/1e7 as high,
+                           MIN(low)/1e7 as low, LAST(close)/1e7 as close,
+                           SUM(volume) as volume
+                    FROM {table} GROUP BY trading_day ORDER BY dt";
+            }
+            else if (int.TryParse(freq.Replace("min", ""), out int periodMin))
+            {
+                sql = $@"
+                    SELECT date_trunc('hour', bar_time::TIMESTAMP) +
+                           INTERVAL (FLOOR(EXTRACT(minute FROM bar_time::TIMESTAMP) / {periodMin}) * {periodMin}) MINUTE as dt,
+                           FIRST(open)/1e7 as open, MAX(high)/1e7 as high,
+                           MIN(low)/1e7 as low, LAST(close)/1e7 as close,
+                           SUM(volume) as volume
+                    FROM {table} GROUP BY dt ORDER BY dt";
+            }
+            else
+            {
+                sql = $"SELECT bar_time::TIMESTAMP as dt, open/1e7 as open, high/1e7 as high, low/1e7 as low, close/1e7 as close, volume FROM {table} ORDER BY bar_time";
+            }
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            using var reader = (DuckDBDataReader)cmd.ExecuteReader();
+
+            var bars = new List<Bar>();
+            var dtIdx = reader.GetOrdinal("dt");
+            var oIdx = reader.GetOrdinal("open");
+            var hIdx = reader.GetOrdinal("high");
+            var lIdx = reader.GetOrdinal("low");
+            var cIdx = reader.GetOrdinal("close");
+            var vIdx = reader.GetOrdinal("volume");
+
+            while (reader.Read())
+            {
+                bars.Add(new Bar
+                {
+                    InstrumentId = product,
+                    BarTime = reader.GetDateTime(dtIdx),
+                    Open = (long)(reader.GetDouble(oIdx) * 1e7),
+                    High = (long)(reader.GetDouble(hIdx) * 1e7),
+                    Low = (long)(reader.GetDouble(lIdx) * 1e7),
+                    Close = (long)(reader.GetDouble(cIdx) * 1e7),
+                    Volume = reader.GetInt64(vIdx),
+                });
+            }
+
+            if (bars.Count < 10)
+            {
+                _logger.LogWarning("DuckDB returned only {count} bars for {product}", bars.Count, product);
+                return false;
+            }
+
+            // 喂入指标
+            foreach (var bar in bars)
+                FeedIndicators(bar);
+
+            // 构建图表
+            BuildCandleSeries(bars);
+            BuildVolumeSeries(bars);
+            RefreshAllPlotModels();
+
+            // 更新 X 轴格式：长时间跨度用日期，短时间用时间
+            var span = bars[^1].BarTime - bars[0].BarTime;
+            var timeFormat = span.TotalDays > 3 ? "MM-dd" : "HH:mm";
+            foreach (var ax in _xAxes)
+                ax.StringFormat = timeFormat;
+
+            StatusText = $"{product} {freq} | {bars.Count:N0} bars | {bars[0].BarTime:yyyy-MM-dd} ~ {bars[^1].BarTime:yyyy-MM-dd}";
+
+            // 初始缩放到最后 200 根 Bar（用户可拖拽查看全量）
+            var visible = Math.Min(200, bars.Count);
+            double xMin = DateTimeAxis.ToDouble(bars[^visible].BarTime);
+            double xMax = DateTimeAxis.ToDouble(bars[^1].BarTime);
+            foreach (var ax in _xAxes)
+                ax.Zoom(xMin, xMax);
+            _logger.LogInformation("ChartViewModel ready (DuckDB): {product} {freq} {bars} bars, {start}~{end}",
+                product, freq, bars.Count, bars[0].BarTime, bars[^1].BarTime);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DuckDB load failed for {product} {freq}, fallback to simulator", product, freq);
+            return false;
+        }
     }
 
     // ============================================================
