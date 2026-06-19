@@ -109,7 +109,7 @@ public class MaCrossStrategy : IStrategy
     public void OnOrderEvent(OrderEvent evt) { }
     public void OnEndOfAlgorithm() { }
 
-    /// <summary>ATR动态仓位: 2%风险 / (2×ATR × 合约乘数)，保证金≤25%</summary>
+    /// <summary>ATR动态仓位: 风险金额/(止损距离×乘数)，多重约束</summary>
     private int CalcLots(double price, State s, string instId)
     {
         if (s.Atr <= 0) return 0;
@@ -117,12 +117,31 @@ public class MaCrossStrategy : IStrategy
         var mult = (double)(f?.TradingUnit ?? 10m);
         var marginRate = (double)(f?.MarginRate ?? 0.08m);
         var equity = (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital);
+        var contractValue = price * mult;
+
+        // ① ATR/Price ≥ 0.5% — 波动率太低无法交易
+        if (s.Atr / price < 0.005) return 0;
+
+        // ② 止损距离 ≥ 0.5% 合约价值（防止止损太近导致过大仓位）
+        var stopDist = StopAtrMult * s.Atr;
+        var riskPerLot = stopDist * mult;
+        if (riskPerLot < contractValue * 0.005) return 0;
+
+        // ③ ATR仓位: riskAmt / riskPerLot
         var riskAmt = equity * RiskPerTrade;
-        var riskPerLot = StopAtrMult * s.Atr * mult;
-        if (riskPerLot < price * mult * 0.002) return 0;
         int lots = Math.Max(1, (int)(riskAmt / riskPerLot));
-        var marginPerLot = price * mult * marginRate;
+
+        // ④ 名义价值上限: ≤ 1× equity（防止杠杆失控）
+        var maxByNotional = (int)(equity / contractValue);
+        if (lots > maxByNotional) lots = maxByNotional;
+
+        // ⑤ 保证金上限: ≤ MaxMarginRatio × equity
+        var marginPerLot = contractValue * marginRate;
         while (lots > 0 && marginPerLot * lots > equity * MaxMarginRatio) lots--;
+
+        // ⑥ 绝对上限 20 手
+        if (lots > 20) lots = 20;
+
         return lots;
     }
 
