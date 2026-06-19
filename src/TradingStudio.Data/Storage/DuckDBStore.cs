@@ -33,23 +33,29 @@ public class DuckDBStore : IBarStore, ITickStore
     public long TickCount => Interlocked.Read(ref _tickWritten);
 
     /// <param name="dbPath">.duckdb 文件路径</param>
+    private readonly bool _readOnly;
+
     /// <param name="enableTickPurge">是否启用 7 天 Tick 自动清理（历史库应为 false）</param>
-    public DuckDBStore(string dbPath, bool enableTickPurge = false)
+    public DuckDBStore(string dbPath, bool enableTickPurge = false, bool readOnly = false)
     {
         _dbPath = dbPath;
+        _readOnly = readOnly;
         _barChannel = Channel.CreateBounded<Bar>(4096);
         _tickChannel = Channel.CreateBounded<(TickRecord, string)>(8192);
         _cts = new CancellationTokenSource();
 
-        // 确保目录 + 建表
-        var dir = Path.GetDirectoryName(Path.GetFullPath(dbPath));
-        if (dir != null) Directory.CreateDirectory(dir);
-        using var conn = OpenConnection();
-        CreateTables(conn);
+        // 确保目录 + 建表（只读模式跳过——减少连接开销，避免锁冲突）
+        if (!readOnly)
+        {
+            var dir = Path.GetDirectoryName(Path.GetFullPath(dbPath));
+            if (dir != null) Directory.CreateDirectory(dir);
+            using var conn = OpenConnection();
+            CreateTables(conn);
+        }
 
-        _barWriterTask = BarWriteLoop(_cts.Token);
-        _tickWriterTask = TickWriteLoop(_cts.Token);
-        _purgeLoopTask = enableTickPurge ? PurgeLoop(_cts.Token) : Task.CompletedTask;
+        _barWriterTask = readOnly ? Task.CompletedTask : BarWriteLoop(_cts.Token);
+        _tickWriterTask = readOnly ? Task.CompletedTask : TickWriteLoop(_cts.Token);
+        _purgeLoopTask = enableTickPurge && !readOnly ? PurgeLoop(_cts.Token) : Task.CompletedTask;
     }
 
     // ═══════════════════════════════════════════
@@ -373,7 +379,10 @@ public class DuckDBStore : IBarStore, ITickStore
 
     private DuckDBConnection OpenConnection()
     {
-        var conn = new DuckDBConnection($"Data Source={_dbPath}");
+        var cs = _readOnly
+            ? $"Data Source={_dbPath};access_mode=read_only"
+            : $"Data Source={_dbPath}";
+        var conn = new DuckDBConnection(cs);
         conn.Open();
         return conn;
     }

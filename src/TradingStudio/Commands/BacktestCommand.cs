@@ -114,7 +114,7 @@ public class BacktestCommand
             if (!string.IsNullOrEmpty(continuousDir))
                 store = new ContinuousBarStore(continuousDir);
             else if (dbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase))
-                store = new DuckDBStore(dbPath);
+                store = new DuckDBStore(dbPath, readOnly: true);
             else
                 store = new SqliteBarStore(dbPath);
 

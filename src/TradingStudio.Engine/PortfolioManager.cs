@@ -106,6 +106,8 @@ public class PortfolioManager : IPortfolioState
         foreach (var (instId, pos) in snapshot)
         {
             if (pos.Quantity == 0) continue;
+            // 连续合约代码 (v000, rb000) — 无到期日，跳过交割月强平
+            if (instId.EndsWith("000")) continue;
             var parsed = ContractCodeGenerator.ParseCode(instId);
             var year = parsed.year;
             var month = parsed.month;
