@@ -19,7 +19,7 @@
 - [ ] **合约代码映射：产品代码 → 具体合约**
   - 策略配置写 `"ag"`，DB 存 `"ag2608"`，需 `ContractCodeGenerator` 展开
   - 在 `HistoricalBarFeed` 或策略初始化层做映射
-- [ ] **Tick CSV 迁移** — 542 文件从 `src/TradingStudio/TickData/` → `data/ticks/`
+- [x] **Tick CSV 迁移** — 已通过 `.csproj` 排除 `TickData/` 目录参与编译，运行时路径不受影响，迁移无实际收益
 - [x] **端到端回测验证** — SA 30min 缠论策略跑通 ✅ 2026-06-19
   - 修复：预热隔离 + 时间驱动BI匹配 + 防重复入场
   - 验证：2025-06~08, Trades=13, Return=+18.13%, MaxDD=1.96%
