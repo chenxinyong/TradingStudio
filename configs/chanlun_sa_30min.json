@@ -4,7 +4,7 @@
   "Description": "SA 缠论多级别策略: 日线笔定方向 + 30min BI转折入场",
   "Version": 1,
   "Instruments": ["SA"],
-  "PrimaryBarType": "bars_sa_1min",
+  "PrimaryBarType": "bars_1min",
   "BarPeriodMinutes": 30,
   "AllocatedCapital": 1000000,
   "MaxDrawdownPct": 0.30,
