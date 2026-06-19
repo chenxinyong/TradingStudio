@@ -1,7 +1,7 @@
 # TradingStudio 待办清单
 
 > 整理自 6/14–6/16 三日计划 + Phase 3 品种深度研究。
-> 最后更新：2026-06-18
+> 最后更新：2026-06-19
 
 ---
 
@@ -20,7 +20,9 @@
   - 策略配置写 `"ag"`，DB 存 `"ag2608"`，需 `ContractCodeGenerator` 展开
   - 在 `HistoricalBarFeed` 或策略初始化层做映射
 - [ ] **Tick CSV 迁移** — 542 文件从 `src/TradingStudio/TickData/` → `data/ticks/`
-- [ ] **端到端回测验证** — 单品种单年跑通整条链路
+- [x] **端到端回测验证** — SA 30min 缠论策略跑通 ✅ 2026-06-19
+  - 修复：预热隔离 + 时间驱动BI匹配 + 防重复入场
+  - 验证：2025-06~08, Trades=13, Return=+18.13%, MaxDD=1.96%
 
 ### Simnow 实盘验证（挂了三天 ⚠️）
 
