@@ -281,7 +281,11 @@ public class ExecutionHandler : IExecutionHandler
                 // 涨停买不进 / 跌停卖不出
                 if (order.Direction == OrderDirection.Buy && atUpperLimit) return null;
                 if (order.Direction == OrderDirection.Sell && atLowerLimit) return null;
-                fillPrice = (decimal)bar.OpenDouble;
+                // 市价单滑点: 买吃Ask(+1跳), 卖砸Bid(-1跳), 最小成本穿越价差
+                var tick = future.TickSize > 0 ? future.TickSize : 1m;
+                fillPrice = order.Direction == OrderDirection.Buy
+                    ? (decimal)bar.OpenDouble + tick   // 市价买: Open + 1跳
+                    : (decimal)bar.OpenDouble - tick;  // 市价卖: Open - 1跳
                 break;
 
             case OrderType.Limit:
@@ -323,10 +327,9 @@ public class ExecutionHandler : IExecutionHandler
         var rate = (decimal)(future.FeeRate > 0 ? future.FeeRate : 0.0001);
         var fee = Math.Max(1m, contractValue * rate);
 
-        // 滑点 = |成交价 - Open|（市价单用 Open 成交，滑点为 0）
-        var slippage = order.Type == OrderType.Market
-            ? 0m
-            : Math.Abs(fillPrice - (decimal)bar.OpenDouble);
+        // 滑点 = |成交价 - Open| × 手数（市价单跨价差，限价/止损单执行偏差）
+        var slipPerLot = Math.Abs(fillPrice - (decimal)bar.OpenDouble);
+        var slippage = slipPerLot * fillQty * future.TradingUnit;
 
         order.FilledQuantity += fillQty;
         order.AvgFillPrice = fillPrice;
