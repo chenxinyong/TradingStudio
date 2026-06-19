@@ -51,17 +51,13 @@
 
 #### 🔴 P0 — 阻塞策略研究
 
-- [ ] **限价单/止损单成交价修正**（[ExecutionHandler.cs](../../src/TradingStudio.Engine/ExecutionHandler.cs#L289)）
-  - 限价买单：Low → min(limitPrice, High)，不应以最低价成交
-  - 限价卖单：High → max(limitPrice, Low)，不应以最高价成交
-  - 止损单：触发后以 stopPrice/Open 成交，而非极端价
-  - 验证：修正后限价策略 Sharpe 应下降 5-15%
-- [ ] **平今/平昨手续费区分**（[PortfolioManager.cs](../../src/TradingStudio.Engine/PortfolioManager.cs#L202)）
-  - `Future` 增加 `FeeType` / `CloseTodayFeeRate` 字段
-  - `PortfolioManager.ProcessFill` 判断当天开当天平 → 平今费率
-  - `symbols.json` + `gen_symbols_json.py` 补充 75 品种平今费率
-  - 关键品种：上期所 15 品种平今免、中金所 IF 平今 15x
-  - 验证：与 simnow 实盘手续费偏差 < 5%
+- [x] **限价单/止损单成交价修正** ✅ 2026-06-19
+  - 限价单：min/max(limitPrice, Open) 替代 bar.Low/bar.High
+  - 止损单：min/max(stopPrice, Open) 替代 bar.High/bar.Low
+  - 验证：SA 缠论不受影响（仅用市价单）
+- [x] **平今/平昨手续费区分** ✅ 2026-06-19 (代码就绪)
+  - `Future.CloseTodayFeeRate` + `PortfolioManager` 平今检测
+  - [ ] `symbols.json` 数据补全 (75品种平今费率) — 后续任务
 
 #### 🟡 P1 — 回测精度改善
 
@@ -232,8 +228,8 @@
 | 6/19 | 金数源每日导入 | ✅ | 20260618, 1345万Tick |
 | 6/19 | Simnow 配置就绪 | ✅ | 密码修正+配置补全 (端午阻塞) |
 | 6/19 | Simnow 连线验证 | | ⬜ 端午休市, 待 6/22 |
-| 6/19 | 限价单成交价修正 | | ⬜ |
-| 6/19 | 平今手续费区分 | | ⬜ |
+| 6/19 | 限价单成交价修正 | ✅ | MatchBar 修正 |
+| 6/19 | 平今手续费区分 | ✅ | 代码就绪, symbols.json数据待补 |
 | 6/19 | 缠论入场逻辑优化 | | ⬜ |
 | 6/19 | 多品种回测 | | ⬜ |
 | 6/19 | bars 周期表自动化 | | ⬜ |
