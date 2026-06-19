@@ -4,107 +4,156 @@ using TradingStudio.Core.Strategy;
 
 namespace TradingStudio.Engine.Examples;
 
-/// <summary>双均线突破策略 — 支持多品种，每品种独立窗口</summary>
+/// <summary>
+/// 双均线趋势跟踪 — ATR动态仓位 + 追踪止损。
+/// SMA金叉做多/死叉做空，反向穿越或追踪止损出场。
+/// 仓位: 风险金额/(ATR止损距离×合约乘数)，受保证金上限25%约束。
+/// </summary>
 public class MaCrossStrategy : IStrategy
 {
-    [StrategyParameter(Description = "快线周期", DefaultValue = 5, Min = 2, Max = 60, Category = "Entry")]
-    public int FastPeriod { get; set; } = 5;
+    [StrategyParameter(Description = "快线周期", DefaultValue = 10, Min = 2, Max = 60, Category = "Entry")]
+    public int FastPeriod { get; set; } = 10;
 
-    [StrategyParameter(Description = "慢线周期", DefaultValue = 20, Min = 5, Max = 200, Category = "Entry")]
-    public int SlowPeriod { get; set; } = 20;
+    [StrategyParameter(Description = "慢线周期", DefaultValue = 30, Min = 5, Max = 200, Category = "Entry")]
+    public int SlowPeriod { get; set; } = 30;
 
-    [StrategyParameter(Description = "每笔交易手数", DefaultValue = 1, Min = 1, Max = 100, Category = "Position")]
-    public int Quantity { get; set; } = 1;
+    [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 10, Max = 40, Category = "Risk")]
+    public int AtrPeriod { get; set; } = 20;
 
-    public string Name => "MA双均线突破";
+    [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2.0, Min = 1.0, Max = 5.0, Category = "Risk")]
+    public double StopAtrMult { get; set; } = 2.0;
+
+    [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.05, Category = "Position")]
+    public double RiskPerTrade { get; set; } = 0.02;
+
+    [StrategyParameter(Description = "最大保证金占比", DefaultValue = 0.25, Min = 0.10, Max = 0.50, Category = "Position")]
+    public double MaxMarginRatio { get; set; } = 0.25;
+
+    public string Name => "双均线趋势跟踪(ATR风控)";
 
     private StrategyContext _ctx = null!;
-    private Dictionary<string, InstrumentState> _state = new();
+    private readonly Dictionary<string, State> _state = new();
 
     public void Initialize(StrategyContext context)
     {
         _ctx = context;
         foreach (var inst in context.SubscribedInstruments)
-            _state[inst] = new InstrumentState(FastPeriod, SlowPeriod);
-        _ctx.Log($"初始化: {Name} on [{string.Join(", ", context.SubscribedInstruments)}] (快线={FastPeriod}, 慢线={SlowPeriod})");
+        {
+            var history = context.GetBarHistory(inst);
+            if (history.Count < SlowPeriod + AtrPeriod)
+            {
+                context.LogWarning($"{inst}: 历史不足 ({history.Count}<{SlowPeriod + AtrPeriod})");
+                continue;
+            }
+            var s = new State(FastPeriod, SlowPeriod, AtrPeriod);
+            foreach (var bar in history) s.Update(bar);
+            _state[inst] = s;
+            context.Log($"{inst}: Fast={s.FastMA:F2} Slow={s.SlowMA:F2} ATR={s.Atr:F2} ({history.Count} bars)");
+        }
+        _ctx.Log($"初始化: {Name} [{string.Join(", ", context.SubscribedInstruments)}]");
     }
 
-    public void OnTick(TickRecord tick, string instrumentId) { /* Phase 2b */ }
+    public void OnTick(TickRecord tick, string instrumentId) { }
 
     public void OnBar(Bar bar)
     {
         if (!_state.TryGetValue(bar.InstrumentId, out var s)) return;
+        if (_ctx.IsWarmup) { s.Update(bar); return; }
 
-        var price = bar.CloseDouble;
-
-        // 滑动窗口 SMA
-        s.Fast.Enqueue(price); s.FastSum += price;
-        if (s.Fast.Count > FastPeriod) s.FastSum -= s.Fast.Dequeue();
-        s.Slow.Enqueue(price); s.SlowSum += price;
-        if (s.Slow.Count > SlowPeriod) s.SlowSum -= s.Slow.Dequeue();
-
-        if (s.Fast.Count < FastPeriod || s.Slow.Count < SlowPeriod) return;
-
-        var fastMa = s.FastSum / FastPeriod;
-        var slowMa = s.SlowSum / SlowPeriod;
-
-        if (double.IsNaN(s.PrevFast)) { s.PrevFast = fastMa; s.PrevSlow = slowMa; return; }
+        var prevFast = s.FastMA;
+        var prevSlow = s.SlowMA;
+        s.Update(bar);
 
         var pos = _ctx.GetPosition(bar.InstrumentId);
         var hasLong = pos is not null && pos.Quantity > 0;
         var hasShort = pos is not null && pos.Quantity < 0;
 
-        // 预热模式：只更新 SMA，不产生交易信号
-        if (_ctx is Engine.EngineStrategyContext engCtx && engCtx.IsWarmup)
+        // ── 出场 ──
+        if (hasLong)
         {
-            s.PrevFast = fastMa;
-            s.PrevSlow = slowMa;
-            return;
+            var exit = false; var reason = "";
+            if (s.FastMA < s.SlowMA && prevFast >= prevSlow) { exit = true; reason = "死叉平多"; }
+            else if (bar.LowDouble <= s.Trail) { exit = true; reason = $"止损@{s.Trail:F1}"; }
+            else { var t = bar.CloseDouble - StopAtrMult * s.Atr; if (t > s.Trail) s.Trail = t; }
+
+            if (exit) { _ctx.ClosePosition(bar.InstrumentId); s.Trail = 0; }
+        }
+        else if (hasShort)
+        {
+            var exit = false; var reason = "";
+            if (s.FastMA > s.SlowMA && prevFast <= prevSlow) { exit = true; reason = "金叉平空"; }
+            else if (bar.HighDouble >= s.Trail) { exit = true; reason = $"止损@{s.Trail:F1}"; }
+            else { var t = bar.CloseDouble + StopAtrMult * s.Atr; if (t < s.Trail) s.Trail = t; }
+
+            if (exit) { _ctx.ClosePosition(bar.InstrumentId); s.Trail = 0; }
         }
 
-        // 金叉做多
-        if (s.PrevFast <= s.PrevSlow && fastMa > slowMa && !hasLong)
+        // ── 入场 ──
+        if (!hasLong && !hasShort)
         {
-            if (hasShort) _ctx.ClosePosition(bar.InstrumentId);
-            _ctx.MarketBuy(bar.InstrumentId, Quantity, "金叉做多");
+            if (s.Atr / bar.CloseDouble < 0.003) return; // 波动率太低
+
+            if (prevFast <= prevSlow && s.FastMA > s.SlowMA)
+            {
+                var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
+                if (q > 0) { _ctx.MarketBuy(bar.InstrumentId, q, "金叉"); s.Trail = bar.CloseDouble - StopAtrMult * s.Atr; }
+            }
+            else if (prevFast >= prevSlow && s.FastMA < s.SlowMA)
+            {
+                var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
+                if (q > 0) { _ctx.MarketSell(bar.InstrumentId, q, "死叉"); s.Trail = bar.CloseDouble + StopAtrMult * s.Atr; }
+            }
         }
-        // 死叉做空
-        else if (s.PrevFast >= s.PrevSlow && fastMa < slowMa && !hasShort)
+    }
+
+    public void OnOrderEvent(OrderEvent evt) { }
+    public void OnEndOfAlgorithm() { }
+
+    /// <summary>ATR动态仓位: 2%风险 / (2×ATR × 合约乘数)，保证金≤25%</summary>
+    private int CalcLots(double price, State s, string instId)
+    {
+        if (s.Atr <= 0) return 0;
+        var f = _ctx.GetFuture(instId);
+        var mult = (double)(f?.TradingUnit ?? 10m);
+        var marginRate = (double)(f?.MarginRate ?? 0.08m);
+        var equity = (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital);
+        var riskAmt = equity * RiskPerTrade;
+        var riskPerLot = StopAtrMult * s.Atr * mult;
+        if (riskPerLot < price * mult * 0.002) return 0;
+        int lots = Math.Max(1, (int)(riskAmt / riskPerLot));
+        var marginPerLot = price * mult * marginRate;
+        while (lots > 0 && marginPerLot * lots > equity * MaxMarginRatio) lots--;
+        return lots;
+    }
+
+    private class State
+    {
+        private readonly int _fn, _sn, _an;
+        private readonly Queue<double> _fq, _sq, _trq;
+        private double _fs, _ss, _ts, _prev = double.NaN;
+        public double FastMA, SlowMA, Atr, Trail;
+
+        public State(int fn, int sn, int an)
+        { _fn = fn; _sn = sn; _an = an; _fq = new(fn + 1); _sq = new(sn + 1); _trq = new(an + 1); }
+
+        public void Update(Bar bar)
         {
-            if (hasLong) _ctx.ClosePosition(bar.InstrumentId);
-            _ctx.MarketSell(bar.InstrumentId, Quantity, "死叉做空");
-        }
-
-        s.PrevFast = fastMa;
-        s.PrevSlow = slowMa;
-    }
-
-    public void OnOrderEvent(OrderEvent evt)
-    {
-        if (evt.Type == OrderEventType.Filled)
-            _ctx.Log($"成交: {evt.InstrumentId} {evt.Direction} {evt.Quantity}手 @ {evt.FillPrice:F2}");
-        else if (evt.Type == OrderEventType.Rejected)
-            _ctx.LogError($"拒绝: {evt.Message}");
-    }
-
-    public void OnEndOfAlgorithm()
-    {
-        _ctx.Log($"回测结束. 最终权益: {_ctx.Equity:C}");
-    }
-
-    /// <summary>
-    /// 每个品种的状态：维护快线、慢线的滑动窗口和当前值，以及上一个 Bar 的快慢线值用于判断交叉。
-    /// </summary>
-    private class InstrumentState
-    {
-        public Queue<double> Fast, Slow;
-        public double FastSum, SlowSum;
-        public double PrevFast = double.NaN, PrevSlow = double.NaN;
-
-        public InstrumentState(int fastPeriod, int slowPeriod)
-        {
-            Fast = new Queue<double>(fastPeriod + 1);
-            Slow = new Queue<double>(slowPeriod + 1);
+            var c = bar.CloseDouble;
+            // Fast SMA
+            _fq.Enqueue(c); _fs += c; if (_fq.Count > _fn) _fs -= _fq.Dequeue();
+            if (_fq.Count >= _fn) FastMA = _fs / _fn;
+            // Slow SMA
+            _sq.Enqueue(c); _ss += c; if (_sq.Count > _sn) _ss -= _sq.Dequeue();
+            if (_sq.Count >= _sn) SlowMA = _ss / _sn;
+            // ATR
+            if (!double.IsNaN(_prev))
+            {
+                var tr = Math.Max(bar.HighDouble - bar.LowDouble,
+                    Math.Max(Math.Abs(bar.HighDouble - _prev), Math.Abs(bar.LowDouble - _prev)));
+                _trq.Enqueue(tr); _ts += tr; if (_trq.Count > _an) _ts -= _trq.Dequeue();
+                if (_trq.Count >= _an) Atr = _ts / _an;
+            }
+            _prev = c;
         }
     }
 }
