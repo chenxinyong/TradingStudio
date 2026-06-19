@@ -16,9 +16,7 @@
   - DuckDB 5.0 GB（SQLite 9.1 GB → 压缩 45%），5926 万行，0 数据异常
   - 4 索引（inst+time / trading_day），查询 < 50ms
   - 新增命令：`ToolBox merge`（alias: `m`）
-- [ ] **合约代码映射：产品代码 → 具体合约**
-  - 策略配置写 `"ag"`，DB 存 `"ag2608"`，需 `ContractCodeGenerator` 展开
-  - 在 `HistoricalBarFeed` 或策略初始化层做映射
+- [x] **合约代码映射** — DuckDBStore 已通过 LIKE 查询自动展开产品码→合约, 无需额外映射层 ✅
 - [x] **Tick CSV 迁移** — 已通过 `.csproj` 排除 `TickData/` 目录参与编译，运行时路径不受影响，迁移无实际收益
 - [x] **端到端回测验证** — SA 30min 缠论策略跑通 ✅ 2026-06-19
   - 修复：预热隔离 + 时间驱动BI匹配 + 防重复入场
@@ -73,8 +71,7 @@
   - `History(instrumentId, count)` 返回 `IReadOnlyList<Bar>`
   - 自动预热支持
 
-> 回测引擎代码写完，但还没跑过一次完整的端到端回测。
-> Phase 2b 精度没做 = 现在跑出来的结果不能当真。
+> Phase 2b P0 已修复 (限价单+平今手续费)。P1 (Volume约束+滑点) 待做。
 
 ### 缠论策略迭代（2026-06-19 新增，基于首次回测发现）
 
@@ -120,7 +117,7 @@
 
 ### 数据库切换
 
-- [ ] DuckDB 迁移（BarStore 已加 IBarStore 接口，待实现 DuckDB 适配器）
+- [x] DuckDB 迁移 ✅ 已在回测中全面使用 (bars_history.duckdb 5GB)
 - [ ] PostgreSQL + C# 实体模型（P0 技术债，6/14 主动延后）
   - Symbol / Contract / CommissionRule / MarginRule / TradingSession 实体
   - `TradingStudio.Data` 添加 PostgreSQL 访问层
@@ -206,19 +203,12 @@
 | 6/14 | 全量验证 2020-2025 | ✅ | |
 | 6/14 | 实盘引擎骨架 | ✅ | |
 | 6/14 | 多策略端到端验证 | | ⬜ |
-| 6/14 | CTP TraderApi 字段映射 | | ⬜ |
-| 6/14 | Simnow 验证 | | ⬜ |
 | 6/14 | PostgreSQL 实体 | | ⬜ |
 | 6/14 | ToolBox SelfContained | | ⬜ |
 | 6/14 | 监控告警 | | ⬜ |
 | 6/15 | WPF Phase A 骨架 | ✅ | (方案改为原生 WPF) |
 | 6/15 | 2021-2025 导入 | ✅ | |
-| 6/15 | Simnow 验证 | | ⬜ |
 | 6/16 | 数据全量验证 | ✅ | |
-| 6/16 | WPF Phase 1 数据连接 | | ⬜ |
-| 6/16 | WPF Phase 2 Dashboard | | ⬜ |
-| 6/16 | WPF Phase 3 Chart + 托盘 | | ⬜ |
-| 6/16 | Simnow 验证 | | ⬜ |
 | 6/16 | 运维确认 | | ⬜ |
 | 6/19 | 线程安全加固 | ✅ | ExecutionHandler/PortfolioManager/CtpTraderBridge/LiveDataCollector |
 | 6/19 | 合约活跃度软过滤 | ✅ | ContractActivityTracker + CtpLiveFeed 双通道 |
