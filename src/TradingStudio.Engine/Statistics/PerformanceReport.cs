@@ -28,7 +28,8 @@ public class PerformanceReport
         string strategyId,
         SubPortfolio subPortfolio,
         IReadOnlyList<Trade> trades,
-        IReadOnlyList<(DateTimeOffset, decimal)> equityCurve)
+        IReadOnlyList<(DateTimeOffset, decimal)> equityCurve,
+        int totalOrders = 0)
     {
         var wins = trades.Where(t => t.PnL > 0).ToList();
         var losses = trades.Where(t => t.PnL <= 0).ToList();
@@ -45,6 +46,7 @@ public class PerformanceReport
             MaxDrawdown = (decimal)maxDrawdown,
             SharpeRatio = (decimal)sharpe,
             SortinoRatio = (decimal)sortino,
+            TotalOrders = totalOrders > 0 ? totalOrders : trades.Count * 2, // 每个Trade至少一对买卖单
             TotalTrades = trades.Count,
             WinRate = trades.Count > 0 ? (decimal)wins.Count / trades.Count : 0,
             AverageWin = wins.Count > 0 ? wins.Average(t => t.PnL) : 0,

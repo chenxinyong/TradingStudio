@@ -22,8 +22,15 @@ internal class EngineStrategyContext : StrategyContext
     public override DateTimeOffset CurrentTime => _currentTime;
     public override IReadOnlyList<string> SubscribedInstruments => _instruments;
 
-    /// <summary>预热模式：策略应只更新内部状态，不产生交易信号</summary>
-    public bool IsWarmup { get; set; }
+    /// <inheritdoc />
+    public override bool IsWarmup { get; set; }
+
+    /// <summary>跳过预热期订单（返回 Rejected）</summary>
+    private OrderTicket SkipIfWarmup(string action)
+    {
+        if (IsWarmup) return new OrderTicket { OrderId = -1, Status = OrderStatus.Rejected };
+        return null!; // 调用方会继续
+    }
 
     public EngineStrategyContext(
         string strategyId,
@@ -66,8 +73,10 @@ internal class EngineStrategyContext : StrategyContext
         _indicators.Get<T>(instrumentId, tag);
 
     // ═══ 交易 ═══
-    public override OrderTicket MarketBuy(string instrumentId, int quantity, string? tag = null) =>
-        _execution.Submit(new Order
+    public override OrderTicket MarketBuy(string instrumentId, int quantity, string? tag = null)
+    {
+        if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
+        return _execution.Submit(new Order
         {
             InstrumentId = instrumentId,
             Direction = OrderDirection.Buy,
@@ -75,9 +84,12 @@ internal class EngineStrategyContext : StrategyContext
             Quantity = quantity,
             Tag = tag,
         }, StrategyId, _portfolio);
+    }
 
-    public override OrderTicket MarketSell(string instrumentId, int quantity, string? tag = null) =>
-        _execution.Submit(new Order
+    public override OrderTicket MarketSell(string instrumentId, int quantity, string? tag = null)
+    {
+        if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
+        return _execution.Submit(new Order
         {
             InstrumentId = instrumentId,
             Direction = OrderDirection.Sell,
@@ -85,9 +97,11 @@ internal class EngineStrategyContext : StrategyContext
             Quantity = quantity,
             Tag = tag,
         }, StrategyId);
+    }
 
     public override OrderTicket ClosePosition(string instrumentId)
     {
+        if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
         var pos = _portfolio.GetPosition(instrumentId);
         if (pos == null || pos.Quantity == 0)
             throw new InvalidOperationException($"No position to close: {instrumentId}");
@@ -96,33 +110,45 @@ internal class EngineStrategyContext : StrategyContext
             : MarketBuy(instrumentId, -pos.Quantity, "平空");
     }
 
-    public override OrderTicket LimitBuy(string instrumentId, int quantity, decimal limitPrice) =>
-        _execution.Submit(new Order
+    public override OrderTicket LimitBuy(string instrumentId, int quantity, decimal limitPrice)
+    {
+        if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
+        return _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Buy,
             Type = OrderType.Limit, Quantity = quantity, LimitPrice = limitPrice,
         }, StrategyId);
+    }
 
-    public override OrderTicket LimitSell(string instrumentId, int quantity, decimal limitPrice) =>
-        _execution.Submit(new Order
+    public override OrderTicket LimitSell(string instrumentId, int quantity, decimal limitPrice)
+    {
+        if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
+        return _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Sell,
             Type = OrderType.Limit, Quantity = quantity, LimitPrice = limitPrice,
         }, StrategyId);
+    }
 
-    public override OrderTicket StopBuy(string instrumentId, int quantity, decimal stopPrice) =>
-        _execution.Submit(new Order
+    public override OrderTicket StopBuy(string instrumentId, int quantity, decimal stopPrice)
+    {
+        if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
+        return _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Buy,
             Type = OrderType.Stop, Quantity = quantity, StopPrice = stopPrice,
         }, StrategyId);
+    }
 
-    public override OrderTicket StopSell(string instrumentId, int quantity, decimal stopPrice) =>
-        _execution.Submit(new Order
+    public override OrderTicket StopSell(string instrumentId, int quantity, decimal stopPrice)
+    {
+        if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
+        return _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Sell,
             Type = OrderType.Stop, Quantity = quantity, StopPrice = stopPrice,
         }, StrategyId);
+    }
 
     // ═══ 仓位 ═══
     public override Position? GetPosition(string instrumentId) =>

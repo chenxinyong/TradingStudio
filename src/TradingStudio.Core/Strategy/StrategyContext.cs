@@ -13,6 +13,9 @@ public class StrategyContext
     // ═══ 标识 ═══
     public string StrategyId { get; }
 
+    /// <summary>预热模式：策略应只更新内部状态（指标/ATR），不产生交易信号</summary>
+    public virtual bool IsWarmup { get; set; }
+
     public StrategyContext(string strategyId) => StrategyId = strategyId;
 
     // ═══ 行情数据 ═══

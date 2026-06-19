@@ -77,16 +77,11 @@ public class ChanLunStrategy : IStrategy
             var m30Result = ChanLunAnalyzer.Analyze(m30Bars, minBiLen: MinBiLen);
             state.All30mBis = m30Result.Bis;
 
-            // ── 3. 预计算BI完成事件索引 ──
-            // 每笔30min BI的结束时间→在history中的index
-            foreach (var bi in m30Result.Bis)
-            {
-                var endDt = bi.DtEnd;
-                // 找到 >= endDt 的第一个bar index
-                int idx = FindBarIndex(history, endDt);
-                if (idx >= 0)
-                    state.BiEndIndexMap[idx] = bi;
-            }
+            // ── 3. 预计算BI完成事件（按时间排序） ──
+            state.BiEndEvents = m30Result.Bis
+                .Select(bi => (bi.DtEnd, bi))
+                .OrderBy(x => x.DtEnd)
+                .ToList();
 
             // ── 4. 初始化ATR ──
             foreach (var bar in history)
@@ -104,8 +99,19 @@ public class ChanLunStrategy : IStrategy
     {
         if (!_state.TryGetValue(bar.InstrumentId, out var s)) return;
 
+        // 预热阶段：仅更新 ATR 和内部状态，不产生交易信号
+        if (_ctx.IsWarmup)
+        {
+            s.UpdateAtr(bar);
+            return;
+        }
+
         // ── ATR更新 ──
         s.UpdateAtr(bar);
+
+        // ── 清除待入场标记：入场成交后持仓非零，或平仓后归零，都表示订单已闭环 ──
+        if (s.HasPendingEntry)
+            s.HasPendingEntry = false;
 
         // ── 检查日线BI方向(用最新的日线笔) ──
         // 注：ATR未就绪时自然跳过（CurrentAtr=0），无需显式warmup检查
@@ -113,19 +119,14 @@ public class ChanLunStrategy : IStrategy
         if (dayDir == DirectionType.Unknown)
             return; // 日线笔数据不足
 
-        // ── 检查当前Bar是否触发30min BI完成事件 ──
-        // Backtest engine中bar按时间顺序到达，bar index递增
-        // 用当前bar时间查找预计算的BI事件
-        if (s.LastBarIdx >= 0 && s.BiEndIndexMap.TryGetValue(s.LastBarIdx, out var completedBi))
-        {
-            // BI刚刚完成 — 检查是否满足入场条件
-            ProcessBiCompletion(s, bar, completedBi, dayDir);
-        }
+        // ── 检查当前Bar是否跨越30min BI完成事件 ──
+        // 时间驱动：比索引驱动更健壮，不依赖 bar 列表长度/偏移一致
+        CheckBiCompletions(s, bar, dayDir);
 
         // ── 止损检查 ──
         CheckStopLoss(s, bar);
 
-        s.LastBarIdx++;
+        s.LastBarTime = bar.BarTime;
     }
 
     public void OnOrderEvent(OrderEvent evt)
@@ -134,7 +135,12 @@ public class ChanLunStrategy : IStrategy
             _ctx.Log($"成交: {evt.InstrumentId} {evt.Direction} {evt.Quantity}手 @ {evt.FillPrice:F2} [{evt.Message}]");
 
         if (evt.Type == OrderEventType.Rejected)
+        {
             _ctx.LogWarning($"拒单: {evt.InstrumentId} {evt.Message}");
+            // 拒单后清除待入场标记，允许下一个信号重新入场
+            if (_state.TryGetValue(evt.InstrumentId, out var s))
+                s.HasPendingEntry = false;
+        }
     }
 
     public void OnEndOfAlgorithm()
@@ -168,6 +174,23 @@ public class ChanLunStrategy : IStrategy
         return DirectionType.Unknown;
     }
 
+    /// <summary>时间驱动BI完成检测：检查 LastBarTime 到 bar.BarTime 之间是否有BI结束</summary>
+    private void CheckBiCompletions(InstrumentState s, Bar bar, DirectionType dayDir)
+    {
+        while (s.NextBiEventIdx < s.BiEndEvents.Count)
+        {
+            var (endTime, bi) = s.BiEndEvents[s.NextBiEventIdx];
+            if (endTime > bar.BarTime) break; // 还没到
+
+            // BI 在上根 Bar 到本根 Bar 之间完成（或恰在本根 Bar）
+            if (endTime > s.LastBarTime || s.LastBarTime == default)
+            {
+                ProcessBiCompletion(s, bar, bi, dayDir);
+            }
+            s.NextBiEventIdx++;
+        }
+    }
+
     /// <summary>处理30min BI完成信号</summary>
     private void ProcessBiCompletion(InstrumentState s, Bar bar, Bi completedBi, DirectionType dayDir)
     {
@@ -193,6 +216,7 @@ public class ChanLunStrategy : IStrategy
             if (shouldExit)
             {
                 _ctx.ClosePosition(s.InstrumentId);
+                s.HasPendingEntry = false;
                 s.EntryBarTime = null;
                 s.StopPrice = 0;
                 s.ActiveBi = null;
@@ -200,8 +224,9 @@ public class ChanLunStrategy : IStrategy
             }
         }
 
-        // ── 入场逻辑 (无持仓时) ──
-        if (!hasPosition)
+        // ── 入场逻辑 (无持仓、无待入场订单时) ──
+        // HasPendingEntry 防止同一信号区间内重复下单（下单后到成交前有1根Bar延迟）
+        if (!hasPosition && !s.HasPendingEntry)
         {
             // 日线Up + 30min底分型(向下笔完成→向上笔开始) → 做多
             if (dayDir == DirectionType.Up && completedBi.Type == ChanLun.Direction.Up)
@@ -210,6 +235,7 @@ public class ChanLunStrategy : IStrategy
                 if (qty > 0)
                 {
                     _ctx.MarketBuy(s.InstrumentId, qty, $"BI入场: 日线Up+30min底分型");
+                    s.HasPendingEntry = true;
                     s.EntryBarTime = bar.BarTime;
                     s.StopPrice = bar.CloseDouble - StopAtrMult * s.CurrentAtr;
                     s.ActiveBi = completedBi;
@@ -222,6 +248,7 @@ public class ChanLunStrategy : IStrategy
                 if (qty > 0)
                 {
                     _ctx.MarketSell(s.InstrumentId, qty, $"BI入场: 日线Down+30min顶分型");
+                    s.HasPendingEntry = true;
                     s.EntryBarTime = bar.BarTime;
                     s.StopPrice = bar.CloseDouble + StopAtrMult * s.CurrentAtr;
                     s.ActiveBi = completedBi;
@@ -327,22 +354,6 @@ public class ChanLunStrategy : IStrategy
         return dayBars;
     }
 
-    /// <summary>找到 Bar 列表中 >= dt 的第一个索引</summary>
-    private static int FindBarIndex(IReadOnlyList<Bar> bars, DateTime dt)
-    {
-        // 二分查找
-        int lo = 0, hi = bars.Count - 1;
-        while (lo <= hi)
-        {
-            int mid = (lo + hi) / 2;
-            if (bars[mid].BarTime < dt)
-                lo = mid + 1;
-            else
-                hi = mid - 1;
-        }
-        return lo < bars.Count ? lo : -1;
-    }
-
     // ═══════════════════════════════════════════════
     // 内部状态
     // ═══════════════════════════════════════════════
@@ -360,7 +371,7 @@ public class ChanLunStrategy : IStrategy
 
         // 30min预计算结果
         public List<Bi> All30mBis = [];
-        public Dictionary<int, Bi> BiEndIndexMap = []; // barIdx → 刚完成的Bi
+        public List<(DateTime EndTime, Bi Bi)> BiEndEvents = []; // 按时间排序的BI完成事件
 
         // ATR
         private readonly Queue<double> _trWindow;
@@ -368,8 +379,10 @@ public class ChanLunStrategy : IStrategy
         public double CurrentAtr { get; private set; }
         private double _prevClose = double.NaN;
 
-        // 交易状态(实盘/回测共享)
-        public int LastBarIdx = 0;
+        // 交易状态(回测/实盘共享)
+        public DateTime LastBarTime;          // 上一根 Bar 的时间（时间驱动，比索引驱动更健壮）
+        public int NextBiEventIdx;            // 下一个待处理的 BI 事件索引
+        public bool HasPendingEntry;          // 已下单待成交，防止重复入场
         public DateTime? EntryBarTime;
         public double StopPrice;
         public Bi? ActiveBi;
