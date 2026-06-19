@@ -1,0 +1,25 @@
+{
+  "StrategyId": "Donchian-AG-15min",
+  "StrategyType": "DonchianTrend",
+  "Description": "白银 ATR通道突破 15min趋势跟踪",
+  "Version": 1,
+  "Instruments": ["ag"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 15,
+  "AllocatedCapital": 500000,
+  "MaxDrawdownPct": 0.25,
+  "MaxPositionPerInstrument": 2,
+  "Priority": 1,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "ChannelPeriod": 20,
+    "ExitPeriod": 10,
+    "TrendMAPeriod": 50,
+    "AtrPeriod": 20,
+    "StopAtrMult": 2.0,
+    "MinVolatility": 0.008,
+    "RiskPerTrade": 0.02,
+    "MaxBarsInTrade": 0
+  }
+}

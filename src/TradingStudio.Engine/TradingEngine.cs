@@ -77,10 +77,7 @@ public class TradingEngine
             if (_dataFeed is Data.Engine.HistoricalBarFeed barFeed)
             {
                 var loadStart = _options.StartTime.AddDays(-Math.Max(_options.WarmupDays, 1));
-                var loadEnd = _options.StartTime;
-                // 如果预热天数覆盖整个回测期，则直接加载全部数据
-                if (_options.WarmupDays >= 365)
-                    loadEnd = _options.EndTime;
+                var loadEnd = _options.StartTime;  // 预热仅用回测期之前的数据，避免窗口污染
 
                 foreach (var inst in config.Instruments)
                 {

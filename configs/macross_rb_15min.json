@@ -1,0 +1,23 @@
+{
+  "StrategyId": "MaCross-RB-15min",
+  "StrategyType": "MaCross",
+  "Description": "螺纹钢 双均线 15min趋势跟踪",
+  "Version": 1,
+  "Instruments": ["rb"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 15,
+  "AllocatedCapital": 500000,
+  "MaxDrawdownPct": 0.30,
+  "MaxPositionPerInstrument": 2,
+  "Priority": 1,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "FastPeriod": 10,
+    "SlowPeriod": 30,
+    "AtrPeriod": 20,
+    "StopAtrMult": 2.5,
+    "RiskPerTrade": 0.02,
+    "FixedLots": 0
+  }
+}
