@@ -204,6 +204,18 @@ public class PortfolioManager : IPortfolioState
                 {
                     // 完全平仓
                     var mult = future.TradingUnit;
+
+                    // 平今手续费：当天开当天平 → 使用 CloseTodayFeeRate
+                    var closeFee = fill.Fee;
+                    var isCloseToday = pos.CreatedTime.Date == fill.Time.Date
+                        && future.CloseTodayFeeRate > 0
+                        && Math.Abs(future.CloseTodayFeeRate - future.FeeRate) > 0.0000001;
+                    if (isCloseToday)
+                    {
+                        var closeContractValue = fill.FillPrice * mult * Math.Abs(pos.Quantity);
+                        closeFee = Math.Max(1m, closeContractValue * (decimal)future.CloseTodayFeeRate);
+                    }
+
                     var pnl = (fill.FillPrice - pos.AvgPrice) * Math.Abs(pos.Quantity) * mult
                         * (pos.Quantity > 0 ? 1 : -1);
                     var trade = new Trade
@@ -212,14 +224,14 @@ public class PortfolioManager : IPortfolioState
                         Quantity = Math.Abs(pos.Quantity),
                         EntryPrice = pos.AvgPrice,
                         ExitPrice = fill.FillPrice,
-                        PnL = pnl - pos.Commission - fill.Fee,
-                        Fee = pos.Commission + fill.Fee,
+                        PnL = pnl - pos.Commission - closeFee,
+                        Fee = pos.Commission + closeFee,
                         Slippage = fill.Slippage,
                         EntryTime = pos.CreatedTime.DateTime,
                         ExitTime = fill.Time.DateTime,
                         StrategyId = fill.StrategyId,
                     };
-                    Cash += pnl - fill.Fee + pos.Margin;
+                    Cash += pnl - closeFee + pos.Margin;
                     MarginUsed -= pos.Margin;
                     _positions.Remove(key);
                     _trades.Add(trade);
@@ -231,7 +243,7 @@ public class PortfolioManager : IPortfolioState
                     // 更新分账
                     if (_subPortfolios.TryGetValue(fill.StrategyId, out var sub))
                     {
-                        sub.Cash += pnl - fill.Fee + pos.Margin;
+                        sub.Cash += pnl - closeFee + pos.Margin;
                         sub.MarginUsed -= pos.Margin;
                         if (sub.Equity > sub.PeakEquity) sub.PeakEquity = sub.Equity;
                     }
@@ -245,9 +257,21 @@ public class PortfolioManager : IPortfolioState
                 // 简化：先平旧仓，再开新仓
                 var closeQty = Math.Abs(pos.Quantity);
                 var mult = future.TradingUnit;
+
+                // 平今手续费检测
+                var exitFee = fill.Fee;
+                var isCloseToday = pos.CreatedTime.Date == fill.Time.Date
+                    && future.CloseTodayFeeRate > 0
+                    && Math.Abs(future.CloseTodayFeeRate - future.FeeRate) > 0.0000001;
+                if (isCloseToday)
+                {
+                    var closeContractValue = fill.FillPrice * mult * closeQty;
+                    exitFee = Math.Max(1m, closeContractValue * (decimal)future.CloseTodayFeeRate);
+                }
+
                 var pnl = (fill.FillPrice - pos.AvgPrice) * closeQty * mult
                     * (pos.Quantity > 0 ? 1 : -1);
-                var closeFee = pos.Commission;
+                var closeFee = pos.Commission + exitFee;
 
                 // 平仓记录
                 var trade = new Trade
@@ -256,26 +280,28 @@ public class PortfolioManager : IPortfolioState
                     Quantity = closeQty,
                     EntryPrice = pos.AvgPrice,
                     ExitPrice = fill.FillPrice,
-                    PnL = pnl - closeFee - fill.Fee,
-                    Fee = closeFee + fill.Fee,
+                    PnL = pnl - closeFee,
+                    Fee = closeFee,
                     Slippage = fill.Slippage,
                     EntryTime = pos.CreatedTime.DateTime,
                     ExitTime = fill.Time.DateTime,
                     StrategyId = fill.StrategyId,
                 };
-                Cash += pnl - fill.Fee + pos.Margin;
+                Cash += pnl - exitFee + pos.Margin;
                 MarginUsed -= pos.Margin;
                 _trades.Add(trade);
 
                 // 开新仓
                 var remainingQty = fill.Quantity - closeQty;
                 var newMargin = future.TradingUnit * fill.FillPrice * remainingQty * marginRate;
+                // 新仓开仓费使用标准费率（不是平今费率）
+                var openFee = Math.Max(1m, future.TradingUnit * fill.FillPrice * remainingQty * (decimal)future.FeeRate);
                 pos = new Position
                 {
                     InstrumentId = key,
                     Quantity = (fill.Direction == OrderDirection.Buy ? 1 : -1) * remainingQty,
                     AvgPrice = fill.FillPrice,
-                    Commission = fill.Fee,
+                    Commission = openFee,
                     Margin = newMargin,
                     CreatedTime = fill.Time,
                     StrategyId = fill.StrategyId,
@@ -285,7 +311,7 @@ public class PortfolioManager : IPortfolioState
 
                 if (_subPortfolios.TryGetValue(fill.StrategyId, out var sub))
                 {
-                    sub.Cash += pnl - fill.Fee + pos.Margin - newMargin;
+                    sub.Cash += pnl - exitFee - openFee + pos.Margin - newMargin;
                     sub.MarginUsed = sub.MarginUsed - pos.Margin + newMargin;
                 }
 
@@ -295,7 +321,7 @@ public class PortfolioManager : IPortfolioState
             // 加仓：更新 Margin
             pos.Margin = contractValue * marginRate;
             MarginUsed = _positions.Values.Sum(p => p.Margin);
-            Cash -= fill.Fee; // weng: 只扣手续费，本金已通过保证金占用
+            Cash -= fill.Fee; // 只扣手续费，本金已通过保证金占用
         }
 
         if (_subPortfolios.TryGetValue(fill.StrategyId, out var sp))

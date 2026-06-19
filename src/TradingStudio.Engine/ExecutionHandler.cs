@@ -285,23 +285,31 @@ public class ExecutionHandler : IExecutionHandler
                 break;
 
             case OrderType.Limit:
-                // 限价买单：bar.Low <= limitPrice → 成交
+                // 限价单：以 limitPrice 成交，不超过 Open（前向偏差防护）
+                // 限价买单触发条件：bar.Low <= limitPrice；成交价 = min(limitPrice, Open)
+                // 限价卖单触发条件：bar.High >= limitPrice；成交价 = max(limitPrice, Open)
+                // 修正前用 bar.Low/bar.High 极端价成交 → 回测结果虚高
                 if (order.LimitPrice == null) return null;
+                var barOpen = (decimal)bar.OpenDouble;
                 if (order.Direction == OrderDirection.Buy && (decimal)bar.LowDouble <= order.LimitPrice.Value)
-                    fillPrice = (decimal)bar.LowDouble;
+                    fillPrice = Math.Min(order.LimitPrice.Value, barOpen);
                 else if (order.Direction == OrderDirection.Sell && (decimal)bar.HighDouble >= order.LimitPrice.Value)
-                    fillPrice = (decimal)bar.HighDouble;
+                    fillPrice = Math.Max(order.LimitPrice.Value, barOpen);
                 else
                     return null; // 限价未触及
                 break;
 
             case OrderType.Stop:
-                // 止损买单：bar.High >= stopPrice → 触发
+                // 止损单：触发后以 stopPrice 或 Open 成交（哪个更不利用哪个）
+                // 止损买单触发条件：bar.High >= stopPrice；成交价 = max(stopPrice, Open)
+                // 止损卖单触发条件：bar.Low <= stopPrice；成交价 = min(stopPrice, Open)
+                // 修正前用 bar.High/bar.Low 极端价成交 → 回测中穿越止损价后反弹也不亏
                 if (order.StopPrice == null) return null;
+                var stopOpen = (decimal)bar.OpenDouble;
                 if (order.Direction == OrderDirection.Buy && (decimal)bar.HighDouble >= order.StopPrice.Value)
-                    fillPrice = (decimal)bar.HighDouble;
+                    fillPrice = Math.Max(order.StopPrice.Value, stopOpen);
                 else if (order.Direction == OrderDirection.Sell && (decimal)bar.LowDouble <= order.StopPrice.Value)
-                    fillPrice = (decimal)bar.LowDouble;
+                    fillPrice = Math.Min(order.StopPrice.Value, stopOpen);
                 else
                     return null;
                 break;

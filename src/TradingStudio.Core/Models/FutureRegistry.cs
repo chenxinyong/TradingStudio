@@ -46,6 +46,8 @@ public sealed class FutureRegistry
                 TickValue      = s.GetProperty("tickValue").GetDecimal(),
                 PriceLimitPct  = s.GetProperty("priceLimitPct").GetDecimal(),
                 MarginRate     = s.GetProperty("marginRate").GetDecimal(),
+                FeeRate        = TryGetDouble(s, "feeRate"),
+                CloseTodayFeeRate = TryGetDouble(s, "closeTodayFeeRate"),
                 Months         = s.GetProperty("months").GetString()!,
                 TradingHours   = TryGet(s, "tradingHours", ""),
                 IsTop30        = TryGetBool(s, "isTop30"),
@@ -82,6 +84,9 @@ public sealed class FutureRegistry
 
     private static string TryGet(JsonElement el, string key, string def) =>
         el.TryGetProperty(key, out var v) ? v.GetString() ?? def : def;
+
+    private static double TryGetDouble(JsonElement el, string key) =>
+        el.TryGetProperty(key, out var v) ? v.GetDouble() : 0;
 
     private static bool TryGetBool(JsonElement el, string key) =>
         el.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.True;

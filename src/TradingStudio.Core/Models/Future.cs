@@ -23,7 +23,8 @@ public sealed record Future
     public decimal TickValue { get; init; }          // 1跳价值 = TickSize × TradingUnit
     public decimal PriceLimitPct { get; init; }      // 涨跌停板 % (0.10 = ±10%)
     public decimal MarginRate { get; init; }         // 交易所基准保证金率
-    public double FeeRate { get; init; }              // 手续费率 (合约价值百分比, 默认 0.0001 = 万1)
+    public double FeeRate { get; init; }              // 开仓/平昨手续费率 (合约价值百分比, 默认 0.0001 = 万1)
+    public double CloseTodayFeeRate { get; init; }    // 平今手续费率 (0=平今免, =FeeRate=正常, >FeeRate=平今加倍)
     public string Months { get; init; } = "";        // "1～12月" | "1,3,5,7,9,11" | "季月(3,6,9,12)"
     public string TradingHours { get; init; } = "";  // 交易时间描述
 
