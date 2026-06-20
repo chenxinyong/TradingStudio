@@ -1,0 +1,23 @@
+{
+  "StrategyId": "MaCross-Top30",
+  "StrategyType": "MaCross",
+  "Description": "Top30品种 双均线(10/30) 15min — ATR动态仓位+追踪止损",
+  "Version": 1,
+  "Instruments": ["AL","ZN","NI","AG","RB","HC","BU","RU","SP","FU","C","M","Y","P","L","V","PP","EB","EG","JM","I","CF","SR","TA","MA","FG","SA","SM","RM","OI"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 15,
+  "AllocatedCapital": 30000000,
+  "MaxDrawdownPct": 0.40,
+  "MaxPositionPerInstrument": 3,
+  "Priority": 1,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "FastPeriod": 10,
+    "SlowPeriod": 30,
+    "AtrPeriod": 20,
+    "StopAtrMult": 2.0,
+    "RiskPerTrade": 0.02,
+    "MaxMarginRatio": 0.10
+  }
+}

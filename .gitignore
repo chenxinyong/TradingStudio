@@ -445,3 +445,13 @@ data/
 
 # Tools and scripts
 tools/
+
+# 回测报告产物（大文件，不提交）
+*.report.json
+
+# 运行时状态文件
+health.json
+log.txt
+
+# 示例/实验输出
+examples/college-advisor/output/

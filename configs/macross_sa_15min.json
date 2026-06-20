@@ -1,0 +1,23 @@
+{
+  "StrategyId": "MaCross-SA-15min",
+  "StrategyType": "MaCross",
+  "Description": "纯碱 双均线(10/30) 15min — ATR动态仓位+追踪止损",
+  "Version": 1,
+  "Instruments": ["SA"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 15,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.30,
+  "MaxPositionPerInstrument": 2,
+  "Priority": 1,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "FastPeriod": 10,
+    "SlowPeriod": 30,
+    "AtrPeriod": 20,
+    "StopAtrMult": 2.0,
+    "RiskPerTrade": 0.02,
+    "MaxMarginRatio": 0.25
+  }
+}

@@ -274,7 +274,23 @@
       "PowerShell(Copy-Item \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\CTP\\\\Wrapper\\\\bin\\\\Debug\\\\CTPWrapper.pdb\" \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.pdb\" -Force -ErrorAction SilentlyContinue)",
       "Bash(taskkill /f /im TradingStudio.exe)",
       "Bash(taskkill /f /im dotnet.exe)",
-      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'dotnet|TradingStudio' } | Stop-Process -Force; Start-Sleep 1; Copy-Item \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\CTP\\\\Wrapper\\\\bin\\\\Debug\\\\CTPWrapper.dll\" \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.dll\" -Force; Write-Host \"OK: CTPWrapper.dll copied\")"
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match 'dotnet|TradingStudio' } | Stop-Process -Force; Start-Sleep 1; Copy-Item \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\CTP\\\\Wrapper\\\\bin\\\\Debug\\\\CTPWrapper.dll\" \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\bin\\\\x64\\\\Debug\\\\CTPWrapper.dll\" -Force; Write-Host \"OK: CTPWrapper.dll copied\")",
+      "PowerShell(Set-Location \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\"; $start = Get-Date; dotnet run --project src/TradingStudio/TradingStudio.csproj -- backtest --config \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\configs\\\\macross_rb_15min.json\" --db \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\data\\\\bars_history.duckdb\" --symbols \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\symbols.json\" --start \"2020-01-01\" --end \"2025-12-31\" 2>&1 | Tee-Object -Variable out; $elapsed = \\(Get-Date\\) - $start; Write-Host \"`n=== Elapsed: $\\($elapsed.TotalSeconds\\)s ===\")",
+      "Bash(pwsh -ExecutionPolicy Bypass scripts/batch_backtest.ps1)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File scripts/batch_backtest.ps1)",
+      "PowerShell(Set-Location \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\"; $o = dotnet run --project src/TradingStudio/TradingStudio.csproj -- backtest --config configs/macross_rb_15min.json --db data/bars_history.duckdb --symbols src/TradingStudio/symbols.json --start \"2021-06-01\" --end \"2021-08-01\" 2>&1 | Out-String; if \\($o -match 'Trades:\\\\s+\\(\\\\d+\\)'\\) { Write-Host \"Trades: $\\($Matches[1]\\)\" } else { Write-Host \"NO MATCH\" }; if \\($o -match 'Done'\\) { Write-Host \"Done line found\" } else { Write-Host \"NO Done\" }; $o | Select-String \"Done|Trades\")",
+      "PowerShell(Set-Location \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\"; $t0 = Get-Date; $output = dotnet run --project src/TradingStudio/TradingStudio.csproj -- backtest --config \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\configs\\\\macross_rb_15min.json\" --db \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\data\\\\bars_history.duckdb\" --symbols \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\src\\\\TradingStudio\\\\symbols.json\" --start \"2021-06-01\" --end \"2021-08-01\" 2>&1; $elapsed = \\(Get-Date\\) - $t0; $output | Select-String \"Done|Trades|Profit|Win|error\"; Write-Host \"Elapsed: $\\($elapsed.TotalSeconds\\)s\")",
+      "Bash(python scripts/analyze_duckdb.py)",
+      "Bash(Select-String \"错误\")",
+      "Bash(python scripts/migrate_continuous.py v)",
+      "Bash(python -c \"import pandas\")",
+      "Bash(grep -E '\\(health\\\\.json|log\\\\.txt|\\\\.report\\\\.json\\)$')",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio add configs/_ag_534.json configs/_ag_debug.json configs/_batch_C.json configs/_v000_test.json configs/_v_debug.json configs/macross_ma_15min.json configs/macross_sa_15min.json configs/macross_top30_15min.json)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio add scripts/v_signal_verify.py scripts/v_trade_chart.py)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio add .claude/settings.json)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio status)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio add .gitignore)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio status --short)"
     ],
     "additionalDirectories": [
       "c:\\Users\\chenx\\.claude\\projects\\c--Works-ClaudeCode-TradingStudio\\memory"
