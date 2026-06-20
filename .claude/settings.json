@@ -304,7 +304,12 @@
       "Bash(cd c:/Works/ClaudeCode/TradingStudio && rm -f configs/_mtf_*.json configs/_verify_*.json configs/_mtf_fix_*.json && git add scripts/fix_continuous.py && git status --short)",
       "Bash(git -C c:/Works/ClaudeCode/TradingStudio ls-files --others --exclude-standard configs/)",
       "Bash(git -C c:/Works/ClaudeCode/TradingStudio ls-files configs/)",
-      "Bash(git -C c:/Works/ClaudeCode/TradingStudio ls-files configs/*.report.json)"
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio ls-files configs/*.report.json)",
+      "Bash(ls test/TradingStudio.Engine.Tests/_wip/)",
+      "Bash(ls test/TradingStudio.Engine.Tests/IndicatorManagerTests.cs)",
+      "Bash(ls test/TradingStudio.Engine.Tests/StrategyContainerTests.cs)",
+      "Bash(ls test/TradingStudio.Engine.Tests/FeedbackMonitorTests.cs)",
+      "Bash(awk '{print $NF}')"
     ],
     "additionalDirectories": [
       "c:\\Users\\chenx\\.claude\\projects\\c--Works-ClaudeCode-TradingStudio\\memory",

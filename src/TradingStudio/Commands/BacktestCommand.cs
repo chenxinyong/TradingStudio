@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Strategy;
