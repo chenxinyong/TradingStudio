@@ -193,7 +193,6 @@ TraderApi 风控 → Simnow 模拟盘 → 小合约实盘
 ## 相关资源
 
 - [个人交易知识库 (Obsidian)](C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading) — 交易规则、品种研究、每日日志
-- [缠中说禅分析工具 (czsc)](https://github.com/waditu/czsc) — Python 参考实现
 - [QuantConnect Lean](https://github.com/QuantConnect/Lean) — 架构设计参考
 
 ---
