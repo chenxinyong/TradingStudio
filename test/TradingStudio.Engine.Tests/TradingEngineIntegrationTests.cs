@@ -141,7 +141,48 @@ public class TradingEngineIntegrationTests
         Assert.True(report.TotalReturn >= 0 || report.TotalReturn <= 0); // 有值即可
     }
 
-    // 多策略端到端回归测试已由 StrategyContainerTests（13用例）覆盖：
-    //   多策略注册/路由、品种订阅隔离、暂停恢复、OrderEvent路由、OnEndOfAlgorithm
-    // TradingEngine.RunAsync 多策略流程在 BacktestCommand 集成测试中验证
+    /// <summary>无状态微型策略 — 仅用于多策略集成测试，不需要预热</summary>
+    private class NoOpStrategy : IStrategy
+    {
+        public string Name => "NoOp";
+        public int BarCount;
+        public void Initialize(StrategyContext ctx) { }
+        public void OnBar(Bar bar) { BarCount++; }
+        public void OnTick(TickRecord tick, string inst) { }
+        public void OnOrderEvent(OrderEvent evt) { }
+        public void OnEndOfAlgorithm() { }
+    }
+
+    [Fact]
+    public async Task MultiStrategy_TwoStrategies_EngineRunsBoth()
+    {
+        // 注册测试策略
+        StrategyFactory.Register<NoOpStrategy>("NoOp");
+
+        var bars = BullBars(10);
+        var feed = new MockBarFeed(bars);
+        var registry = MakeRegistry();
+
+        var config1 = new StrategyConfig { StrategyId = "s1", StrategyType = "NoOp",
+            Instruments = ["rb2608"], Priority = 1, AllocatedCapital = 100_000 };
+        var config2 = new StrategyConfig { StrategyId = "s2", StrategyType = "NoOp",
+            Instruments = ["rb2608"], Priority = 2, AllocatedCapital = 100_000 };
+
+        var options = new EngineOptions
+        {
+            StartTime = bars[0].BarTime, EndTime = bars[^1].BarTime,
+            Instruments = ["rb2608"], StrategyConfigs = [config1, config2],
+            StartingCapital = 200_000, IsLive = false, WarmupDays = 0
+        };
+
+        var engine = new TradingEngine(feed, new ExecutionHandler(new RiskController()),
+            new PortfolioManager(200_000), new IndicatorManager(),
+            new StrategyContainer(), new RiskController(maxDrawdown: 1.0m),
+            new FeedbackMonitor(), new TickSnapshot(), options, registry);
+
+        var report = await engine.RunAsync(CancellationToken.None);
+
+        Assert.NotNull(report);
+        Assert.Equal(2, report.StrategyReports.Count);
+    }
 }
