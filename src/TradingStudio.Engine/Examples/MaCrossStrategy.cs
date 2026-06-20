@@ -29,6 +29,9 @@ public class MaCrossStrategy : IStrategy
     [StrategyParameter(Description = "最大保证金占比", DefaultValue = 0.25, Min = 0.10, Max = 0.50, Category = "Position")]
     public double MaxMarginRatio { get; set; } = 0.25;
 
+    [StrategyParameter(Description = "最大持仓手数", DefaultValue = 2, Min = 1, Max = 20, Category = "Position")]
+    public int MaxPosition { get; set; } = 2;
+
     public string Name => "双均线趋势跟踪(ATR风控)";
 
     private StrategyContext _ctx = null!;
@@ -68,27 +71,51 @@ public class MaCrossStrategy : IStrategy
         var hasLong = pos is not null && pos.Quantity > 0;
         var hasShort = pos is not null && pos.Quantity < 0;
 
-        // ── 出场 ──
+        // ── 出场 + 反手 ──
+        // 注意：_ctx.ClosePosition() 提交订单但不立即成交（下根 Bar 撮合），
+        // 所以同 Bar 内 hasLong/hasShort 仍为 true。必须显式反手，不能依赖入场段。
         if (hasLong)
         {
-            var exit = false; var reason = "";
-            if (s.FastMA < s.SlowMA && prevFast >= prevSlow) { exit = true; reason = "死叉平多"; }
-            else if (bar.LowDouble <= s.Trail) { exit = true; reason = $"止损@{s.Trail:F1}"; }
-            else { var t = bar.CloseDouble - StopAtrMult * s.Atr; if (t > s.Trail) s.Trail = t; }
+            var exit = false; var reverse = false;
+            if (s.FastMA < s.SlowMA && prevFast >= prevSlow)
+                { exit = true; reverse = true; }                                  // 死叉 → 平多反手做空
+            else if (bar.LowDouble <= s.Trail)
+                { exit = true; reverse = s.FastMA < s.SlowMA; }                   // 止损 → MA已转空才反手
+            else
+                { var t = bar.CloseDouble - StopAtrMult * s.Atr; if (t > s.Trail) s.Trail = t; }
 
-            if (exit) { _ctx.ClosePosition(bar.InstrumentId); s.Trail = 0; }
+            if (exit)
+            {
+                _ctx.ClosePosition(bar.InstrumentId); s.Trail = 0;
+                if (reverse)
+                {
+                    var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
+                    if (q > 0) { _ctx.MarketSell(bar.InstrumentId, q, "反手"); s.Trail = bar.CloseDouble + StopAtrMult * s.Atr; }
+                }
+            }
         }
         else if (hasShort)
         {
-            var exit = false; var reason = "";
-            if (s.FastMA > s.SlowMA && prevFast <= prevSlow) { exit = true; reason = "金叉平空"; }
-            else if (bar.HighDouble >= s.Trail) { exit = true; reason = $"止损@{s.Trail:F1}"; }
-            else { var t = bar.CloseDouble + StopAtrMult * s.Atr; if (t < s.Trail) s.Trail = t; }
+            var exit = false; var reverse = false;
+            if (s.FastMA > s.SlowMA && prevFast <= prevSlow)
+                { exit = true; reverse = true; }                                  // 金叉 → 平空反手做多
+            else if (bar.HighDouble >= s.Trail)
+                { exit = true; reverse = s.FastMA > s.SlowMA; }                   // 止损 → MA已转多才反手
+            else
+                { var t = bar.CloseDouble + StopAtrMult * s.Atr; if (t < s.Trail) s.Trail = t; }
 
-            if (exit) { _ctx.ClosePosition(bar.InstrumentId); s.Trail = 0; }
+            if (exit)
+            {
+                _ctx.ClosePosition(bar.InstrumentId); s.Trail = 0;
+                if (reverse)
+                {
+                    var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
+                    if (q > 0) { _ctx.MarketBuy(bar.InstrumentId, q, "反手"); s.Trail = bar.CloseDouble - StopAtrMult * s.Atr; }
+                }
+            }
         }
 
-        // ── 入场 ──
+        // ── 入场（仅首次开仓，反手已在出场段处理）──
         if (!hasLong && !hasShort)
         {
             if (s.Atr / bar.CloseDouble < 0.003) return; // 波动率太低
@@ -141,6 +168,9 @@ public class MaCrossStrategy : IStrategy
 
         // ⑥ 绝对上限 20 手
         if (lots > 20) lots = 20;
+
+        // ⑦ 策略自身持仓上限（与风控一致，避免信号被拦截）
+        if (lots > MaxPosition) lots = MaxPosition;
 
         return lots;
     }
