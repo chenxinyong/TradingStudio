@@ -55,7 +55,11 @@ public class ChanLunStrategy : IStrategy
             state.AllBars = history.ToList();
 
             var dayCoreBars = BuildDayBars(history);
-            var dayChanlunBars = BarAdapter.FromCoreBars(dayCoreBars);
+            state.DayBars = dayCoreBars;
+            state.LastDayUpdate = dayCoreBars.Count > 0
+                ? DateOnly.FromDateTime(dayCoreBars[^1].BarTime)
+                : DateOnly.MinValue;
+            var dayChanlunBars = BarAdapter.FromCoreBars(state.DayBars);
             var dayResult = ChanLunAnalyzer.Analyze(dayChanlunBars, minBiLen: 5);
             state.DayBis = dayResult.Bis;
 
@@ -104,10 +108,20 @@ public class ChanLunStrategy : IStrategy
         s.AllBars.Add(bar);
         if (s.HasPendingEntry) s.HasPendingEntry = false;
 
+        // 日线笔增量更新（每个新交易日用全量 AllBars 重建日线 OHLC）
+        var barDay = DateOnly.FromDateTime(bar.BarTime);
+        if (barDay > s.LastDayUpdate)
+        {
+            s.LastDayUpdate = barDay;
+            s.DayBars = BuildDayBars(s.AllBars);
+            var dayCL = BarAdapter.FromCoreBars(s.DayBars);
+            s.DayBis = ChanLunAnalyzer.Analyze(dayCL, minBiLen: 5).Bis;
+        }
+
         var dayDir = GetCurrentDayDirection(s, bar.BarTime);
         if (dayDir == DirectionType.Unknown) return;
 
-        // 增量检测新完成的 Bi
+        // 增量检测新完成的 30min Bi
         DetectNewBis(s);
 
         CheckBiCompletions(s, bar, dayDir);
@@ -303,10 +317,12 @@ public class ChanLunStrategy : IStrategy
         public double MinBiPower;
         public int MinBiLen;
 
-        public List<Bar> AllBars = [];  // 累计的全部 Bar（用于增量 Bi 检测）
+        public List<Bar> AllBars = [];  // 累计的全部 30min Bar（用于增量 Bi 检测）
+        public List<Bar> DayBars = [];   // 累计的日线 Bar（用于增量日线 Bi 检测）
         public List<Bi> DayBis = [];
         public List<Bi> All30mBis = [];
         public List<(DateTime EndTime, Bi Bi)> BiEndEvents = [];
+        public DateOnly LastDayUpdate;    // 上次更新日线 Bi 的日期
 
         private readonly Queue<double> _trWindow;
         private double _trSum;
