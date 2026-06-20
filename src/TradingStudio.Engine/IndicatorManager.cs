@@ -4,9 +4,18 @@ using TradingStudio.Core.Models;
 namespace TradingStudio.Engine;
 
 /// <summary>
-/// 指标管理器 — 引擎层的数据变换服务。
-/// 策略注册指标需求，引擎 feed 数据，策略只读访问结果。
-/// 同一品种同一指标只算一次，所有订阅策略共享。
+/// 指标管理器 — 引擎层的数据变换服务。策略注册指标 → 引擎 Feed Bar → 策略只读查询。
+///
+/// 调用链:
+///   Initialize:    Strategy.Initialize → ctx.RegisterIndicator → IndicatorManager.Register
+///                  (策略声明需求，同名指标去重复用)
+///   Main Loop:     DataFeed → Bar → IndicatorManager.Feed(bar)
+///                  (遍历 bar.InstrumentId 的所有注册指标，逐一 Update)
+///   策略 Bar 回调:  TradingEngine → Strategy.OnBar → ctx.GetIndicatorValue → IndicatorManager.GetValue
+///                  (策略在 OnBar 内查询指标当前值做决策)
+///
+/// 共享规则: 同一品种+同一指标名+同一 tag → 全局唯一实例，所有策略共享计算结果。
+/// 线程模型: 单线程主循环调用 — Feed 和 GetValue 都在引擎线程，无锁。
 /// </summary>
 public class IndicatorManager
 {

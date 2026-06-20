@@ -5,7 +5,26 @@ using TradingStudio.Core.Risk;
 namespace TradingStudio.Engine;
 
 /// <summary>
-/// 订单撮合引擎 — Bar 回放模式：市价/限价/止损单用下一根 Bar 撮合。
+/// 订单撮合引擎 — 回测和实盘共用。
+///
+/// 订单生命周期:
+///   Strategy.MarketBuy/Sell → EngineStrategyContext → ExecutionHandler.Submit
+///     → RiskController.CheckPreOrder (风控前置，拒绝则立即返回Rejected)
+///     → 回测: 订单进入 ActiveOrders 队列，等待下一 Tick/Bar 撮合
+///     → 实盘: 市价单通过 SendToExchange 发往 CTP TraderApi
+///     → ProcessTick/ProcessBar: 遍历 ActiveOrders，匹配价格 + 流动性约束
+///     → 完全成交: 移除出 ActiveOrders → PortfolioManager.ProcessFill
+///     → 订单事件写入 OrderHistory (完整审计追踪)
+///
+/// 双模式撮合:
+///   - Tick 模式: ProcessTick() — 用增量成交量 + Bid/Ask 五档撮合，每 Tick 可部分成交
+///   - Bar 模式:  ProcessBar()  — 用下一根 Bar 撮合，单笔≤Bar.Volume×10%，Open价成交防前向偏差
+///
+/// 前向偏差防护 (look-ahead bias):
+///   - 市价单: 用 Bar.Open 而非 Bar.Close 成交
+///   - 限价单: 成交价 ≤ min(LimitPrice, Open) 买入 / ≥ max(LimitPrice, Open) 卖出
+///   - 止损单: 成交价 = max(StopPrice, Open) 买入 / min(StopPrice, Open) 卖出
+///   修正前用 Bar.High/Bar.Low 极端价成交 → 回测结果虚高。
 /// </summary>
 public class ExecutionHandler : IExecutionHandler
 {
