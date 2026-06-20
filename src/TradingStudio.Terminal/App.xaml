@@ -5,6 +5,7 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <conv:ZeroToVisibleConverter x:Key="ZeroToVisible" />
+        <conv:StringToColorConverter x:Key="StringToColor" />
 
         <!-- ═══════════════════════════════════════════
              VS Code 暗色主题色板

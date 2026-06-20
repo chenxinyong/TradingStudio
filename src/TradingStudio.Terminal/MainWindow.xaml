@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="TradingStudio.Terminal" Height="900" Width="1400"
-        WindowStartupLocation="CenterScreen" WindowState="Maximized"
+        WindowStartupLocation="CenterScreen"
         WindowStyle="None" AllowsTransparency="False" ResizeMode="CanResizeWithGrip"
         BorderBrush="{StaticResource VsBorder}" BorderThickness="1"
         Background="{StaticResource VsBgPrimary}">
@@ -76,27 +76,132 @@
             </Setter>
         </Style>
 
-        <!-- 菜单项样式 -->
-        <Style TargetType="MenuItem">
-            <Setter Property="Foreground" Value="{StaticResource VsFgSecondary}" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Padding" Value="6,2" />
+        <!-- 菜单样式 — 暗色主题，保留完整 Popup 功能 -->
+        <Style TargetType="Menu">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{StaticResource VsFgPrimary}" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+
+        <!-- 顶级菜单按钮（文件/视图/帮助） -->
+        <Style x:Key="TopMenuHeader" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{StaticResource VsFgPrimary}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="MenuItem">
-                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter Content="{TemplateBinding Header}" />
+                        <Border x:Name="Border" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header"
+                                              RecognizesAccessKey="True"
+                                              VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter Property="Background" Value="{StaticResource VsBgHover}" />
+                                <Setter TargetName="Border" Property="Background"
+                                        Value="{StaticResource VsBgHover}" />
+                            </Trigger>
+                            <Trigger Property="IsSubmenuOpen" Value="True">
+                                <Setter TargetName="Border" Property="Background"
+                                        Value="{StaticResource VsBgHover}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- 子菜单项（Popup 内的菜单项） -->
+        <Style x:Key="SubMenuItem" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{StaticResource VsFgSecondary}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Border" Background="Transparent"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.Column="0" ContentSource="Header"
+                                                  VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{TemplateBinding InputGestureText}"
+                                           Foreground="{StaticResource VsFgMuted}"
+                                           FontSize="11" Margin="30,0,8,0"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Border" Property="Background"
+                                        Value="{StaticResource VsBgHover}" />
+                                <Setter Property="Foreground" Value="{StaticResource VsFgPrimary}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource VsFgMuted}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 顶级 MenuItem：用 Popup 包含子菜单 -->
+        <Style TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{StaticResource VsFgPrimary}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Background" Value="Transparent" />
+            <!-- 子菜单使用暗色样式 -->
+            <Setter Property="ItemContainerStyle" Value="{StaticResource SubMenuItem}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Border" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <ContentPresenter ContentSource="Header"
+                                                  RecognizesAccessKey="True"
+                                                  VerticalAlignment="Center" />
+                                <Popup x:Name="Popup" Placement="Bottom"
+                                       IsOpen="{TemplateBinding IsSubmenuOpen}"
+                                       AllowsTransparency="True" Focusable="False"
+                                       PopupAnimation="Fade">
+                                    <Border Background="{StaticResource VsBgTertiary}"
+                                            BorderBrush="{StaticResource VsBorder}"
+                                            BorderThickness="1" Padding="2"
+                                            MinWidth="180">
+                                        <StackPanel IsItemsHost="True"
+                                                    KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background"
+                                        Value="{StaticResource VsBgHover}" />
+                            </Trigger>
+                            <Trigger Property="IsSubmenuOpen" Value="True">
+                                <Setter TargetName="Border" Property="Background"
+                                        Value="{StaticResource VsBgHover}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+            <Setter Property="Background" Value="{StaticResource VsBorder}" />
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Margin" Value="4,3" />
         </Style>
 
         <Style x:Key="StatusItem" TargetType="TextBlock">
@@ -113,24 +218,29 @@
             <RowDefinition Height="32" />  <!-- 标题栏 -->
             <RowDefinition Height="28" />  <!-- 菜单+命令栏 -->
             <RowDefinition Height="*" />   <!-- 内容区 -->
-            <RowDefinition Height="24" />  <!-- 状态栏 -->
+            <RowDefinition Height="28" />  <!-- 状态栏 -->
         </Grid.RowDefinitions>
 
         <!-- ── 标题栏 ── -->
-        <Border Grid.Row="0" Background="{StaticResource VsBgTertiary}"
+        <Border Grid.Row="0" Background="{DynamicResource {x:Static SystemColors.ActiveCaptionBrushKey}}"
                 BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,0,1"
                 MouseDown="TitleBar_MouseDown">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                    <TextBlock Text="TradingStudio" FontSize="13" Foreground="{StaticResource VsFgPrimary}"
+                    <TextBlock Text="TradingStudio" FontSize="13"
+                               Foreground="{DynamicResource {x:Static SystemColors.ActiveCaptionTextBrushKey}}"
                                VerticalAlignment="Center" FontWeight="SemiBold" />
-                    <TextBlock Text="Terminal" FontSize="13" Foreground="{StaticResource VsFgMuted}"
-                               VerticalAlignment="Center" Margin="4,0,0,0" />
+                    <TextBlock x:Name="TitleText" Text=" Terminal" FontSize="13"
+                               Foreground="{DynamicResource {x:Static SystemColors.ActiveCaptionTextBrushKey}}"
+                               VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-                    <Button Style="{StaticResource WinButton}" Content="─" ToolTip="最小化" Click="Minimize_Click" />
-                    <Button Style="{StaticResource WinButton}" Content="□" ToolTip="最大化" Click="Maximize_Click" />
-                    <Button Style="{StaticResource CloseButton}" Content="✕" ToolTip="关闭" Click="Close_Click" />
+                    <Button Style="{StaticResource WinButton}" Content="─" ToolTip="最小化"
+                            Click="Minimize_Click" shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+                    <Button Style="{StaticResource WinButton}" Content="□" ToolTip="最大化"
+                            Click="Maximize_Click" shell:WindowChrome.IsHitTestVisibleInChrome="True" />
+                    <Button Style="{StaticResource CloseButton}" Content="✕" ToolTip="关闭"
+                            Click="Close_Click" shell:WindowChrome.IsHitTestVisibleInChrome="True" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -139,18 +249,48 @@
         <Border Grid.Row="1" Background="{StaticResource VsBgTertiary}"
                 BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,0,1">
             <Grid Margin="8,0">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
-                    <MenuItem Header="文件(_F)" FontSize="12" Padding="6,2" />
-                    <MenuItem Header="编辑(_E)" FontSize="12" Padding="6,2" />
-                    <MenuItem Header="视图(_V)" FontSize="12" Padding="6,2" />
-                    <MenuItem Header="工具(_T)" FontSize="12" Padding="6,2" />
-                    <MenuItem Header="帮助(_H)" FontSize="12" Padding="6,2" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="🔍" FontSize="12" VerticalAlignment="Center" />
-                    <TextBlock Text="搜索命令 (Ctrl+Shift+P)" FontSize="12"
-                               Foreground="{StaticResource VsFgMuted}" VerticalAlignment="Center" Margin="6,0,0,0" />
-                </StackPanel>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="300" />
+                </Grid.ColumnDefinitions>
+
+                <!-- 菜单 -->
+                <Menu Grid.Column="0" Background="Transparent"
+                      Foreground="{StaticResource VsFgPrimary}" FontSize="12" VerticalAlignment="Center">
+                    <MenuItem Header="文件(_F)" Padding="6,2">
+                        <MenuItem Header="连接引擎(_C)  Ctrl+F5" Click="Menu_Connect" />
+                        <Separator />
+                        <MenuItem Header="退出(_X)  Alt+F4" Click="Menu_Exit" />
+                    </MenuItem>
+                    <MenuItem Header="视图(_V)" Padding="6,2">
+                        <MenuItem Header="仪表盘(_D)  Ctrl+D" Click="Menu_Dashboard" />
+                        <MenuItem Header="K线图(_C)  Ctrl+C" Click="Menu_Chart" />
+                        <MenuItem Header="策略(_S)  Ctrl+S" Click="Menu_Strategies" />
+                        <MenuItem Header="订单(_O)  Ctrl+O" Click="Menu_Orders" />
+                    </MenuItem>
+                    <MenuItem Header="帮助(_H)" Padding="6,2">
+                        <MenuItem Header="关于(_A)" Click="Menu_About" />
+                    </MenuItem>
+                </Menu>
+
+                <!-- 命令栏 (Bloomberg-style, always visible) -->
+                <Border Grid.Column="2" CornerRadius="4" Margin="0,2,0,2"
+                        Background="#3C3C3C" BorderBrush="#555" BorderThickness="1"
+                        VerticalAlignment="Stretch">
+                    <TextBox x:Name="CommandBarInput"
+                             Background="Transparent"
+                             Foreground="{StaticResource VsFgPrimary}"
+                             BorderThickness="0" FontSize="12" Padding="8,0"
+                             CaretBrush="White" VerticalAlignment="Center"
+                             PreviewKeyDown="CommandBar_KeyDown">
+                        <TextBox.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="Transparent"/>
+                            </Style>
+                        </TextBox.Resources>
+                    </TextBox>
+                </Border>
             </Grid>
         </Border>
 
@@ -266,28 +406,35 @@
             </Border>
         </Grid>
 
-        <!-- ── 状态栏 (绑定 DashboardViewModel) ── -->
+        <!-- ── 状态栏 ── -->
         <Border Grid.Row="3" Background="{StaticResource VsStatusBar}"
-                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,1,0,0" Padding="8,0">
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,2,0,0" Padding="12,0">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,0,6,0">
-                        <Ellipse.Fill>
-                            <SolidColorBrush Color="{Binding StatusColor, FallbackValue=#4EC9B0}" />
-                        </Ellipse.Fill>
-                    </Ellipse>
-                    <TextBlock Text="{Binding StatusText, FallbackValue=● 已连接}" Foreground="White" FontSize="11" VerticalAlignment="Center" />
-                    <TextBlock Style="{StaticResource StatusItem}" Text="{Binding Session, StringFormat='📅 {0}', FallbackValue='📅 休市'}" />
-                    <TextBlock Style="{StaticResource StatusItem}"><Run Text="💰 ¥"/><Run Text="{Binding TotalEquity, StringFormat=N0, FallbackValue=102345}"/></TextBlock>
-                    <TextBlock Style="{StaticResource StatusItem}"><Run Text="品种 "/><Run Text="{Binding ConnectedInstruments, Mode=OneWay, FallbackValue=45}"/></TextBlock>
-                    <TextBlock Style="{StaticResource StatusItem}" Foreground="{StaticResource VsAccentYellow}"><Run Text="⚠ "/><Run Text="{Binding RecentAlerts.Count, Mode=OneWay, FallbackValue=3}"/></TextBlock>
+                    <!-- 连接指示灯 -->
+                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0"
+                             Fill="{Binding StatusColor, Converter={StaticResource StringToColor}}" />
+                    <TextBlock Text="{Binding StatusText, FallbackValue=● 已连接}"
+                               Foreground="White" FontSize="12" FontWeight="SemiBold"
+                               VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <TextBlock Text="{Binding Session, StringFormat='📅 {0}', FallbackValue='📅 休市'}"
+                               Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <TextBlock Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <Run Text="💰 ¥" />
+                        <Run Text="{Binding TotalEquity, StringFormat=N0, FallbackValue=102345}" />
+                    </TextBlock>
+                    <TextBlock Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <Run Text="品种 " />
+                        <Run Text="{Binding ConnectedInstruments, FallbackValue=42}" />
+                    </TextBlock>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center">
-                    <TextBlock Text="Ctrl+1~5" Foreground="{StaticResource VsFgMuted}" FontSize="10" />
+                <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
+                    <TextBlock Text="Ctrl+Shift+P 命令 | Ctrl+D 仪表盘 | Ctrl+C K线"
+                               Foreground="{StaticResource VsFgMuted}" FontSize="11" />
                 </StackPanel>
             </Grid>
         </Border>

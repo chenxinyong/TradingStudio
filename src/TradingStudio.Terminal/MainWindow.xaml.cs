@@ -2,6 +2,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
+using TradingStudio.Terminal.Commands;
+using TradingStudio.Terminal.Core.Commands;
+using TradingStudio.Terminal.Core.Messaging;
+using TradingStudio.Terminal.Services;
 using TradingStudio.Terminal.ViewModels;
 using TradingStudio.Terminal.Views;
 
@@ -10,28 +14,159 @@ namespace TradingStudio.Terminal;
 public partial class MainWindow : Window
 {
     private readonly DashboardViewModel _dashVM;
+    private readonly CommandRegistry _commands;
+    private readonly KeybindingRegistry _keybindings;
+    private readonly EventBus _eventBus;
+    private Rect _normalBounds; // saved position for restore
 
     public MainWindow()
     {
         InitializeComponent();
         _dashVM = App.Services.GetRequiredService<DashboardViewModel>();
+        _commands = App.Services.GetRequiredService<CommandRegistry>();
+        _keybindings = App.Services.GetRequiredService<KeybindingRegistry>();
+        _eventBus = App.Services.GetRequiredService<EventBus>();
+
         DataContext = _dashVM;
 
-        // 首页默认打开仪表盘
+        // Default tabs on startup
         OpenTab("📊 仪表盘", () => new DashboardView());
         OpenTab("📈 行情",    () => new ChartView());
 
-        KeyDown += (_, e) =>
+        // Register keyboard shortcuts from the command system
+        RegisterKeyBindings();
+
+        // Listen for connection state changes → update title bar
+        _eventBus.Subscribe<EngineConnectionChanged>(change =>
         {
-            if (e.KeyboardDevice.Modifiers != ModifierKeys.Control) return;
-            switch (e.Key) { case Key.D1: OpenTab("📊 仪表盘", () => new DashboardView()); break;
-                case Key.D2: OpenTab("📈 行情", () => new ChartView()); break; }
+            Dispatcher.Invoke(() =>
+            {
+                TitleText.Text = change.State switch
+                {
+                    ConnectionState.Connected => " Terminal ●",
+                    ConnectionState.Connecting => " Terminal ◉",
+                    _ => " Terminal ○"
+                };
+            });
+        });
+
+        // Global key handler for command shortcuts not covered by WPF InputBindings
+        KeyDown += OnGlobalKeyDown;
+
+        // Set placeholder text on command bar
+        CommandBarInput.Text = "";
+        CommandBarInput.LostFocus += (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(CommandBarInput.Text))
+                CommandBarInput.Text = "";
         };
+
+        // Maximize to work area (screen minus taskbar) so status bar isn't hidden
+        SourceInitialized += (_, _) => MaximizeToWorkArea();
     }
+
+    /// <summary>
+    /// Switch to a panel by its ID (for ActivityBar / Command integration).
+    /// </summary>
+    public void SwitchToPanel(string panelId)
+    {
+        switch (panelId)
+        {
+            case "dashboard":  NavDashboard_Click(this, new RoutedEventArgs()); break;
+            case "chart":      NavChart_Click(this, new RoutedEventArgs());     break;
+            case "strategies": NavStrategies_Click(this, new RoutedEventArgs()); break;
+            case "orders":     NavOrders_Click(this, new RoutedEventArgs());    break;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Keyboard Shortcuts (from KeybindingRegistry → WPF InputBindings)
+    // ═══════════════════════════════════════════════════════════
+
+    private void RegisterKeyBindings()
+    {
+        foreach (var command in _commands.All)
+        {
+            var wpfBinding = InputAdapter.CreateWpfKeyBinding(command);
+            if (wpfBinding != null)
+                InputBindings.Add(wpfBinding);
+        }
+    }
+
+    private void OnGlobalKeyDown(object sender, KeyEventArgs e)
+    {
+        // Ctrl+Shift+P or Ctrl+P → focus command bar
+        if (e.Key == Key.P && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+        {
+            CommandBarInput.Focus();
+            CommandBarInput.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        // Escape → clear command bar
+        if (e.Key == Key.Escape && CommandBarInput.IsFocused)
+        {
+            CommandBarInput.Text = "";
+            Keyboard.ClearFocus();
+            e.Handled = true;
+            return;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Command Bar (Bloomberg-style)
+    // ═══════════════════════════════════════════════════════════
+
+    private void CommandBar_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            var query = CommandBarInput.Text.Trim();
+            if (string.IsNullOrWhiteSpace(query)) return;
+
+            // Search commands
+            var matches = _commands.Search(query).ToList();
+            if (matches.Count == 1)
+            {
+                _ = _commands.ExecuteAsync(matches[0].Id);
+                CommandBarInput.Text = "";
+            }
+            else if (matches.Count > 1)
+            {
+                // Execute first match
+                _ = _commands.ExecuteAsync(matches[0].Id);
+                CommandBarInput.Text = "";
+            }
+            e.Handled = true;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Menu Click Handlers → CommandRegistry
+    // ═══════════════════════════════════════════════════════════
+
+    private void Menu_Connect(object s, RoutedEventArgs e)
+        => _ = _commands.ExecuteAsync("engine.connect");
+    private void Menu_Exit(object s, RoutedEventArgs e)
+        => Close();
+    private void Menu_Dashboard(object s, RoutedEventArgs e)
+        => _ = _commands.ExecuteAsync("view.dashboard");
+    private void Menu_Chart(object s, RoutedEventArgs e)
+        => _ = _commands.ExecuteAsync("view.chart");
+    private void Menu_Strategies(object s, RoutedEventArgs e)
+        => _ = _commands.ExecuteAsync("view.strategies");
+    private void Menu_Orders(object s, RoutedEventArgs e)
+        => _ = _commands.ExecuteAsync("view.orders");
+    private void Menu_About(object s, RoutedEventArgs e)
+        => _ = _commands.ExecuteAsync("help.about");
+
+    // ═══════════════════════════════════════════════════════════
+    // Tabs
+    // ═══════════════════════════════════════════════════════════
 
     void OpenTab(string title, Func<UIElement> factory)
     {
-        // 已有同标题标签 → 切换到它
         foreach (TabItem tab in MainTabs.Items)
             if (tab.Tag?.ToString() == title) { tab.IsSelected = true; return; }
 
@@ -49,10 +184,46 @@ public partial class MainWindow : Window
         }
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // Window Chrome
+    // ═══════════════════════════════════════════════════════════
+
     void TitleBar_MouseDown(object s, MouseButtonEventArgs e) { if (e.ClickCount == 2) Maximize_Click(s, e); else if (e.ChangedButton == MouseButton.Left) DragMove(); }
     void Minimize_Click(object s, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-    void Maximize_Click(object s, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    void Maximize_Click(object s, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            // Restore to saved normal bounds
+            WindowState = WindowState.Normal;
+            Left = _normalBounds.Left;
+            Top = _normalBounds.Top;
+            Width = _normalBounds.Width;
+            Height = _normalBounds.Height;
+        }
+        else
+        {
+            // Save current bounds, then maximize to work area (excludes taskbar)
+            _normalBounds = new Rect(Left, Top, Width, Height);
+            MaximizeToWorkArea();
+        }
+    }
+
+    private void MaximizeToWorkArea()
+    {
+        var workArea = SystemParameters.WorkArea;
+        WindowState = WindowState.Normal; // must be Normal to set bounds manually
+        Left = workArea.Left;
+        Top = workArea.Top;
+        Width = workArea.Width;
+        Height = workArea.Height;
+    }
     void Close_Click(object s, RoutedEventArgs e) => Close();
+
+    // ═══════════════════════════════════════════════════════════
+    // Navigation
+    // ═══════════════════════════════════════════════════════════
 
     void NavDashboard_Click(object s, RoutedEventArgs e)  => OpenTab("📊 仪表盘", () => new DashboardView());
     void NavChart_Click(object s, RoutedEventArgs e)      => OpenTab("📈 行情",    () => new ChartView());

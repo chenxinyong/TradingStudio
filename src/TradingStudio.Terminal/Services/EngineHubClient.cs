@@ -1,23 +1,26 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
+using TradingStudio.Terminal.Core.Messaging;
 
 namespace TradingStudio.Terminal.Services;
 
 /// <summary>
 /// SignalR 引擎客户端 — 单例，管理连接生命周期和事件分发。
+/// 双通道：C# event（直接订阅）+ EventBus（pub/sub 解耦）。
 /// </summary>
 public enum ConnectionState { Disconnected, Connecting, Connected, Degraded }
 
 public class EngineHubClient : IAsyncDisposable
 {
     private readonly ILogger<EngineHubClient> _log;
+    private readonly EventBus? _eventBus;
     private HubConnection? _connection;
     private readonly string _url;
 
     public ConnectionState State { get; private set; } = ConnectionState.Disconnected;
     public event Action<ConnectionState>? StateChanged;
 
-    // ── 服务端推送事件 ──
+    // ── 服务端推送事件 (C# event — 向后兼容) ──
     public event Action<IReadOnlyList<TickSnapshotItem>>? TickSnapshotReceived;
     public event Action<PortfolioUpdatedPayload>? PortfolioUpdated;
     public event Action<IReadOnlyList<StrategySnapshot>>? StrategiesUpdated;
@@ -25,10 +28,12 @@ public class EngineHubClient : IAsyncDisposable
     public event Action<MonitorAlert>? AlertReceived;
 
     public EngineHubClient(string url = "http://localhost:5199/hubs/engine",
-                           ILogger<EngineHubClient>? log = null)
+                           ILogger<EngineHubClient>? log = null,
+                           EventBus? eventBus = null)
     {
         _url = url;
         _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<EngineHubClient>.Instance;
+        _eventBus = eventBus;
     }
 
     public async Task ConnectAsync(CancellationToken ct = default)
@@ -40,34 +45,54 @@ public class EngineHubClient : IAsyncDisposable
             .WithAutomaticReconnect(new RetryPolicy())
             .Build();
 
-        // ── 服务端推送 → 类型化事件 ──
+        // ── 服务端推送 → 双通道分发 ──
         _connection.On<IReadOnlyList<TickSnapshotItem>>("TickSnapshot", items =>
         {
-            try { TickSnapshotReceived?.Invoke(items); }
+            try
+            {
+                TickSnapshotReceived?.Invoke(items);
+                _eventBus?.Publish(new TickBatchReceived(items));
+            }
             catch (Exception ex) { _log.LogError(ex, "TickSnapshot handler error"); }
         });
 
         _connection.On<PortfolioUpdatedPayload>("PortfolioUpdated", p =>
         {
-            try { PortfolioUpdated?.Invoke(p); }
+            try
+            {
+                PortfolioUpdated?.Invoke(p);
+                _eventBus?.Publish(new PortfolioChanged(p));
+            }
             catch (Exception ex) { _log.LogError(ex, "PortfolioUpdated handler error"); }
         });
 
         _connection.On<IReadOnlyList<StrategySnapshot>>("StrategiesUpdated", s =>
         {
-            try { StrategiesUpdated?.Invoke(s); }
+            try
+            {
+                StrategiesUpdated?.Invoke(s);
+                _eventBus?.Publish(new StrategiesChanged(s));
+            }
             catch (Exception ex) { _log.LogError(ex, "StrategiesUpdated handler error"); }
         });
 
         _connection.On<OrderEvent>("OrderFlowUpdated", o =>
         {
-            try { OrderUpdated?.Invoke(o); }
+            try
+            {
+                OrderUpdated?.Invoke(o);
+                _eventBus?.Publish(new OrderFlowReceived(o));
+            }
             catch (Exception ex) { _log.LogError(ex, "OrderUpdated handler error"); }
         });
 
         _connection.On<MonitorAlert>("AlertsUpdated", a =>
         {
-            try { AlertReceived?.Invoke(a); }
+            try
+            {
+                AlertReceived?.Invoke(a);
+                _eventBus?.Publish(new AlertOccurred(a));
+            }
             catch (Exception ex) { _log.LogError(ex, "Alert handler error"); }
         });
 
@@ -113,6 +138,7 @@ public class EngineHubClient : IAsyncDisposable
         if (State == state) return;
         State = state;
         StateChanged?.Invoke(state);
+        _eventBus?.Publish(new EngineConnectionChanged(state));
     }
 
     public async ValueTask DisposeAsync()
@@ -154,3 +180,12 @@ public record OrderEvent(long OrderId, string InstrumentId, string StrategyId,
 
 public record MonitorAlert(string Type, string StrategyId, string Message,
     string Severity, DateTimeOffset Timestamp);
+
+// ── EventBus 消息类型（SignalR → EventBus）──
+
+public record TickBatchReceived(IReadOnlyList<TickSnapshotItem> Items);
+public record PortfolioChanged(PortfolioUpdatedPayload Portfolio);
+public record StrategiesChanged(IReadOnlyList<StrategySnapshot> Strategies);
+public record OrderFlowReceived(OrderEvent Order);
+public record AlertOccurred(MonitorAlert Alert);
+public record EngineConnectionChanged(ConnectionState State);
