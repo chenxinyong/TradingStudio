@@ -6,7 +6,7 @@ namespace TradingStudio.Engine.Examples;
 
 /// <summary>
 /// 双均线多周期策略 — 1min 入场 + 日线趋势过滤。
-/// 日线 SMA(20) 向上 → 只做多；向下 → 只做空。1min 金叉/死叉 入场。
+/// 日线 SMA(233) 向上 → 只做多；向下 → 只做空。1min 金叉/死叉 入场。
 /// </summary>
 public class MaCrossMultiTfStrategy : IStrategy
 {
@@ -16,8 +16,8 @@ public class MaCrossMultiTfStrategy : IStrategy
     [StrategyParameter(Description = "慢线周期", DefaultValue = 20, Min = 5, Max = 200, Category = "Entry")]
     public int SlowPeriod { get; set; } = 20;
 
-    [StrategyParameter(Description = "日线趋势周期", DefaultValue = 20, Min = 5, Max = 60, Category = "Trend")]
-    public int DayTrendPeriod { get; set; } = 20;
+    [StrategyParameter(Description = "日线趋势周期", DefaultValue = 233, Min = 5, Max = 250, Category = "Trend")]
+    public int DayTrendPeriod { get; set; } = 233;
 
     [StrategyParameter(Description = "每笔交易手数", DefaultValue = 1, Min = 1, Max = 100, Category = "Position")]
     public int Quantity { get; set; } = 1;
