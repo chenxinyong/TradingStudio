@@ -239,4 +239,72 @@ public class TickExecutionTests
         Assert.Equal(1, fills[1].FilledQty);
         Assert.Equal(OrderEventType.PartiallyFilled, fills[1].Type);
     }
+
+    // ═══ 多策略优先级 ═══
+
+    [Fact]
+    public void Priority_HighGetsLiquidityFirst()
+    {
+        var h = new ExecutionHandler(new RiskController());
+        h.SetStrategyPriority("low", 99);
+        h.SetStrategyPriority("high", 1);
+
+        h.Submit(new Order { InstrumentId = "rb", Direction = OrderDirection.Buy,
+            Type = OrderType.Market, Quantity = 5, StrategyId = "low" }, "low");
+        h.Submit(new Order { InstrumentId = "rb", Direction = OrderDirection.Buy,
+            Type = OrderType.Market, Quantity = 5, StrategyId = "high" }, "high");
+
+        // 增量仅3手 → 高优先级(Priority=1)拿走全部3手
+        h.ProcessTick(Tick(last: 3500, bid: 3499, ask: 3500, vol: 0), "rb", Rb);
+        var fills = h.ProcessTick(Tick(last: 3500, bid: 3499, ask: 3500, vol: 3), "rb", Rb);
+
+        Assert.Single(fills);                     // 只有高优先级成交
+        Assert.Equal("high", fills[0].StrategyId); // 确认是高优先级
+        Assert.Equal(3, fills[0].FilledQty);       // 拿走全部流动性
+    }
+
+    // ═══ Tick vs Bar 撮合对比 ═══
+
+    [Fact]
+    public void TickMode_MarketBuySlippage_UsesAskPrice()
+    {
+        // Tick 模式: Ask=3500, Slippage=1 tick → Fill=3501
+        var h = new ExecutionHandler(new RiskController());
+        h.Submit(new Order { InstrumentId = "rb", Direction = OrderDirection.Buy,
+            Type = OrderType.Market, Quantity = 1, StrategyId = "s" }, "s");
+        var fills = h.ProcessTick(Tick(last: 3500, bid: 3499, ask: 3500, vol: 100), "rb", Rb);
+        Assert.Equal(3501m, fills[0].FillPrice);
+    }
+
+    [Fact]
+    public void BarMode_MarketBuySlippage_UsesOpenPrice()
+    {
+        // Bar 模式: Open=3500, Slippage=1 tick → Fill=3501
+        var h = new ExecutionHandler(new RiskController());
+        h.Submit(new Order { InstrumentId = "rb", Direction = OrderDirection.Buy,
+            Type = OrderType.Market, Quantity = 1, StrategyId = "s" }, "s");
+        var bar = new Bar { InstrumentId = "rb", Open = P(3500), High = P(3550), Low = P(3490), Close = P(3520), BarTime = DateTime.Today };
+        var fills = h.ProcessBar(bar, Rb);
+        Assert.Equal(3501m, fills[0].FillPrice);
+    }
+
+    [Fact]
+    public void TickVsBar_SameDirection_SlippageConsistent()
+    {
+        // Tick 和 Bar 的滑点都 = 1 tick，方向一致
+        var hTick = new ExecutionHandler(new RiskController());
+        hTick.Submit(new Order { InstrumentId = "rb", Direction = OrderDirection.Buy,
+            Type = OrderType.Market, Quantity = 1, StrategyId = "s" }, "s");
+        var tickFills = hTick.ProcessTick(Tick(last: 3500, bid: 3499, ask: 3500, vol: 100), "rb", Rb);
+
+        var hBar = new ExecutionHandler(new RiskController());
+        hBar.Submit(new Order { InstrumentId = "rb", Direction = OrderDirection.Buy,
+            Type = OrderType.Market, Quantity = 1, StrategyId = "s" }, "s");
+        var bar = new Bar { InstrumentId = "rb", Open = P(3500), High = P(3550), Low = P(3490), Close = P(3520), BarTime = DateTime.Today };
+        var barFills = hBar.ProcessBar(bar, Rb);
+
+        // 两种模式的滑点都是 1 tick，成交价差不超过 1 tick
+        var diff = Math.Abs(tickFills[0].FillPrice - barFills[0].FillPrice);
+        Assert.True(diff <= 1m);
+    }
 }

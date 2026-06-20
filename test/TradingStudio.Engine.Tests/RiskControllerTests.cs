@@ -20,14 +20,14 @@ public class RiskControllerTests
         public IReadOnlyList<Position> AllPositions => Position is null ? [] : [Position];
         public IReadOnlyList<Order> ActiveOrders => [];
         public IReadOnlyList<Trade> TradeHistory => [];
-        public IReadOnlyList<SubPortfolioState> SubPortfolios => [];
+        public IReadOnlyList<SubPortfolioState> SubPortfolios { get; set; } = [];
     }
 
-    private static Order Buy(string inst = "rb", int qty = 1)
-        => new() { InstrumentId = inst, Direction = OrderDirection.Buy, Quantity = qty };
+    private static Order Buy(string inst = "rb", int qty = 1, string sid = "s1")
+        => new() { InstrumentId = inst, Direction = OrderDirection.Buy, Quantity = qty, StrategyId = sid };
 
-    private static Order Sell(string inst = "rb", int qty = 1)
-        => new() { InstrumentId = inst, Direction = OrderDirection.Sell, Quantity = qty };
+    private static Order Sell(string inst = "rb", int qty = 1, string sid = "s1")
+        => new() { InstrumentId = inst, Direction = OrderDirection.Sell, Quantity = qty, StrategyId = sid };
 
     // ═══════════════════════════════════════════
     // MaxPositionPerInstrumentRule
@@ -264,5 +264,88 @@ public class RiskControllerTests
         var pf = new MockPortfolio(); // 全部正常
         var result = rc.CheckPreOrder(Buy(qty: 3), pf);
         Assert.True(result.Passed);
+    }
+
+    // ═══════════════════════════════════════════
+    // MaxStrategyDrawdownRule
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public void StrategyDD_WithinLimit_Passes()
+    {
+        var rc = new RiskController(maxStrategyDrawdown: 0.20m); // 策略回撤上限20%
+        var pf = new MockPortfolio
+        {
+            SubPortfolios = [new SubPortfolioState { StrategyId = "s1", PeakEquity = 100_000, Equity = 90_000 }]
+        };
+        var result = rc.CheckPreOrder(Buy(), pf);
+        Assert.True(result.Passed); // DD=10% < 20%
+    }
+
+    [Fact]
+    public void StrategyDD_ExceedsLimit_RejectsNewLong()
+    {
+        var rc = new RiskController(maxStrategyDrawdown: 0.20m);
+        var pf = new MockPortfolio
+        {
+            SubPortfolios = [new SubPortfolioState { StrategyId = "s1", PeakEquity = 100_000, Equity = 70_000 }]
+        };
+        var result = rc.CheckPreOrder(Buy(), pf);
+        Assert.False(result.Passed); // DD=30% > 20%
+    }
+
+    [Fact]
+    public void StrategyDD_ExceedsLimit_AllowsCloseLong()
+    {
+        var rc = new RiskController(maxStrategyDrawdown: 0.20m);
+        var pf = new MockPortfolio
+        {
+            Position = new Position { InstrumentId = "rb", Quantity = 2, AvgPrice = 3500 },
+            SubPortfolios = [new SubPortfolioState { StrategyId = "s1", PeakEquity = 100_000, Equity = 70_000 }]
+        };
+        var result = rc.CheckPreOrder(Sell(qty: 2), pf);
+        Assert.True(result.Passed); // 平多 = 减仓，允许穿透
+    }
+
+    [Fact]
+    public void StrategyDD_ExceedsLimit_StillRejectsAddPosition()
+    {
+        var rc = new RiskController(maxStrategyDrawdown: 0.20m);
+        var pf = new MockPortfolio
+        {
+            Position = new Position { InstrumentId = "rb", Quantity = 1, AvgPrice = 3500 },
+            SubPortfolios = [new SubPortfolioState { StrategyId = "s1", PeakEquity = 100_000, Equity = 70_000 }]
+        };
+        var result = rc.CheckPreOrder(Buy(qty: 2), pf);
+        Assert.False(result.Passed); // 加仓 = 风险增加，拦截
+    }
+
+    [Fact]
+    public void StrategyDD_DifferentStrategy_Independent()
+    {
+        var rc = new RiskController(maxStrategyDrawdown: 0.20m);
+        var pf = new MockPortfolio
+        {
+            SubPortfolios = [new SubPortfolioState { StrategyId = "s1", PeakEquity = 100_000, Equity = 70_000 }]
+        };
+        // s2 不在 SubPortfolios 中 → 无数据 → 放行
+        var order = new Order { InstrumentId = "rb", Direction = OrderDirection.Buy, Quantity = 1, StrategyId = "s2" };
+        var result = rc.CheckPreOrder(order, pf);
+        Assert.True(result.Passed);
+    }
+
+    [Fact]
+    public void StrategyDD_CombinedWithGlobalDD()
+    {
+        // 策略回撤=0.20, 全局回撤=0.25 — 两个规则都激活
+        var rc = new RiskController(maxDrawdown: 0.25m, maxStrategyDrawdown: 0.20m);
+        var pf = new MockPortfolio
+        {
+            Equity = 80_000, StartingCapital = 100_000, // 全局DD=20% < 25%
+            SubPortfolios = [new SubPortfolioState { StrategyId = "s1", PeakEquity = 100_000, Equity = 70_000 }]
+        };
+        // 全局DD OK, 但策略DD=30% > 20% → 应被策略规则拦截
+        var result = rc.CheckPreOrder(Buy(), pf);
+        Assert.False(result.Passed);
     }
 }

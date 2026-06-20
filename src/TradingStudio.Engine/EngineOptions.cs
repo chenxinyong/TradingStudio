@@ -18,4 +18,7 @@ public class EngineOptions
 
     /// <summary>预热天数：启动前加载多少天历史 Bar 喂策略（0=不预热）</summary>
     public int WarmupDays { get; init; }
+
+    /// <summary>跳过集合竞价 Tick（FlagAuction=1 的 Tick 不处理）</summary>
+    public bool SkipAuction { get; init; } = true;
 }

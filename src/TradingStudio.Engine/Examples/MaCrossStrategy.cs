@@ -1,4 +1,5 @@
 using TradingStudio.Core.Engine;
+using TradingStudio.Core.Indicators;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Strategy;
 
@@ -8,6 +9,8 @@ namespace TradingStudio.Engine.Examples;
 /// 双均线趋势跟踪 — ATR动态仓位 + 追踪止损。
 /// SMA金叉做多/死叉做空，反向穿越或追踪止损出场。
 /// 仓位: 风险金额/(ATR止损距离×合约乘数)，受保证金上限25%约束。
+///
+/// 指标管理: SMA走IndicatorManager（共享/去重），ATR策略内自算。
 /// </summary>
 public class MaCrossStrategy : IStrategy
 {
@@ -35,7 +38,11 @@ public class MaCrossStrategy : IStrategy
     public string Name => "双均线趋势跟踪(ATR风控)";
 
     private StrategyContext _ctx = null!;
-    private readonly Dictionary<string, State> _state = new();
+    private readonly Dictionary<string, InstrumentState> _state = new();
+
+    // 注册的 SMA 指标引用（用于预热期手动 Feed）
+    private readonly Dictionary<string, IIndicator> _fastSmas = new();
+    private readonly Dictionary<string, IIndicator> _slowSmas = new();
 
     public void Initialize(StrategyContext context)
     {
@@ -48,10 +55,29 @@ public class MaCrossStrategy : IStrategy
                 context.LogWarning($"{inst}: 历史不足 ({history.Count}<{SlowPeriod + AtrPeriod})");
                 continue;
             }
-            var s = new State(FastPeriod, SlowPeriod, AtrPeriod);
-            foreach (var bar in history) s.Update(bar);
+
+            // 注册 SMA 指标到 IndicatorManager（多策略共享去重）
+            var fastTag = FastPeriod.ToString();
+            var slowTag = SlowPeriod.ToString();
+            var fastSma = context.RegisterIndicator(inst, new SmaIndicator(FastPeriod), fastTag);
+            var slowSma = context.RegisterIndicator(inst, new SmaIndicator(SlowPeriod), slowTag);
+            _fastSmas[inst] = fastSma;
+            _slowSmas[inst] = slowSma;
+
+            // 预热：手动 Feed 指标 + ATR
+            var s = new InstrumentState(AtrPeriod);
+            foreach (var bar in history)
+            {
+                fastSma.Update(bar);
+                slowSma.Update(bar);
+                s.UpdateAtr(bar);
+            }
             _state[inst] = s;
-            context.Log($"{inst}: Fast={s.FastMA:F2} Slow={s.SlowMA:F2} ATR={s.Atr:F2} ({history.Count} bars)");
+
+            // 保存预热结束时的 SMA 值，作为实盘首根 Bar 的"前值"
+            s.PrevFast = context.GetIndicatorValue(inst, "SMA", fastTag);
+            s.PrevSlow = context.GetIndicatorValue(inst, "SMA", slowTag);
+            context.Log($"{inst}: Fast={s.PrevFast:F2} Slow={s.PrevSlow:F2} ATR={s.Atr:F2} ({history.Count} bars)");
         }
         _ctx.Log($"初始化: {Name} [{string.Join(", ", context.SubscribedInstruments)}]");
     }
@@ -61,26 +87,44 @@ public class MaCrossStrategy : IStrategy
     public void OnBar(Bar bar)
     {
         if (!_state.TryGetValue(bar.InstrumentId, out var s)) return;
-        if (_ctx.IsWarmup) { s.Update(bar); return; }
 
-        var prevFast = s.FastMA;
-        var prevSlow = s.SlowMA;
-        s.Update(bar);
+        // 预热期：手动 Feed 指标（IndicatorManager.Feed 在实盘主循环才调用）
+        if (_ctx.IsWarmup)
+        {
+            _fastSmas[bar.InstrumentId].Update(bar);
+            _slowSmas[bar.InstrumentId].Update(bar);
+            s.UpdateAtr(bar);
+            s.PrevFast = _ctx.GetIndicatorValue(bar.InstrumentId, "SMA", FastPeriod.ToString());
+            s.PrevSlow = _ctx.GetIndicatorValue(bar.InstrumentId, "SMA", SlowPeriod.ToString());
+            return;
+        }
+
+        // 查询当前 SMA 值（IndicatorManager.Feed 在 OnBar 之前已更新，取到的是含当前 Bar 的最新值）
+        var fastTag = FastPeriod.ToString();
+        var slowTag = SlowPeriod.ToString();
+        var curFast = _ctx.GetIndicatorValue(bar.InstrumentId, "SMA", fastTag);
+        var curSlow = _ctx.GetIndicatorValue(bar.InstrumentId, "SMA", slowTag);
+        if (double.IsNaN(curFast) || double.IsNaN(curSlow)) return;
+
+        // 上一根 Bar 的 SMA 值（保存在 InstrumentState 中，用于穿越检测）
+        var prevFast = s.PrevFast;
+        var prevSlow = s.PrevSlow;
+
+        // Feed ATR（策略内自算）
+        s.UpdateAtr(bar);
 
         var pos = _ctx.GetPosition(bar.InstrumentId);
         var hasLong = pos is not null && pos.Quantity > 0;
         var hasShort = pos is not null && pos.Quantity < 0;
 
         // ── 出场 + 反手 ──
-        // 注意：_ctx.ClosePosition() 提交订单但不立即成交（下根 Bar 撮合），
-        // 所以同 Bar 内 hasLong/hasShort 仍为 true。必须显式反手，不能依赖入场段。
         if (hasLong)
         {
             var exit = false; var reverse = false;
-            if (s.FastMA < s.SlowMA && prevFast >= prevSlow)
+            if (curFast < curSlow && prevFast >= prevSlow)
                 { exit = true; reverse = true; }                                  // 死叉 → 平多反手做空
             else if (bar.LowDouble <= s.Trail)
-                { exit = true; reverse = s.FastMA < s.SlowMA; }                   // 止损 → MA已转空才反手
+                { exit = true; reverse = curFast < curSlow; }                     // 止损 → MA已转空才反手
             else
                 { var t = bar.CloseDouble - StopAtrMult * s.Atr; if (t > s.Trail) s.Trail = t; }
 
@@ -97,10 +141,10 @@ public class MaCrossStrategy : IStrategy
         else if (hasShort)
         {
             var exit = false; var reverse = false;
-            if (s.FastMA > s.SlowMA && prevFast <= prevSlow)
+            if (curFast > curSlow && prevFast <= prevSlow)
                 { exit = true; reverse = true; }                                  // 金叉 → 平空反手做多
             else if (bar.HighDouble >= s.Trail)
-                { exit = true; reverse = s.FastMA > s.SlowMA; }                   // 止损 → MA已转多才反手
+                { exit = true; reverse = curFast > curSlow; }                     // 止损 → MA已转多才反手
             else
                 { var t = bar.CloseDouble + StopAtrMult * s.Atr; if (t < s.Trail) s.Trail = t; }
 
@@ -118,26 +162,29 @@ public class MaCrossStrategy : IStrategy
         // ── 入场（仅首次开仓，反手已在出场段处理）──
         if (!hasLong && !hasShort)
         {
-            if (s.Atr / bar.CloseDouble < 0.003) return; // 波动率太低
+            if (s.Atr / bar.CloseDouble < 0.003) return;
 
-            if (prevFast <= prevSlow && s.FastMA > s.SlowMA)
+            if (prevFast <= prevSlow && curFast > curSlow)
             {
                 var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
                 if (q > 0) { _ctx.MarketBuy(bar.InstrumentId, q, "金叉"); s.Trail = bar.CloseDouble - StopAtrMult * s.Atr; }
             }
-            else if (prevFast >= prevSlow && s.FastMA < s.SlowMA)
+            else if (prevFast >= prevSlow && curFast < curSlow)
             {
                 var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
                 if (q > 0) { _ctx.MarketSell(bar.InstrumentId, q, "死叉"); s.Trail = bar.CloseDouble + StopAtrMult * s.Atr; }
             }
         }
+
+        // 保存当前 SMA 值作为下一根 Bar 的"前值"（穿越检测用）
+        s.PrevFast = curFast;
+        s.PrevSlow = curSlow;
     }
 
     public void OnOrderEvent(OrderEvent evt) { }
     public void OnEndOfAlgorithm() { }
 
-    /// <summary>ATR动态仓位: 风险金额/(止损距离×乘数)，多重约束</summary>
-    private int CalcLots(double price, State s, string instId)
+    private int CalcLots(double price, InstrumentState s, string instId)
     {
         if (s.Atr <= 0) return 0;
         var f = _ctx.GetFuture(instId);
@@ -146,63 +193,50 @@ public class MaCrossStrategy : IStrategy
         var equity = (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital);
         var contractValue = price * mult;
 
-        // ① ATR/Price ≥ 0.5% — 波动率太低无法交易
         if (s.Atr / price < 0.005) return 0;
 
-        // ② 止损距离 ≥ 0.5% 合约价值（防止止损太近导致过大仓位）
         var stopDist = StopAtrMult * s.Atr;
         var riskPerLot = stopDist * mult;
         if (riskPerLot < contractValue * 0.005) return 0;
 
-        // ③ ATR仓位: riskAmt / riskPerLot
         var riskAmt = equity * RiskPerTrade;
         int lots = Math.Max(1, (int)(riskAmt / riskPerLot));
 
-        // ④ 名义价值上限: ≤ 1× equity（防止杠杆失控）
         var maxByNotional = (int)(equity / contractValue);
         if (lots > maxByNotional) lots = maxByNotional;
 
-        // ⑤ 保证金上限: ≤ MaxMarginRatio × equity
         var marginPerLot = contractValue * marginRate;
         while (lots > 0 && marginPerLot * lots > equity * MaxMarginRatio) lots--;
 
-        // ⑥ 绝对上限 20 手
         if (lots > 20) lots = 20;
-
-        // ⑦ 策略自身持仓上限（与风控一致，避免信号被拦截）
         if (lots > MaxPosition) lots = MaxPosition;
 
         return lots;
     }
 
-    private class State
+    /// <summary>品种状态 — ATR自算 + 追踪止损位 + 前值快照</summary>
+    private class InstrumentState
     {
-        private readonly int _fn, _sn, _an;
-        private readonly Queue<double> _fq, _sq, _trq;
-        private double _fs, _ss, _ts, _prev = double.NaN;
-        public double FastMA, SlowMA, Atr, Trail;
+        private readonly int _an;
+        private readonly Queue<double> _trq;
+        private double _ts, _prev = double.NaN;
+        public double Atr, Trail;
+        public double PrevFast = double.NaN, PrevSlow = double.NaN;  // 上一根 Bar 的 SMA 值（穿越检测用）
 
-        public State(int fn, int sn, int an)
-        { _fn = fn; _sn = sn; _an = an; _fq = new(fn + 1); _sq = new(sn + 1); _trq = new(an + 1); }
+        public InstrumentState(int atrPeriod)
+        { _an = atrPeriod; _trq = new(atrPeriod + 1); }
 
-        public void Update(Bar bar)
+        public void UpdateAtr(Bar bar)
         {
-            var c = bar.CloseDouble;
-            // Fast SMA
-            _fq.Enqueue(c); _fs += c; if (_fq.Count > _fn) _fs -= _fq.Dequeue();
-            if (_fq.Count >= _fn) FastMA = _fs / _fn;
-            // Slow SMA
-            _sq.Enqueue(c); _ss += c; if (_sq.Count > _sn) _ss -= _sq.Dequeue();
-            if (_sq.Count >= _sn) SlowMA = _ss / _sn;
-            // ATR
             if (!double.IsNaN(_prev))
             {
                 var tr = Math.Max(bar.HighDouble - bar.LowDouble,
                     Math.Max(Math.Abs(bar.HighDouble - _prev), Math.Abs(bar.LowDouble - _prev)));
-                _trq.Enqueue(tr); _ts += tr; if (_trq.Count > _an) _ts -= _trq.Dequeue();
+                _trq.Enqueue(tr); _ts += tr;
+                if (_trq.Count > _an) _ts -= _trq.Dequeue();
                 if (_trq.Count >= _an) Atr = _ts / _an;
             }
-            _prev = c;
+            _prev = bar.CloseDouble;
         }
     }
 }

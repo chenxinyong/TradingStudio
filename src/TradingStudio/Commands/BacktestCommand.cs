@@ -73,7 +73,8 @@ public class BacktestCommand
 
         var risk = new RiskController(
             maxPosition: strategyConfig.MaxPositionPerInstrument > 0 ? strategyConfig.MaxPositionPerInstrument : 5,
-            maxDrawdown: strategyConfig.MaxDrawdownPct > 0 ? strategyConfig.MaxDrawdownPct : 0.25m);
+            maxDrawdown: strategyConfig.MaxDrawdownPct > 0 ? strategyConfig.MaxDrawdownPct : 0.25m,
+            maxStrategyDrawdown: strategyConfig.MaxDrawdownPct > 0 ? strategyConfig.MaxDrawdownPct : 0.25m);
         var feedback = new FeedbackMonitor();
         var tickSnapshot = new TickSnapshot();
         var execution = new ExecutionHandler(risk);
@@ -102,6 +103,7 @@ public class BacktestCommand
             StrategyConfigs = [strategyConfig],
             StartingCapital = startCapital,
             WarmupDays = warmupDays,
+            SkipAuction = strategyConfig.SkipAuction,
         };
 
         // 4. 构建数据源

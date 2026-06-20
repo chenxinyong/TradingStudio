@@ -36,6 +36,7 @@ public class PerformanceReport
 
         var maxDrawdown = DrawdownCalculator.CalculateMaxDrawdown(equityCurve);
         var (sharpe, sortino) = CalculateRatios(equityCurve);
+        var cagr = CalculateCAGR(equityCurve, subPortfolio.AllocatedCapital, subPortfolio.Equity);
 
         return new PerformanceReport
         {
@@ -43,6 +44,7 @@ public class PerformanceReport
             StartingCapital = subPortfolio.AllocatedCapital,
             FinalEquity = subPortfolio.Equity,
             TotalNetProfit = subPortfolio.Equity - subPortfolio.AllocatedCapital,
+            CompoundingAnnualReturn = cagr,
             MaxDrawdown = (decimal)maxDrawdown,
             SharpeRatio = (decimal)sharpe,
             SortinoRatio = (decimal)sortino,
@@ -59,6 +61,18 @@ public class PerformanceReport
             EquityCurve = equityCurve.ToList(),
             Trades = trades.ToList(),
         };
+    }
+
+    /// <summary>计算年化复合收益率 (CAGR)</summary>
+    private static decimal CalculateCAGR(
+        IReadOnlyList<(DateTimeOffset Time, decimal Equity)> equityCurve,
+        decimal startCapital, decimal finalEquity)
+    {
+        if (equityCurve.Count < 2 || startCapital <= 0) return 0;
+        var years = (equityCurve[^1].Time - equityCurve[0].Time).TotalDays / 365.25;
+        if (years <= 0) return 0;
+        var totalReturn = (double)(finalEquity / startCapital);
+        return (decimal)(Math.Pow(totalReturn, 1.0 / years) - 1.0);
     }
 
     /// <summary>从权益曲线计算年化 Sharpe 和 Sortino 比率</summary>

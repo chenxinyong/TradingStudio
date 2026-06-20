@@ -13,6 +13,7 @@ public class ExecutionHandler : IExecutionHandler
     private readonly List<OrderEvent> _orderHistory = new();
     private readonly RiskController _risk;
     private readonly Dictionary<string, int> _lastCumulativeVolume = new();
+    private readonly Dictionary<string, int> _strategyPriority = new();  // StrategyId → Priority (越小越优先)
     private readonly object _sync = new();  // 保护 _activeOrders / _orderHistory 并发访问（Submit 和 REST API 可能并发）
     private long _nextOrderId = 1;
 
@@ -40,6 +41,12 @@ public class ExecutionHandler : IExecutionHandler
     public ExecutionHandler(RiskController risk)
     {
         _risk = risk;
+    }
+
+    /// <summary>注册策略优先级。引擎在注册策略时调用。Priority 越小越优先。</summary>
+    public void SetStrategyPriority(string strategyId, int priority)
+    {
+        _strategyPriority[strategyId] = priority;
     }
 
     public OrderTicket Submit(Order order, string strategyId, Core.Risk.IPortfolioState? portfolio = null)
@@ -137,7 +144,8 @@ public class ExecutionHandler : IExecutionHandler
         List<Order> pending;
         lock (_sync) { pending = _activeOrders
             .Where(o => o.InstrumentId == instrumentId)
-            .OrderBy(o => o.OrderId)
+            .OrderBy(o => _strategyPriority.GetValueOrDefault(o.StrategyId, int.MaxValue))
+            .ThenBy(o => o.OrderId)
             .ToList();
         }
 
@@ -240,7 +248,8 @@ public class ExecutionHandler : IExecutionHandler
         List<Order> pending;
         lock (_sync) { pending = _activeOrders
             .Where(o => o.InstrumentId == bar.InstrumentId)
-            .OrderBy(o => o.OrderId)
+            .OrderBy(o => _strategyPriority.GetValueOrDefault(o.StrategyId, int.MaxValue))
+            .ThenBy(o => o.OrderId)
             .ToList();
         }
 

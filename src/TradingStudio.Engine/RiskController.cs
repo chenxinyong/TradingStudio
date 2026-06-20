@@ -11,11 +11,14 @@ public class RiskController
 {
     private readonly List<IRiskRule> _rules = new();
 
-    public RiskController(int maxPosition = 5, int maxOrderQty = 100, decimal maxDrawdown = 0.25m)
+    public RiskController(int maxPosition = 5, int maxOrderQty = 100, decimal maxDrawdown = 0.25m,
+        decimal maxStrategyDrawdown = 0)
     {
         _rules.Add(new MaxPositionPerInstrumentRule(maxPosition));
         _rules.Add(new MaxOrderQuantityRule(maxOrderQty));
         _rules.Add(new MaxDrawdownRule(maxDrawdown));
+        if (maxStrategyDrawdown > 0)
+            _rules.Add(new MaxStrategyDrawdownRule(maxStrategyDrawdown));
     }
 
     public void AddRule(IRiskRule rule) => _rules.Add(rule);
@@ -133,6 +136,39 @@ public class RiskController
                     return RiskCheckResult.Reject(Name,
                         $"Drawdown {drawdown:P2} > {_threshold:P2} — rejecting new orders");
             }
+            return RiskCheckResult.Pass;
+        }
+
+        public RiskCheckResult CheckPostFill(OrderEvent fill, IPortfolioState portfolio) => RiskCheckResult.Pass;
+        public RiskCheckResult CheckPeriodic(IPortfolioState portfolio) => RiskCheckResult.Pass;
+    }
+
+    /// <summary>策略级回撤风控：单个策略回撤超限 → 拒绝该策略新开仓</summary>
+    private class MaxStrategyDrawdownRule : IRiskRule
+    {
+        private readonly decimal _threshold;
+        public string Name => "MaxStrategyDrawdown";
+
+        public MaxStrategyDrawdownRule(decimal threshold) => _threshold = threshold;
+
+        public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
+        {
+            // 允许减仓/平仓 — 风险降低类订单不受策略回撤限制
+            var existing = portfolio.GetPosition(order.InstrumentId);
+            if (existing != null)
+            {
+                if (order.Direction == OrderDirection.Buy && existing.Quantity < 0) return RiskCheckResult.Pass;
+                if (order.Direction == OrderDirection.Sell && existing.Quantity > 0) return RiskCheckResult.Pass;
+            }
+
+            // 查找对应子账户
+            var sub = portfolio.SubPortfolios.FirstOrDefault(s => s.StrategyId == order.StrategyId);
+            if (sub == null || sub.PeakEquity <= 0) return RiskCheckResult.Pass;
+
+            var drawdown = 1m - sub.Equity / sub.PeakEquity;
+            if (drawdown > _threshold)
+                return RiskCheckResult.Reject(Name,
+                    $"Strategy '{order.StrategyId}' drawdown {drawdown:P2} > {_threshold:P2}");
             return RiskCheckResult.Pass;
         }
 

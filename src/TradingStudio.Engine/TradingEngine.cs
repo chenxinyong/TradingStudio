@@ -107,6 +107,8 @@ public class TradingEngine
             }
 
             _strategies.Register(strategy, config, ctx);
+            if (_execution is ExecutionHandler eh)
+                eh.SetStrategyPriority(config.StrategyId, config.Priority);
             Console.WriteLine($"[Engine] Strategy '{config.StrategyId}' ({strategy.Name}) initialized (history={barHistory.Count} bars)");
         }
 
@@ -141,6 +143,10 @@ public class TradingEngine
             {
                 case TickEvent tickEvt:
                 {
+                    // 集合竞价过滤：跳过非连续交易时段的噪音 Tick
+                    if (_options.SkipAuction && tickEvt.Tick.IsAuction)
+                        break;
+
                     var inst = _registry.Resolve(tickEvt.InstrumentId);
                     if (inst == null) break;
 

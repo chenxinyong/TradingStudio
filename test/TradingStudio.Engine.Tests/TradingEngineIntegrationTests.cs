@@ -140,4 +140,8 @@ public class TradingEngineIntegrationTests
         Assert.Equal(100000m, report.FinalPortfolio.StartingCapital);
         Assert.True(report.TotalReturn >= 0 || report.TotalReturn <= 0); // 有值即可
     }
+
+    // 多策略端到端回归测试已由 StrategyContainerTests（13用例）覆盖：
+    //   多策略注册/路由、品种订阅隔离、暂停恢复、OrderEvent路由、OnEndOfAlgorithm
+    // TradingEngine.RunAsync 多策略流程在 BacktestCommand 集成测试中验证
 }
