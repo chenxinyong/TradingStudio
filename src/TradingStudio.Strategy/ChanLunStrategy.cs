@@ -13,7 +13,7 @@ public class ChanLunStrategy : IStrategy
     [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2, Min = 1, Max = 5, Category = "Risk")]
     public double StopAtrMult { get; set; } = 2.0;
 
-    [StrategyParameter(Description = "最小笔力度(万分比)", DefaultValue = 200, Min = 50, Max = 500, Category = "Signal")]
+    [StrategyParameter(Description = "最小笔力度(万分比)", DefaultValue = 200, Min = 10, Max = 500, Category = "Signal")]
     public double MinBiPower { get; set; } = 200;
 
     [StrategyParameter(Description = "最小笔长度(K线数)", DefaultValue = 3, Min = 2, Max = 10, Category = "Signal")]
@@ -51,12 +51,15 @@ public class ChanLunStrategy : IStrategy
                 AtrPeriod, StopAtrMult, MinBiPower, MinBiLen);
             _state[inst] = state;
 
+            // 保存全部 Bar 用于增量 Bi 检测
+            state.AllBars = history.ToList();
+
             var dayCoreBars = BuildDayBars(history);
             var dayChanlunBars = BarAdapter.FromCoreBars(dayCoreBars);
             var dayResult = ChanLunAnalyzer.Analyze(dayChanlunBars, minBiLen: 5);
             state.DayBis = dayResult.Bis;
 
-            var m30Bars = BarAdapter.FromCoreBars(history);
+            var m30Bars = BarAdapter.FromCoreBars(state.AllBars);
             var m30Result = ChanLunAnalyzer.Analyze(m30Bars, minBiLen: MinBiLen);
             state.All30mBis = m30Result.Bis;
 
@@ -68,7 +71,17 @@ public class ChanLunStrategy : IStrategy
             foreach (var bar in history)
                 state.UpdateAtr(bar);
 
-            context.Log($"{inst}: Day={dayResult.BiCount}BI, 30min={m30Result.BiCount}BI, ATR={state.CurrentAtr:F2}");
+            // 预处理：跳过所有预热期 Bi 事件（EndTime ≤ 最后预热 Bar 时间），避免涌入实盘首根 Bar
+            // 注：LastBarTime - 1 秒，确保 EndTime == LastBarTime 的 Bi 能被 > 条件捕获
+            state.LastBarTime = history.Count > 0 ? history[^1].BarTime.AddSeconds(-1) : DateTime.MinValue;
+            while (state.NextBiEventIdx < state.BiEndEvents.Count)
+            {
+                var (endTime, _) = state.BiEndEvents[state.NextBiEventIdx];
+                if (endTime > state.LastBarTime) break;
+                state.NextBiEventIdx++;
+            }
+
+            context.Log($"{inst}: Day={dayResult.BiCount}BI, 30min={m30Result.BiCount}BI, Pending={state.BiEndEvents.Count - state.NextBiEventIdx}Bi, ATR={state.CurrentAtr:F2}");
         }
 
         _ctx.Log($"初始化: {Name} on [{string.Join(", ", context.SubscribedInstruments)}]");
@@ -83,19 +96,48 @@ public class ChanLunStrategy : IStrategy
         if (_ctx.IsWarmup)
         {
             s.UpdateAtr(bar);
-            s.LastBarTime = bar.BarTime;
+            // AllBars 已在 Initialize 中加载，LastBarTime 也由 Initialize 设好
             return;
         }
 
         s.UpdateAtr(bar);
+        s.AllBars.Add(bar);
         if (s.HasPendingEntry) s.HasPendingEntry = false;
 
         var dayDir = GetCurrentDayDirection(s, bar.BarTime);
         if (dayDir == DirectionType.Unknown) return;
 
+        // 增量检测新完成的 Bi
+        DetectNewBis(s);
+
         CheckBiCompletions(s, bar, dayDir);
         CheckStopLoss(s, bar);
-        s.LastBarTime = bar.BarTime;
+        s.LastBarTime = bar.BarTime.AddSeconds(-1);  // 边界：确保 EndTime == bar.BarTime 的 Bi 在下根 Bar 能被 > 捕获
+    }
+
+    /// <summary>重新分析 30min Bar 序列，找出新完成的 Bi</summary>
+    private void DetectNewBis(InstrumentState s)
+    {
+        if (s.AllBars.Count == 0) return;
+        var chanlunBars = BarAdapter.FromCoreBars(s.AllBars);
+        var result = ChanLunAnalyzer.Analyze(chanlunBars, minBiLen: MinBiLen);
+
+        // 比较新旧 Bi 列表，找出新增的完成 Bi
+        var prevCount = s.All30mBis.Count;
+        if (result.Bis.Count <= prevCount) return;
+
+        // 把新增的 Bi 追加到事件队列
+        for (int i = prevCount; i < result.Bis.Count; i++)
+        {
+            var bi = result.Bis[i];
+            // 只加入已完成的 Bi（Bi.EndTime <= 最后一根 Bar 的时间）
+            if (bi.DtEnd <= s.AllBars[^1].BarTime)
+                s.BiEndEvents.Add((bi.DtEnd, bi));
+        }
+        s.All30mBis = result.Bis;
+
+        // 重新排序事件队列（首次不重置索引——Initialize中已设置好）
+        s.BiEndEvents = s.BiEndEvents.OrderBy(x => x.EndTime).ToList();
     }
 
     public void OnOrderEvent(OrderEvent evt)
@@ -134,14 +176,17 @@ public class ChanLunStrategy : IStrategy
             var (endTime, bi) = s.BiEndEvents[s.NextBiEventIdx];
             if (endTime > bar.BarTime) break;
             if (endTime > s.LastBarTime || s.LastBarTime == default)
+            {
                 ProcessBiCompletion(s, bar, bi, dayDir);
+            }
             s.NextBiEventIdx++;
         }
     }
 
     private void ProcessBiCompletion(InstrumentState s, Bar bar, Bi completedBi, DirectionType dayDir)
     {
-        if (completedBi.Power < MinBiPower || completedBi.BarCount < MinBiLen) return;
+        if (completedBi.Power < MinBiPower || completedBi.BarCount < MinBiLen)
+            return;
         if (s.CurrentAtr <= 0) return;
 
         var pos = _ctx.GetPosition(s.InstrumentId);
@@ -258,6 +303,7 @@ public class ChanLunStrategy : IStrategy
         public double MinBiPower;
         public int MinBiLen;
 
+        public List<Bar> AllBars = [];  // 累计的全部 Bar（用于增量 Bi 检测）
         public List<Bi> DayBis = [];
         public List<Bi> All30mBis = [];
         public List<(DateTime EndTime, Bi Bi)> BiEndEvents = [];
