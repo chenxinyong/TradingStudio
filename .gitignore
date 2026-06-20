@@ -455,3 +455,7 @@ log.txt
 
 # 示例/实验输出
 examples/college-advisor/output/
+
+# 批量回测生成产物
+configs/batch/
+configs/grid/

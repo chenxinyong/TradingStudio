@@ -173,12 +173,15 @@ public class ExecutionHandler : IExecutionHandler
         var fillQty = Math.Min(order.Quantity - order.FilledQuantity, remainingVolume);
         if (fillQty <= 0) return null;
 
+        // TickSize 需缩放到 ×10⁷ 以匹配 TickRecord 价格单位
+        var tickSizeScaled = (long)(future.TickSize * TickRecord.PriceScale);
+
         decimal? fillPrice = order.Type switch
         {
             OrderType.Market when order.Direction == OrderDirection.Buy
-                => (decimal)(tick.AskPrice1 + future.TickSize) / TickRecord.PriceScale,
+                => (decimal)(tick.AskPrice1 + tickSizeScaled) / TickRecord.PriceScale,
             OrderType.Market when order.Direction == OrderDirection.Sell
-                => (decimal)(tick.BidPrice1 - future.TickSize) / TickRecord.PriceScale,
+                => (decimal)(tick.BidPrice1 - tickSizeScaled) / TickRecord.PriceScale,
             OrderType.Limit when order.Direction == OrderDirection.Buy
                 && tick.AskPrice1 > 0 && tick.AskPrice1 <= order.LimitPrice * TickRecord.PriceScale
                 => (decimal)tick.AskPrice1 / TickRecord.PriceScale,
