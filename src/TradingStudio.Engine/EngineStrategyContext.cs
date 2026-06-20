@@ -96,7 +96,7 @@ internal class EngineStrategyContext : StrategyContext
             Type = OrderType.Market,
             Quantity = quantity,
             Tag = tag,
-        }, StrategyId);
+        }, StrategyId, _portfolio);
     }
 
     public override OrderTicket ClosePosition(string instrumentId)
@@ -127,7 +127,7 @@ internal class EngineStrategyContext : StrategyContext
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Sell,
             Type = OrderType.Limit, Quantity = quantity, LimitPrice = limitPrice,
-        }, StrategyId);
+        }, StrategyId, _portfolio);
     }
 
     public override OrderTicket StopBuy(string instrumentId, int quantity, decimal stopPrice)
@@ -147,7 +147,7 @@ internal class EngineStrategyContext : StrategyContext
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Sell,
             Type = OrderType.Stop, Quantity = quantity, StopPrice = stopPrice,
-        }, StrategyId);
+        }, StrategyId, _portfolio);
     }
 
     // ═══ 仓位 ═══

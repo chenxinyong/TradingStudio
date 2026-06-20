@@ -73,10 +73,14 @@ public class RiskController
         public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
         {
             var existing = portfolio.GetPosition(order.InstrumentId);
-            var newQty = (existing?.Quantity ?? 0) + order.Quantity;
+            var currentQty = existing?.Quantity ?? 0;
+            // 区分买卖方向：买加仓、卖减仓 / 开空加负仓、平空减负仓
+            var newQty = order.Direction == OrderDirection.Buy
+                ? currentQty + order.Quantity
+                : currentQty - order.Quantity;
             if (Math.Abs(newQty) > _maxPositions)
                 return RiskCheckResult.Reject(Name,
-                    $"Position limit: {Math.Abs(newQty)} > {_maxPositions} for {order.InstrumentId}");
+                    $"Position limit: |{newQty}| > {_maxPositions} for {order.InstrumentId}");
             return RiskCheckResult.Pass;
         }
 
@@ -114,6 +118,14 @@ public class RiskController
 
         public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
         {
+            // 允许减仓/平仓（风险降低类订单），避免回撤超限后关不掉仓位
+            var existing = portfolio.GetPosition(order.InstrumentId);
+            if (existing != null)
+            {
+                if (order.Direction == OrderDirection.Buy && existing.Quantity < 0) return RiskCheckResult.Pass;
+                if (order.Direction == OrderDirection.Sell && existing.Quantity > 0) return RiskCheckResult.Pass;
+            }
+
             if (portfolio.StartingCapital > 0)
             {
                 var drawdown = 1m - portfolio.Equity / portfolio.StartingCapital;
