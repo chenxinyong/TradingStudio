@@ -188,7 +188,7 @@ public class PortfolioManager : IPortfolioState
         }
         else
         {
-            var newQty = pos.Quantity + (fill.Direction == OrderDirection.Buy ? fill.Quantity : -fill.Quantity);
+            var newQty = pos!.Quantity + (fill.Direction == OrderDirection.Buy ? fill.Quantity : -fill.Quantity);
 
             if (Math.Sign(newQty) == Math.Sign(pos.Quantity) || newQty == 0)
             {

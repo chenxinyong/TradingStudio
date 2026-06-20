@@ -175,7 +175,7 @@ static async Task RunLiveAsync(string[] args)
     {
         var traderOpts = new CtpTraderOptions
         {
-            TraderFront = cfg["Live:TraderFront"],
+            TraderFront = cfg["Live:TraderFront"]!,
             BrokerId = cfg["Live:BrokerId"] ?? "9999",
             UserId = cfg["Live:UserId"] ?? "",
             Password = cfg["Live:Password"] ?? "",

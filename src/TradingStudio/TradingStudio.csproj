@@ -10,6 +10,8 @@
     <RuntimeIdentifier Condition="'$(Configuration)' == 'Debug'">win-x64</RuntimeIdentifier>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <!-- NU1510: Hosting 是直接依赖 + Serilog传递依赖，保留显式引用 -->
+    <NoWarn>NU1510</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

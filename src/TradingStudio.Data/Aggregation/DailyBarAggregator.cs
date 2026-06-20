@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using TradingStudio.Core.Models;
-using TradingStudio.Core.Models;
 
 namespace TradingStudio.Data.Aggregation;
 

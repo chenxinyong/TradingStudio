@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using TradingStudio.Core.Models;
-using TradingStudio.Core.Models;
 
 namespace TradingStudio.Data.Aggregation;
 
@@ -21,7 +20,6 @@ public class BarAggregator : IDisposable, IAsyncDisposable
     public ChannelReader<Bar> Output => _output.Reader;
 
     public event Action<Bar>? OnBar;
-    public event Action<string>? OnMinuteChange; // instrumentId that switched minute
 
     public BarAggregator()
     {

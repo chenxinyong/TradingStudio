@@ -188,6 +188,26 @@ TraderApi 风控规则引擎 → simnow 模拟盘 → 小合约实盘验证。
 - 配置项不硬编码，从外部配置读取
 - 先跑通再优化，不提前做过度抽象
 
+### Git 分支策略
+
+```
+main ← feat/* ← fix/* ← chore/*
+```
+
+| 分支类型 | 命名 | 用途 | 生命周期 |
+|----------|------|------|----------|
+| `main` | — | 唯一主线，功能合并目标 | 永久 |
+| `feat/*` | `feat/chanlun-backtest`, `feat/grid-search` | 新功能/策略开发 | 合并后删除 |
+| `fix/*` | `fix/sqlite-vuln`, `fix/bar-overlap` | 缺陷修复 | 合并后删除 |
+| `chore/*` | `chore/clean-configs` | 工程卫生/重构 | 合并后删除 |
+
+**规则：**
+- 从 `main` 创建分支，完成后合并回 `main`
+- 不在 `main` 上直接开发大于单 commit 的功能
+- 合并前确保测试全绿（当前：64/64）
+- 小修复（<20行、单文件、编译器可验证）可直接在 `main` 提交
+- 实验性工作（网格搜索、策略探索）产出放在 gitignored 目录（`configs/grid/`、`configs/batch/`）
+
 ### 合约规格文档更新
 
 `gen_final_specs.py` 从 AKShare 拉取合约规格 → 知识库。`gen_symbols_json.py` 生成 `symbols.json`（品种 + 交易规则，75 个品种）。

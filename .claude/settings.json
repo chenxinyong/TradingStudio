@@ -290,10 +290,25 @@
       "Bash(git -C c:/Works/ClaudeCode/TradingStudio add .claude/settings.json)",
       "Bash(git -C c:/Works/ClaudeCode/TradingStudio status)",
       "Bash(git -C c:/Works/ClaudeCode/TradingStudio add .gitignore)",
-      "Bash(git -C c:/Works/ClaudeCode/TradingStudio status --short)"
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio status --short)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio check-ignore examples/college-advisor/output/)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio commit -m '@ *)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio push)",
+      "Bash(python -c \"import duckdb, matplotlib, numpy; print\\('OK'\\)\")",
+      "Bash(python scripts/v_signal_verify.py)",
+      "Bash(python scripts/v_trade_chart.py)",
+      "Bash(python -X utf8 -c ' *)",
+      "Bash(python -X utf8 scripts/batch_backtest.py)",
+      "Bash(python -X utf8 scripts/grid_search.py)",
+      "Bash(python -X utf8 scripts/fix_continuous.py c p l)",
+      "Bash(cd c:/Works/ClaudeCode/TradingStudio && rm -f configs/_mtf_*.json configs/_verify_*.json configs/_mtf_fix_*.json && git add scripts/fix_continuous.py && git status --short)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio ls-files --others --exclude-standard configs/)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio ls-files configs/)",
+      "Bash(git -C c:/Works/ClaudeCode/TradingStudio ls-files configs/*.report.json)"
     ],
     "additionalDirectories": [
-      "c:\\Users\\chenx\\.claude\\projects\\c--Works-ClaudeCode-TradingStudio\\memory"
+      "c:\\Users\\chenx\\.claude\\projects\\c--Works-ClaudeCode-TradingStudio\\memory",
+      "C:\\Works\\ClaudeCode\\TradingStudio\\configs"
     ]
   }
 }
