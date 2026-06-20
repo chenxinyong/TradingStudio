@@ -56,9 +56,14 @@ public class ChanLunStrategy : IStrategy
 
             var dayCoreBars = BuildDayBars(history);
             state.DayBars = dayCoreBars;
-            state.LastDayUpdate = dayCoreBars.Count > 0
-                ? DateOnly.FromDateTime(dayCoreBars[^1].BarTime)
-                : DateOnly.MinValue;
+            // 预热期最后一日移到 CurrentDayBar（实盘首 Bar 若同日则累积，若新日则 Flush）
+            if (dayCoreBars.Count > 0)
+            {
+                state.CurrentDayBar = dayCoreBars[^1];
+                state.HasCurrentDayBar = true;
+                state.DayBars.RemoveAt(state.DayBars.Count - 1);
+                state.LastDayUpdate = DateOnly.FromDateTime(state.CurrentDayBar.BarTime);
+            }
             var dayChanlunBars = BarAdapter.FromCoreBars(state.DayBars);
             var dayResult = ChanLunAnalyzer.Analyze(dayChanlunBars, minBiLen: 5);
             state.DayBis = dayResult.Bis;
@@ -108,14 +113,34 @@ public class ChanLunStrategy : IStrategy
         s.AllBars.Add(bar);
         if (s.HasPendingEntry) s.HasPendingEntry = false;
 
-        // 日线笔增量更新（每个新交易日用全量 AllBars 重建日线 OHLC）
+        // 日线笔增量更新：每根 Bar 累积 OHLC，新交易日 Flush 并重分析
         var barDay = DateOnly.FromDateTime(bar.BarTime);
-        if (barDay > s.LastDayUpdate)
+        var isNewDay = !s.HasCurrentDayBar || barDay != s.LastDayUpdate;
+
+        if (isNewDay)
         {
+            // Flush 上一日 Bar
+            if (s.HasCurrentDayBar)
+            {
+                s.DayBars.Add(s.CurrentDayBar);
+                // 新日 Bar 生成 → 重分析日线 Bi
+                var allDayBars = new List<Bar>(s.DayBars);
+                var dayCL = BarAdapter.FromCoreBars(allDayBars);
+                s.DayBis = ChanLunAnalyzer.Analyze(dayCL, minBiLen: 5).Bis;
+            }
+            s.CurrentDayBar = new Bar { InstrumentId = bar.InstrumentId, TradingDay = bar.TradingDay,
+                BarTime = barDay.ToDateTime(TimeOnly.MinValue),
+                Open = bar.Open, High = bar.High, Low = bar.Low, Close = bar.Close, Volume = bar.Volume };
+            s.HasCurrentDayBar = true;
             s.LastDayUpdate = barDay;
-            s.DayBars = BuildDayBars(s.AllBars);
-            var dayCL = BarAdapter.FromCoreBars(s.DayBars);
-            s.DayBis = ChanLunAnalyzer.Analyze(dayCL, minBiLen: 5).Bis;
+        }
+        else
+        {
+            // 同日后续 Bar → 更新 OHLC
+            if (bar.High > s.CurrentDayBar.High) s.CurrentDayBar.High = bar.High;
+            if (bar.Low < s.CurrentDayBar.Low) s.CurrentDayBar.Low = bar.Low;
+            s.CurrentDayBar.Close = bar.Close;
+            s.CurrentDayBar.Volume += bar.Volume;
         }
 
         var dayDir = GetCurrentDayDirection(s, bar.BarTime);
@@ -318,7 +343,9 @@ public class ChanLunStrategy : IStrategy
         public int MinBiLen;
 
         public List<Bar> AllBars = [];  // 累计的全部 30min Bar（用于增量 Bi 检测）
-        public List<Bar> DayBars = [];   // 累计的日线 Bar（用于增量日线 Bi 检测）
+        public List<Bar> DayBars = [];   // 已完成日线 Bar 列表
+        public Bar CurrentDayBar;         // 当日累积中的日 Bar
+        public bool HasCurrentDayBar;     // CurrentDayBar 是否有效
         public List<Bi> DayBis = [];
         public List<Bi> All30mBis = [];
         public List<(DateTime EndTime, Bi Bi)> BiEndEvents = [];
