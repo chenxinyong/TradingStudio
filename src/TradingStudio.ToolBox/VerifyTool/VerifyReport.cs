@@ -6,6 +6,7 @@ public enum DimensionStatus { Pass, Warn, Fail, Skip }
 public class VerifyReport
 {
     public string DbPath { get; set; } = "";
+    public string Engine { get; set; } = "SQLite";  // "SQLite" or "DuckDB"
     public DateTime VerifiedAt { get; set; } = DateTime.Now;
     public long FileSizeBytes { get; set; }
     public DateTime DateMin { get; set; }

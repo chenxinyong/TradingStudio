@@ -103,7 +103,7 @@ public class VerifyTool : IToolCommand
         Console.WriteLine("═══════════════════════════════════════");
         Console.WriteLine("  Data Verification Report");
         Console.WriteLine("═══════════════════════════════════════");
-        Console.WriteLine($"  DB:      {Path.GetFileName(dbPath)}  ({sizeStr})");
+        Console.WriteLine($"  DB:      {Path.GetFileName(dbPath)}  ({sizeStr})  [{r.Engine}]");
         Console.WriteLine($"  Range:   {r.DateMin:yyyy-MM-dd} ~ {r.DateMax:yyyy-MM-dd}");
         Console.WriteLine($"  Tables:  bars_1min={r.Bars1Min.RowCount:N0}  bars_day={r.BarsDay.RowCount:N0}");
         Console.WriteLine($"  Instruments: {r.Bars1Min.InstrumentCount} / {r.BarsDay.InstrumentCount}");

@@ -17,6 +17,8 @@ public class ToolRegistry
         Register(new MergeTool.MergeTool());
         Register(new AnalyzeTool.AnalyzeTool());
         Register(new ContinuousTool.ContinuousTool());
+        Register(new AppendTool.AppendTool());
+        Register(new BuildPeriodsTool.BuildPeriodsTool());
         // 未来扩展：只需加下面这类行
         // Register(new InfoTool.InfoTool());
         // Register(new ConvertTool.ConvertTool());
