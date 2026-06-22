@@ -8,7 +8,7 @@
 ## 用户背景
 
 - 20年C#工程师，50岁，长期关注股票与期货交易
-- 技术舒适区：C# (.NET 8+)
+- 技术舒适区：C# (.NET 10)
 - 定位：个人发烧友，研究与量化并重，工匠工作室而非企业级产品
 
 ---
@@ -77,12 +77,16 @@ src/
 │   └── 命令: import / import-jinshuyuan / import-url / verify / merge / append / build-periods / analyze / continuous
 ├── TradingStudio/           引擎主程序 (.NET Host + DI + Serilog)
 │   ├── Program.cs           入口（live / collect / backtest）
-│   ├── Services/            CollectService, LiveDataCollector, PeriodMaintainer, SessionScheduler, HealthMonitor
+│   ├── Services/            CollectService, LiveDataCollector, QuotePipeline, PeriodMaintainer, SessionScheduler
 │   ├── Commands/            BacktestCommand
 │   ├── Options/             CollectOptions
 │   ├── appsettings.json     Serilog + CTP + DuckDB 默认配置
 │   └── symbols.json         品种数据
-└── scripts/                 daily_import.ps1, gen_symbols_json.py
+├── scripts/                 daily_import.ps1, data_status.py, gen_symbols_json.py
+└── test/
+    ├── TradingStudio.Core.Tests/   17 tests — TickRecord, Bar, CsvTickRecord
+    ├── TradingStudio.Data.Tests/   16 tests — BarAggregator, MultiBarAggregator, CsvTickImporter
+    └── TradingStudio.Engine.Tests/ 116 tests — TradingEngine, Strategy, Execution
 ```
 
 ### 三种运行模式
@@ -253,7 +257,7 @@ main ← feat/* ← fix/* ← chore/*
 **规则：**
 - 从 `main` 创建分支，完成后合并回 `main`
 - 不在 `main` 上直接开发大于单 commit 的功能
-- 合并前确保测试全绿（当前：64/64）
+- 合并前确保测试全绿（当前：149/149 — Core 17 + Data 16 + Engine 116）
 - 小修复（<20行、单文件、编译器可验证）可直接在 `main` 提交
 - 实验性工作（网格搜索、策略探索）产出放在 gitignored 目录（`configs/grid/`、`configs/batch/`）
 
