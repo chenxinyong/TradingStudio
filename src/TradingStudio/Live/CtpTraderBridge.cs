@@ -35,39 +35,31 @@ public class CtpTraderBridge : IDisposable
 
     public void Connect()
     {
-        Console.WriteLine($"[CTP-Trader] Connect() called: Front={_opts.TraderFront} Broker={_opts.BrokerId} User={_opts.UserId} AuthCode={_opts.AuthCode?.Substring(0,4)}...");
         _trader = new CTP.TraderApi();
 
-        // ① OnFrontConnected → 先认证
         _trader.OnFrontConnected += () =>
         {
-            Console.WriteLine($"[CTP-Trader] FrontConnected: {_opts.TraderFront}");
             _log.Information("CTP Trader connected: {Front}", _opts.TraderFront);
             if (!string.IsNullOrEmpty(_opts.AuthCode))
             {
-                Console.WriteLine("[CTP-Trader] Authenticating...");
                 _log.Information("CTP Trader authenticating...");
                 _trader.Authenticate(_opts.BrokerId, _opts.UserId, _opts.AuthCode, _opts.AppId ?? "simnow_client_test");
             }
             else
             {
-                Console.WriteLine("[CTP-Trader] No auth, login directly");
                 _trader.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
             }
         };
 
-        // ② OnAuth → 认证成功后登录
         _trader.OnAuth += err =>
         {
             if (err.IsOK())
             {
-                Console.WriteLine("[CTP-Trader] Auth OK → Login");
-                _log.Information("CTP Trader auth OK");
+                _log.Information("CTP Trader auth OK → Login");
                 _trader.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
             }
             else
             {
-                Console.WriteLine($"[CTP-Trader] Auth FAIL: {err.ErrorID} {err.ErrorMsg}");
                 _log.Error("CTP Trader auth failed [{Code}] {Msg}", err.ErrorID, err.ErrorMsg);
             }
         };
@@ -75,7 +67,6 @@ public class CtpTraderBridge : IDisposable
         _trader.OnFrontDisconnected += reason =>
         {
             IsReady = false;
-            Console.WriteLine($"[CTP-Trader] Disconnected (0x{reason:X})");
             _log.Warning("CTP Trader disconnected (0x{Reason:X}) — reconnecting in 5s...", reason);
 
             // 通知引擎：交易已断
@@ -127,13 +118,11 @@ public class CtpTraderBridge : IDisposable
             if (err.IsOK())
             {
                 IsReady = true;
-                Console.WriteLine("[CTP-Trader] Login OK → ConfirmSettlement");
-                _log.Information("CTP Trader login OK");
+                _log.Information("CTP Trader login OK → ConfirmSettlement");
                 _trader.ConfirmSettlement();
             }
             else
             {
-                Console.WriteLine($"[CTP-Trader] Login FAIL: {err.ErrorID} {err.ErrorMsg}");
                 _log.Error("CTP Trader login failed [{Code}] {Msg}", err.ErrorID, err.ErrorMsg);
             }
         };

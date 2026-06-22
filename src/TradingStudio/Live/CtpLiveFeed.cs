@@ -140,7 +140,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                     merged.Writer.TryWrite((instId, record, tradingDay));
                     PersistChannel.Writer.TryWrite((instId, q, tradingDay));  // 原始 Quote 全42字段
                     tracker?.Feed(instId, q);
-                    if (firstQuote) { firstQuote = false; Console.WriteLine($"[CTP-MD] First tick: {instId} @ {q.LastPrice}"); }
+                    if (firstQuote) { firstQuote = false; _log.Information("[CTP-MD] First tick: {InstId} @ {Price}", instId, q.LastPrice); }
                 };
 
                 _log.Information("CTP: Connecting to {Front}...", _opts.MdFront);
@@ -198,9 +198,6 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                             topProducts.Count, filteredCount, _instruments.Count,
                             string.Join(", ", topRanking.Take(5).Select(x =>
                                 $"{x.Product}(V{x.TotalVol},OI{x.TotalOI:F0},{x.Contracts}ct)")));
-                        Console.WriteLine(
-                            $"[Activity] Soft filter ready: engine {filteredCount}/{_instruments.Count} contracts. " +
-                            $"Top: {string.Join(", ", topRanking.Take(5).Select(x => x.Product))}");
                     }
 
                     // 过滤未就绪前：定期检查观察期（每 5s 超时一次）

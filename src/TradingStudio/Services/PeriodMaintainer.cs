@@ -28,18 +28,14 @@ public class PeriodMaintainer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        Console.WriteLine("[PeriodMaintainer] Starting...");
-
         // Only works with DuckDB
         if (_barStore is not DuckDBStore duckStore)
         {
-            Console.WriteLine($"[PeriodMaintainer] Not DuckDB (type={_barStore.GetType().Name}) — skipping");
-            _log.LogInformation("PeriodMaintainer: Not DuckDB — skipping");
+            _log.LogInformation("PeriodMaintainer: Not DuckDB (type={Type}) — skipping", _barStore.GetType().Name);
             return;
         }
 
         var dbPath = duckStore.DbPath;
-        Console.WriteLine($"[PeriodMaintainer] DuckDB mode — DB={dbPath}");
         _log.LogInformation("PeriodMaintainer started, DB={Db}", dbPath);
 
         var lastBuild = DateTime.MinValue;
