@@ -442,6 +442,7 @@ data/
 
 # Database files
 *.db
+*.duckdb
 
 # Tools and scripts
 tools/
@@ -462,3 +463,4 @@ examples/college-advisor/output/
 # 批量回测生成产物
 configs/batch/
 configs/grid/
+**/TickData/

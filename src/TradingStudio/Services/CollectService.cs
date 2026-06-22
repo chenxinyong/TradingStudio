@@ -198,9 +198,9 @@ public class CollectService : BackgroundService
         agg1Min.Feed(record, instId, tradingDay); aggDay.Feed(record, instId, tradingDay);
         Interlocked.Increment(ref _quoteCount);
 
-        // Phase 3 数据分层：仅 Top 30 品种写 Tick CSV
+        // Top 30 数据分层：若配置了 Top 30 则只写活跃品种，否则全量写 Tick CSV
         var productCode = instId.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
-        if (!_top30Codes.Contains(productCode))
+        if (_top30Codes.Count > 0 && !_top30Codes.Contains(productCode))
         {
             Interlocked.Increment(ref _tickSkipped);
             return;

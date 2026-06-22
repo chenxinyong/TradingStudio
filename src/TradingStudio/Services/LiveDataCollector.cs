@@ -79,10 +79,10 @@ public class LiveDataCollector : BackgroundService
 
                     Interlocked.Increment(ref _tickCount);
 
-                    // Phase 3 数据分层：仅 Top 30 品种写 Tick CSV
-                    // 其余品种：1min + Day Bar 照常聚合，仅跳过 Tick 落盘
+                    // Top 30 数据分层：若配置了 Top 30 则只写活跃品种，否则全量写 Tick CSV
                     var productCode = _registry.Resolve(instId)?.Code;
-                    var isTop30 = productCode != null && _top30Codes.Contains(productCode);
+                    var isTop30 = _top30Codes.Count == 0
+                        || (productCode != null && _top30Codes.Contains(productCode));
 
                     if (isTop30)
                     {

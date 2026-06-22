@@ -1,0 +1,22 @@
+{
+  "StrategyId": "LiveDebug",
+  "StrategyType": "MaCross",
+  "Description": "Live调试 — Simnow模拟交易, 1手测试",
+  "Version": 1,
+  "Instruments": ["rb"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 5,
+  "AllocatedCapital": 100000,
+  "MaxDrawdownPct": 0.10,
+  "MaxPositionPerInstrument": 1,
+  "Priority": 0,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "FastPeriod": 5,
+    "SlowPeriod": 20,
+    "AtrPeriod": 14,
+    "RiskPerTrade": 0.005,
+    "MaxMarginRatio": 0.3
+  }
+}
