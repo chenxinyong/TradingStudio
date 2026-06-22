@@ -214,14 +214,24 @@ static async Task RunLiveAsync(string[] args)
             json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         if (strategyConfig != null)
         {
+            var warmupDays = int.Parse(cfg["Live:WarmupDays"] ?? "5");
+            IBarStore? warmupStore = null;
+            if (warmupDays > 0)
+            {
+                var warmupDb = cfg["Live:WarmupDatabase"] ?? "../../../../data/bars_history.duckdb";
+                if (File.Exists(warmupDb))
+                    warmupStore = new DuckDBStore(warmupDb, readOnly: true);
+            }
             engineOptions = new EngineOptions
             {
                 StartTime = DateTime.Today,
                 EndTime = DateTime.Today.AddDays(1),
-                Instruments = allInstruments, // 全品种订阅（数据采集），策略只处理 StrategyConfig.Instruments
+                Instruments = allInstruments,
                 StrategyConfigs = [strategyConfig],
                 StartingCapital = strategyConfig.AllocatedCapital > 0 ? strategyConfig.AllocatedCapital : startCapital,
                 IsLive = true,
+                WarmupDays = warmupDays,
+                WarmupStore = warmupStore,
             };
             StrategyFactory.DiscoverFromAssembly(typeof(TradingEngine).Assembly);
         }

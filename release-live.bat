@@ -82,11 +82,11 @@ echo   1. Edit appsettings.json ^(Live section^):
 echo      MdFront, TraderFront, UserId, Password, StrategyConfig
 echo   2. Edit configs\strategies\live-test.json
 echo   3. Run: start.bat
-echo   4. Open http://localhost:59661 for health check
+echo   4. Open http://localhost:5000/api/health for health check
 echo.
 echo --- Ports ---
-echo   59661  HTTP REST API + SignalR Hub ^(/hubs/engine^)
-echo   59662  HTTPS
+echo   5000  HTTP REST API + SignalR Hub ^(/hubs/engine^)
+echo   5001  HTTPS
 echo.
 echo --- Install as Windows Service ---
 echo   sc create TradingStudio binPath= "%CD%\TradingStudio.exe live" start= auto

@@ -40,6 +40,10 @@ public class EngineOptions
     /// 典型值: 60 (MA60 需要至少 60 根 Bar), 0 = 不预热。</summary>
     public int WarmupDays { get; init; }
 
+    /// <summary>预热数据源（实盘模式）：从数据库直接加载历史 Bar，绕过 IDataFeed。
+    /// 回测模式通过 HistoricalBarFeed 加载，此字段为 null。</summary>
+    public Core.Storage.IBarStore? WarmupStore { get; init; }
+
     /// <summary>跳过集合竞价 Tick（FlagAuction=1）。集合竞价阶段价格不真实，
     /// 跳过可避免虚假信号触发。集合竞价结束后才产生第一个 Tick。</summary>
     public bool SkipAuction { get; init; } = true;

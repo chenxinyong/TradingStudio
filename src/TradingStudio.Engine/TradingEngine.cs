@@ -91,6 +91,36 @@ public class TradingEngine
                 }
                 barHistory.Sort((a, b) => a.BarTime.CompareTo(b.BarTime));
             }
+            else if (_options.WarmupStore != null && _options.WarmupDays > 0)
+            {
+                // 实盘模式：从历史库加载最近 N 天 Bar 预热指标
+                var loadStart = _options.StartTime.AddDays(-Math.Max(_options.WarmupDays * 2, 10));
+                var loadEnd = _options.StartTime.AddDays(1);
+
+                Console.WriteLine($"[Warmup] Loading {_options.WarmupDays}d worth from {loadStart:yyyy-MM-dd} to {loadEnd:yyyy-MM-dd}");
+                foreach (var inst in config.Instruments)
+                {
+                    if (!warmupCache.TryGetValue(inst, out var loaded))
+                    {
+                        try
+                        {
+                            var bars = await _options.WarmupStore.QueryBarsAsync(inst, loadStart, loadEnd, "bars_1min");
+                            if (bars.Count == 0)
+                                bars = await _options.WarmupStore.QueryBarsAsync(inst, loadStart, loadEnd, $"bars_{inst}_1min");
+                            loaded = bars.ToList();
+                            Console.WriteLine($"[Warmup] {inst}: {loaded.Count} bars loaded");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Warmup] {inst}: FAILED — {ex.Message}");
+                            loaded = new List<Bar>();
+                        }
+                        warmupCache[inst] = loaded;
+                    }
+                    barHistory.AddRange(loaded);
+                }
+                barHistory.Sort((a, b) => a.BarTime.CompareTo(b.BarTime));
+            }
 
             var ctx = new EngineStrategyContext(
                 config.StrategyId, _execution, _portfolio, _indicators,

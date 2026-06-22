@@ -20,6 +20,15 @@ public class TickCsvWriter : IDisposable
     private long _written;
     private long _errors;
 
+    /// <summary>GBK 编码（无 BOM），匹配金数源格式</summary>
+    private static readonly Encoding Gbk = InitGbk();
+
+    private static Encoding InitGbk()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        return Encoding.GetEncoding(936);
+    }
+
     public long WrittenCount => Interlocked.Read(ref _written);
     public long ErrorCount => Interlocked.Read(ref _errors);
 
@@ -81,12 +90,12 @@ public class TickCsvWriter : IDisposable
             {
                 var w = entry.Writer;
                 w.Write(tradingDay); w.Write(','); w.Write(instrumentId); w.Write(',');
-                w.Write(ex); w.Write(','); w.Write(','); // 4空
+                w.Write(','); w.Write(','); // 交易所代码、合约在交易所的代码留空（匹配金数源）
                 w.Write(F(lastPrice)); w.Write(','); w.Write(F(preSettle)); w.Write(',');
-                w.Write(F(preClose)); w.Write(','); w.Write(F(preOI)); w.Write(',');
+                w.Write(F(preClose)); w.Write(','); w.Write((long)preOI); w.Write(',');
                 w.Write(F(openPrice)); w.Write(','); w.Write(F(highest)); w.Write(',');
                 w.Write(F(lowest)); w.Write(','); w.Write(volume); w.Write(',');
-                w.Write(Fd(turnover)); w.Write(','); w.Write(F(openInterest)); w.Write(',');
+                w.Write(Fd(turnover)); w.Write(','); w.Write((long)openInterest); w.Write(',');
                 w.Write(F(closePrice)); w.Write(','); w.Write(F(settle)); w.Write(',');
                 w.Write(F(upperLimit)); w.Write(','); w.Write(F(lowerLimit)); w.Write(',');
                 w.Write("0,0,"); // delta
@@ -157,7 +166,7 @@ public class TickCsvWriter : IDisposable
         var dir = Path.Combine(_basePath, ex);
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, $"{inst}_{day}.csv");
-        var sw = new StreamWriter(path, true, Encoding.UTF8) { AutoFlush = false };
+        var sw = new StreamWriter(path, true, Gbk) { AutoFlush = false };
         if (new FileInfo(path).Length == 0) sw.WriteLine(Hdr);
         return (sw, day);
     }
@@ -172,8 +181,8 @@ public class TickCsvWriter : IDisposable
     }
     private static string Fd(double v)
     {
-        if (double.IsNaN(v) || double.IsInfinity(v) || Math.Abs(v) > 1e100) return "0.00";
-        return v.ToString("F2", CultureInfo.InvariantCulture);
+        if (double.IsNaN(v) || double.IsInfinity(v) || Math.Abs(v) > 1e100) return "0.0000";
+        return v.ToString("F4", CultureInfo.InvariantCulture); // 成交金额 F4，匹配金数源
     }
 
     public static string GuessExchange(string inst)
@@ -205,10 +214,10 @@ public class TickCsvWriter : IDisposable
         return "??";
     }
 
-    private const string Hdr = "日期,合约代码,交易所代码,合约在交易所的代码,最新价,上次结算价,昨收盘,昨持仓量," +
-        "开盘价,最高价,最低价,成交量,成交额,持仓量,涨跌,本次结算价,涨停价,跌停价," +
-        "昨虚实度,今虚实度,更新时间,更新毫秒," +
-        "买一价,买一量,卖一价,卖一量,买二价,买二量,卖二价,卖二量," +
-        "买三价,买三量,卖三价,卖三量,买四价,买四量,卖四价,卖四量," +
-        "买五价,买五量,卖五价,卖五量,均价,业务日期";
+    private const string Hdr = "交易日,合约代码,交易所代码,合约在交易所的代码,最新价,上次结算价,昨收盘,昨持仓量," +
+        "今开盘,最高价,最低价,数量,成交金额,持仓量,今收盘,本次结算价,涨停板价,跌停板价," +
+        "昨虚实度,今虚实度,最后修改时间,最后修改毫秒," +
+        "申买价一,申买量一,申卖价一,申卖量一,申买价二,申买量二,申卖价二,申卖量二," +
+        "申买价三,申买量三,申卖价三,申卖量三,申买价四,申买量四,申卖价四,申卖量四," +
+        "申买价五,申买量五,申卖价五,申卖量五,当日均价,业务日期";
 }
