@@ -10,8 +10,9 @@ public class CollectOptions
     public string UserId { get; init; } = "";
     public string Password { get; init; } = "";
     public string SymbolsPath { get; init; } = "symbols.json";
-    public string Database { get; init; } = "bars.db";
+    public string Database { get; init; } = "bars.duckdb";
     public string TickData { get; init; } = "TickData";
+    public bool UseDuckDB { get; init; } = false;  // true → DuckDBStore, false → SqliteBarStore
 
     // 命令行过滤（非 JSON 配置）
     public string? ExchangeFilter { get; set; }   // "SHFE" → 仅上期所

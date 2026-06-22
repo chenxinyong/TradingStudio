@@ -158,8 +158,11 @@ static async Task RunLiveAsync(string[] args)
     // ── 数据持久化 ──
     var dataPath = cfg["Live:DataPath"] ?? "data";
     var dbPath = Path.Combine(dataPath, cfg["Live:Database"] ?? "bars_live.db");
-    var useDuckDB = cfg["Live:UseDuckDB"]?.ToLowerInvariant() == "true";
-    IBarStore barStore = useDuckDB
+    // 自动识别存储引擎：.duckdb 扩展名 → DuckDB, 否则 SQLite
+    // UseDuckDB 可强制覆盖（兼容旧配置）
+    var forceDuckDB = cfg["Live:UseDuckDB"]?.ToLowerInvariant() == "true";
+    var isDuckDB = forceDuckDB || dbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase);
+    IBarStore barStore = isDuckDB
         ? new DuckDBStore(dbPath, enableTickPurge: true)
         : new SqliteBarStore(dbPath);
     builder.Services.AddSingleton(barStore);
@@ -305,15 +308,17 @@ static async Task RunCollectAsync(string[] args)
         else { i++; }
     }
 
-    var cliArgs = new List<string>();
-    if (overrides.TryGetValue("--db",    out var db))    cliArgs.Add($"Collect:Database={db}");
-    if (overrides.TryGetValue("--tick",  out var tick))  cliArgs.Add($"Collect:TickData={tick}");
-    if (overrides.TryGetValue("--front", out var front)) cliArgs.Add($"Collect:MdFront={front}");
-    if (overrides.TryGetValue("--user",  out var user))  cliArgs.Add($"Collect:UserId={user}");
-    if (overrides.TryGetValue("--pwd",   out var pwd))   cliArgs.Add($"Collect:Password={pwd}");
-    if (overrides.TryGetValue("--broker", out var broker)) cliArgs.Add($"Collect:BrokerId={broker}");
+    var collectorArgs = new List<string>();
+    if (overrides.TryGetValue("--db",    out var db))    collectorArgs.Add($"Collect:Database={db}");
+    if (overrides.TryGetValue("--tick",  out var tick))  collectorArgs.Add($"Collect:TickData={tick}");
+    if (overrides.TryGetValue("--front", out var front)) collectorArgs.Add($"Collect:MdFront={front}");
+    if (overrides.TryGetValue("--user",  out var user))  collectorArgs.Add($"Collect:UserId={user}");
+    if (overrides.TryGetValue("--pwd",   out var pwd))   collectorArgs.Add($"Collect:Password={pwd}");
+    if (overrides.TryGetValue("--broker", out var broker)) collectorArgs.Add($"Collect:BrokerId={broker}");
+    var useDuckCollect = overrides.ContainsKey("--duckdb") || args.Contains("--duckdb");
+    if (useDuckCollect) collectorArgs.Add("Collect:UseDuckDB=true");
 
-    var builder = Host.CreateApplicationBuilder([..cliArgs, ..args]);
+    var builder = Host.CreateApplicationBuilder([..collectorArgs, ..args]);
     builder.Services.AddSerilog((_, cfg) => cfg.ReadFrom.Configuration(builder.Configuration));
     var cfgSection = builder.Configuration.GetSection(CollectOptions.Section);
     builder.Services.Configure<CollectOptions>(cfgSection);

@@ -67,7 +67,10 @@ public class CollectService : BackgroundService
         var tickDir = Path.GetDirectoryName(Path.GetFullPath(_cfg.TickData));
         if (tickDir != null) Directory.CreateDirectory(tickDir);
 
-        using var store = new SqliteBarStore(_cfg.Database);
+        var isDuckDB = _cfg.UseDuckDB || _cfg.Database.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase);
+        using IBarStore store = isDuckDB
+            ? new DuckDBStore(_cfg.Database, enableTickPurge: true)
+            : new SqliteBarStore(_cfg.Database);
         using var tickWriter = new TickCsvWriter(_cfg.TickData);
 
         using var healthCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
