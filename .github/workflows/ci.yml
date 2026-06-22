@@ -8,28 +8,32 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ═══ 测试 (跨平台, 快速) ═══
-  test:
+  # ═══ 测试 (ubuntu: Core + Engine, windows: Data) ═══
+  test-ubuntu:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-
       - name: Core Tests
         run: dotnet test test/TradingStudio.Core.Tests/TradingStudio.Core.Tests.csproj --configuration Release --verbosity normal
-
-      - name: Data Tests
-        run: dotnet test test/TradingStudio.Data.Tests/TradingStudio.Data.Tests.csproj --configuration Release --verbosity normal
-
       - name: Engine Tests
         run: dotnet test test/TradingStudio.Engine.Tests/TradingStudio.Engine.Tests.csproj --configuration Release --verbosity normal
-
       - name: ToolBox Build
         run: dotnet build src/TradingStudio.ToolBox/TradingStudio.ToolBox.csproj --configuration Release
+
+  test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Data Tests (needs DuckDB native DLL)
+        run: dotnet test test/TradingStudio.Data.Tests/TradingStudio.Data.Tests.csproj --configuration Release --verbosity normal
 
   # ═══ 主程序编译 (Windows only, C++/CLI 依赖) ═══
   build:
