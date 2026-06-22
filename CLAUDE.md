@@ -59,7 +59,7 @@ TradingStudio.Mind           — LLM 模块（研究助手、策略解释、异�
 TradingStudio.Terminal              — 监控与管理界面
 ```
 
-### 当前实现 (2026-06-12)
+### 当前实现 (2026-06-23)
 
 ```
 src/
@@ -69,23 +69,54 @@ src/
 ├── TradingStudio.Core/    核心模型
 │   └── Models/            Exchange, Future, FutureRegistry, TickRecord, Bar, ContractCodeGenerator
 ├── TradingStudio.Data/    数据聚合 + 存储
-│   ├── Aggregation/       BarAggregator, DailyBarAggregator
-│   └── Storage/           BarStore (SQLite), TickCsvWriter (金数源格式)
+│   ├── Aggregation/       BarAggregator, DailyBarAggregator, MultiBarAggregator
+│   ├── Import/            CsvTickImporter, TickImportService, JinshuyuanImportService
+│   └── Storage/           DuckDBStore, SqliteBarStore, TickCsvWriter, BuildPeriodsService
 ├── TradingStudio.Ctp/       C# 适配层 (CtpMdAdapter: Quote→Channel<TickRecord>)
-├── TradingStudio.ToolBox/   数据工具 CLI（独立控制台）
-│   └── 6命令: import / import-jinshuyuan / export / verify / info / convert
+├── TradingStudio.ToolBox/   数据工具 CLI（独立项目，不依赖主程序）
+│   └── 命令: import / import-jinshuyuan / import-url / verify / merge / append / build-periods / analyze / continuous
 ├── TradingStudio/           引擎主程序 (.NET Host + DI + Serilog)
-│   ├── Program.cs           入口（live/collect/backtest）
-│   ├── Services/            CollectService, SessionScheduler, HealthMonitor
+│   ├── Program.cs           入口（live / collect / backtest）
+│   ├── Services/            CollectService, LiveDataCollector, PeriodMaintainer, SessionScheduler, HealthMonitor
+│   ├── Commands/            BacktestCommand
 │   ├── Options/             CollectOptions
-│   ├── appsettings.json     Serilog + CTP 连接 + 路径
+│   ├── appsettings.json     Serilog + CTP + DuckDB 默认配置
 │   └── symbols.json         品种数据
-└── Scripts/                 gen_symbols_json.py
-
-test/
-├── CtpDemo/               行情 + 交易 Demo
-└── CtpBarDemo/            管线 Demo (Quote→Bar→SQLite)
+└── scripts/                 daily_import.ps1, gen_symbols_json.py
 ```
+
+### 三种运行模式
+
+| 模式 | 命令 | 默认 DB | 用途 |
+|------|------|---------|------|
+| **Live** | `dotnet run -- live` | `data/bars_live.duckdb` | 实盘交易+监控+数据落盘，HTTP API :5001 |
+| **Collect** | `dotnet run -- collect` | `bars.duckdb` | 纯行情采集，交易时段自动启停，无 HTTP |
+| **Backtest** | `dotnet run -- backtest --config x.json` | `data/bars_history.duckdb` | 历史数据回测，默认指向历史库 |
+
+### 数据管线（Live / Collect 共用）
+
+```
+CTP 行情 ──→ Tick CSV (GBK/金数源 44 列)  →  data/TickData/
+         ──→ bars_1min (全部合约)         →  DuckDB
+         ──→ bars_day  (全部合约)         →  DuckDB
+
+PeriodMaintainer (每 5min / 收盘):
+         ──→ BuildContinuousContracts     →  生成 xxx000 连续合约
+         ──→ bars_5min  (连续合约)        →  DuckDB
+         ──→ bars_15min (连续合约)        →  DuckDB
+         ──→ bars_week (连续合约)         →  DuckDB
+```
+
+### 日终补齐
+
+```powershell
+.\scripts\daily_import.ps1 -TickDataDir .\src\TradingStudio\data\TickData
+  → 金数源 RAR 下载 + 导入 → append 历史库 → build-periods 多周期 → verify 验证
+```
+
+### 历史数据库
+
+`data/bars_history.duckdb` — 8.42 GB，2020-01-02 ~ 2026-06-22，覆盖 50+ 品种连续合约，全周期（1min/5min/15min/day/week）。Backtest 模式默认使用。
 
 ### 调度逻辑
 
@@ -117,8 +148,8 @@ test/
 |------|------|------|
 | 运行时 | .NET 10 | VS 2026 (v18), x64 |
 | CTP 封装 | **C++/CLI 自封装** | `src/CTP/Wrapper/` — MdApi + TraderApi 完整封装 |
-| 时序数据 | SQLite (Phase 1) → ClickHouse (Phase 2) | bars_1min + bars_day，后续切 |
-| 关系数据 | SQLite (Phase 1) → PostgreSQL (Phase 2) | 品种配置、订单记录 |
+| 时序数据 | **DuckDB** (Phase 2) | 列存 OLAP，bars_1min/5min/15min/day/week，历史库 8.4 GB / 8100 万 Bar |
+| 关系数据 | SQLite (Phase 1) → PostgreSQL (Phase 3) | 品种配置、订单记录 |
 | 回测框架 | 自研 | 通用回测框架不适合期货特性 |
 | 研究环境 | Python + Jupyter（可选） | pandas/numpy 做策略探索 |
 | 前端 | WPF | C# 生态，MVVM + OxyPlot + SignalR ([设计: 14-wpf-monitoring-client-design](docs/design/14-wpf-monitoring-client-design.md)) |
@@ -151,19 +182,21 @@ test/
 | 功能 | 状态 |
 |------|------|
 | CTP C++/CLI 封装 (MdApi + TraderApi) | ✅ |
-| 全市场 Quote 实时接收 (928 合约) | ✅ |
-| Tick CSV 持续化 (金数源 42 列格式) | ✅ |
-| 1min Bar + Day Bar 聚合入库 (SQLite) | ✅ |
+| 全市场 Quote 实时接收 (883 合约, 74 品种) | ✅ |
+| Tick CSV 持续化 (金数源 44 列格式, GBK) | ✅ |
+| 1min Bar + Day Bar 聚合入库 | ✅ |
+| 5min/15min/Week 多周期表 | ✅ PeriodMaintainer 自动维护 |
+| 连续合约 (xxx000) 自动生成 | ✅ BuildContinuousContracts |
 | 7×24 自动重连 + 健康日志 | ✅ |
-| 品种数据实体 + JSON 65 驱动 | ✅ |
-| 金数源历史数据导入 2020-2025 | ✅ |
-| 六年全量数据验证 (5908 万 Bar, 0 硬伤) | ✅ |
-| 发布体系: release/collect, live, backtest | ✅ |
+| 金数源历史数据导入 2020-2026 | ✅ 8100 万 Bar, DuckDB 8.4 GB |
+| 全量数据验证 (6 维度, 0 硬伤) | ✅ |
+| 三种运行模式: Live / Collect / Backtest | ✅ |
+| 每日导入管线: 下载→追加→多周期→验证 | ✅ daily_import.ps1 |
 
 ### 第二阶段：回测基础（3-4周）← 当前阶段
 历史数据回放 → 模拟撮合 → 仓位资金管理 → 绩效指标。交付物：结果可信的回测系统。
 > 设计文档：[phase2-backtest-design-v2.md](docs/design/phase2-backtest-design-v2.md)
-> 数据就绪：6 年度 SQLite DB 共 9.13 GB，验证完毕可直接使用
+> 数据就绪：DuckDB 8.42 GB，8100 万 Bar，2020-2026 全周期，0 硬伤
 
 ### 第三阶段：策略研发（4-8周）
 趋势跟踪（海龟/均线）→ 均值回归（布林带/RSI）→ 套利 → 组合优化。目标：2-3个正期望值策略雏形。
@@ -187,6 +220,22 @@ TraderApi 风控规则引擎 → simnow 模拟盘 → 小合约实盘验证。
 - 关键路径（下单、风控、数据写入）必须有错误处理和日志
 - 配置项不硬编码，从外部配置读取
 - 先跑通再优化，不提前做过度抽象
+
+### 项目依赖关系
+
+```
+TradingStudio.ToolBox (exe, 独立 CLI)       TradingStudio (exe, SelfContained)
+  ├─ TradingStudio.Data                       ├─ TradingStudio.Data
+  ├─ TradingStudio.Core                       ├─ TradingStudio.Core
+  └─ (独立，不依赖主程序)                       ├─ TradingStudio.Engine
+                                              └─ TradingStudio.Strategy
+
+共享逻辑 (无循环依赖):
+  TradingStudio.Data.Storage.BuildPeriodsService  ← 两份 exe 共用
+  TradingStudio.Data.Storage.DuckDBStore          ← 两份 exe 共用
+```
+
+ToolBox 是独立的控制台工具，TradingStudio 不依赖它。多周期聚合（`BuildPeriodsService`）和连续合约生成（`BuildContinuousContracts`）在 Data 层实现，两边共享。
 
 ### Git 分支策略
 
