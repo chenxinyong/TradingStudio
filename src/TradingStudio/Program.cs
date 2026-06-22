@@ -156,13 +156,14 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddSingleton(strategies);
 
     // ── 数据持久化 ──
-    var dbPath = cfg["Live:Database"] ?? "bars_live.db";
+    var dataPath = cfg["Live:DataPath"] ?? "data";
+    var dbPath = Path.Combine(dataPath, cfg["Live:Database"] ?? "bars_live.db");
     var useDuckDB = cfg["Live:UseDuckDB"]?.ToLowerInvariant() == "true";
     IBarStore barStore = useDuckDB
         ? new DuckDBStore(dbPath, enableTickPurge: true)
         : new SqliteBarStore(dbPath);
     builder.Services.AddSingleton(barStore);
-    var tickWriter = new TickCsvWriter("TickData");
+    var tickWriter = new TickCsvWriter(Path.Combine(dataPath, "TickData"));
     builder.Services.AddSingleton(tickWriter);
 
     // 资金管理
@@ -218,7 +219,7 @@ static async Task RunLiveAsync(string[] args)
             IBarStore? warmupStore = null;
             if (warmupDays > 0)
             {
-                var warmupDb = cfg["Live:WarmupDatabase"] ?? "../../../../data/bars_history.duckdb";
+                var warmupDb = Path.Combine(dataPath, cfg["Live:WarmupDatabase"] ?? "bars_history.duckdb");
                 if (File.Exists(warmupDb))
                     warmupStore = new DuckDBStore(warmupDb, readOnly: true);
             }
