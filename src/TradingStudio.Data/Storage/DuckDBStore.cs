@@ -20,6 +20,10 @@ namespace TradingStudio.Data.Storage;
 public class DuckDBStore : IBarStore, ITickStore
 {
     private readonly string _dbPath;
+
+    /// <summary>DuckDB 文件路径（供外部服务如 PeriodMaintainer 使用）</summary>
+    public string DbPath => _dbPath;
+
     private readonly Channel<Bar> _barChannel;
     private readonly Channel<(TickRecord Tick, string Symbol)> _tickChannel;
     private readonly CancellationTokenSource _cts;
@@ -81,7 +85,7 @@ public class DuckDBStore : IBarStore, ITickStore
                 if (ct.IsCancellationRequested) break;
                 appender.CreateRow()
                     .AppendValue(bar.InstrumentId)
-                    .AppendValue(bar.TradingDay.ToString("yyyy-MM-dd"))
+                    .AppendValue(bar.TradingDay.ToDateTime(TimeOnly.MinValue))  // DateOnly→DateTime for DuckDB DATE
                     .AppendValue(bar.BarTime)
                     .AppendValue(bar.Open)
                     .AppendValue(bar.High)

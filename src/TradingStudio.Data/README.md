@@ -48,23 +48,26 @@
 
 | 组件 | 职责 | 线程安全 |
 |------|------|----------|
-| `TickCsvWriter` | 金数源 42 列 CSV 落盘，按合约/交易日分文件 | ConcurrentDictionary + Timer 刷新 |
+| `TickCsvWriter` | 金数源 44 列 CSV 落盘 (GBK)，按合约/交易日分文件 | ConcurrentDictionary + Timer 刷新 |
 | `BarAggregator` | TickRecord → 1min Bar，30 秒无数据兜底 | ConcurrentDictionary 按品种分组 |
 | `DailyBarAggregator` | 实时更新当日 OHLCV，交易日切换时发射 | ConcurrentDictionary |
 | `MultiBarAggregator` | 1min → Nmin 合成 (5min/15min/30min) | 单线程，纯函数 |
 | `SqliteBarStore` | Bar → SQLite，Channel 异步写入 | Channel + 单消费者线程 |
-| `DuckDBStore` | Bar → DuckDB，支持直接查询 | 读多写少，写入有锁 |
+| `DuckDBStore` | Bar → DuckDB (默认)，支持直接查询 + 多周期 | 读多写少，写入有锁 |
+| `BuildPeriodsService` | 1min → 5min/15min/day/week 连续合约 + xxx000 自动生成 | DuckDB SQL，增量 upsert |
 | `ContinuousBarStore` | 主力连续合约适配，按仓位权重计算价格 | 读适配器，不写 |
 | `HistoricalBarFeed` | 回测数据源，实现 IDataFeed，K-way merge | 单线程流式输出 |
 | `HistoricalTickFeed` | Tick 模式回测，CSV 回放 + GB2312 解码 | 单线程流式输出 |
 
-## 数据表命名
+## 数据表
 
-| 表名 | 含义 | 示例 |
-|------|------|------|
-| `bars_{product}_1min` | 产品级 1 分钟 Bar | `bars_sa_1min` |
-| `bars_{product}_day` | 产品级日线 Bar | `bars_sa_day` |
-| `bars_{product}_1min` (continuous) | 主力连续合约 1min | `bars_rb_1min` (DuckDB) |
+| 表名 | 含义 | 品种覆盖 |
+|------|------|----------|
+| `bars_1min` | 全合约 1min Bar | 4163 合约 |
+| `bars_5min` | 连续合约 5min Bar | 50+ 品种 xxx000 |
+| `bars_15min` | 连续合约 15min Bar | 50+ 品种 xxx000 |
+| `bars_day` | 全合约日线 Bar | 4163 合约 |
+| `bars_week` | 连续合约周线 Bar | 50+ 品种 xxx000 |
 
 ## 价格精度
 

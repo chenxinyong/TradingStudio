@@ -77,15 +77,18 @@ public class TickImportService
     }
 
     /// <summary>
-    /// 批量导入目录下所有金数源 CSV 文件。
+    /// 批量导入目录下所有 CSV 文件（支持金数源格式 + 我们自己的落盘格式）。
+    /// 可通过 searchPattern 过滤，recursive=true 时递归子目录。
     /// </summary>
     public static async Task<List<ImportStats>> ImportDirectoryAsync(
         string dirPath, string dbPath = "bars.db",
-        string searchPattern = "金数源_*_CTP格式.csv",
+        string searchPattern = "*_????????.csv",
+        bool recursive = true,
         CancellationToken ct = default)
     {
-        var files = Directory.GetFiles(dirPath, searchPattern, SearchOption.TopDirectoryOnly);
-        Array.Sort(files); // 按文件名排序（含日期）
+        var opt = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        var files = Directory.GetFiles(dirPath, searchPattern, opt);
+        Array.Sort(files);
 
         Console.WriteLine($"Found {files.Length} CSV files in {dirPath}\n");
 

@@ -19,13 +19,30 @@ public static class CsvTickImporter
         double LowerLimitPrice);
 
     /// <summary>
-    /// 从文件名提取合约代码和交易日。
-    /// 文件名格式: 金数源_商品tick快照样本_{symbol}_{tradingDay}_CTP格式.csv
+    /// 从文件名提取合约代码和交易日 — 兼容两种命名格式：
+    /// 1. 金数源_商品tick快照样本_{symbol}_{tradingDay}_CTP格式.csv
+    /// 2. {contract}_{tradingDay}.csv（金数源 RAR 内 & 我们自己的落盘格式）
     /// </summary>
     public static (string Symbol, DateOnly TradingDay) ParseFileName(string filePath)
     {
         var name = Path.GetFileNameWithoutExtension(filePath);
-        // Split by '_', 取倒数第3和第2段
+
+        // 格式2: {contract}_{tradingDay}.csv — 我们的落盘 & 金数源 RAR 内
+        // 例: "ag2608_20260623", "cu2501_20250601", "ag主力连续_20210104"
+        var lastUnderscore = name.LastIndexOf('_');
+        if (lastUnderscore > 0)
+        {
+            var dateStr = name[(lastUnderscore + 1)..];
+            if (dateStr.Length == 8 && dateStr.All(char.IsDigit))
+            {
+                var contractCode = name[..lastUnderscore];
+                if (DateOnly.TryParseExact(dateStr, "yyyyMMdd",
+                        CultureInfo.InvariantCulture, DateTimeStyles.None, out var rarDay))
+                    return (contractCode, rarDay);
+            }
+        }
+
+        // 格式1: 金数源_商品tick快照样本_{symbol}_{tradingDay}_CTP格式.csv
         var parts = name.Split('_');
         if (parts.Length >= 5)
         {
@@ -34,7 +51,7 @@ public static class CsvTickImporter
             if (DateOnly.TryParseExact(dayStr, "yyyyMMdd", out var day))
                 return (symbol, day);
         }
-        throw new FormatException($"无法从文件名解析合约/交易日: {filePath}");
+        throw new FormatException($"无法解析文件名: {filePath}");
     }
 
     /// <summary>
