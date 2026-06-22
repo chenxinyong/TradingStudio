@@ -19,7 +19,7 @@ public class BacktestCommand
     {
         var configPath = "";
         var mode = "bar";
-        var dbPath = "bars.db";
+        var dbPath = ResolveHistoryDb();  // 默认：data/bars_history.duckdb
         var dataDir = "";
         var symbolsPath = "symbols.json";
         var startStr = "";
@@ -41,6 +41,7 @@ public class BacktestCommand
         if (string.IsNullOrEmpty(configPath))
         {
             Console.Error.WriteLine("Usage: TradingStudio backtest --config <strategy.json> [--mode bar|tick] [--db <path>] [--data-dir <csv_dir>]");
+            Console.Error.WriteLine("  Default DB: data/bars_history.duckdb (auto-detected)");
             return 1;
         }
 
@@ -189,6 +190,28 @@ public class BacktestCommand
             Console.Error.WriteLine($"Backtest failed: {ex}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// 解析默认历史数据库路径。
+    /// 优先级：../../data/bars_history.duckdb > data/bars_history.duckdb > bars_history.duckdb
+    /// </summary>
+    private static string ResolveHistoryDb()
+    {
+        string[] candidates =
+        [
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "data", "bars_history.duckdb"),
+            Path.Combine(AppContext.BaseDirectory, "data", "bars_history.duckdb"),
+            Path.Combine(Directory.GetCurrentDirectory(), "data", "bars_history.duckdb"),
+            "bars_history.duckdb",
+        ];
+        foreach (var c in candidates)
+        {
+            var full = Path.GetFullPath(c);
+            if (File.Exists(full)) return full;
+        }
+        // Fallback: return the first candidate so error message is useful
+        return Path.GetFullPath(candidates[0]);
     }
 
     /// <summary>

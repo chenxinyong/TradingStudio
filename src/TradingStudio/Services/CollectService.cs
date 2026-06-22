@@ -14,15 +14,20 @@ public class CollectService : BackgroundService
     private readonly CollectOptions _cfg;
     private readonly SessionScheduler _scheduler = SessionScheduler.CreateWithHolidays();
     private readonly HealthMonitor _health;
+    private readonly IBarStore _store;
+    private readonly TickCsvWriter _tickWriter;
     private readonly Serilog.ILogger _log;
 
     private long _quoteCount, _reconnectCount, _tickSkipped;
     private DateTime _lastConnect, _lastQuote, _lastHealth;
     private HashSet<string> _top30Codes = new(StringComparer.OrdinalIgnoreCase);
 
-    public CollectService(IOptions<CollectOptions> options, Serilog.ILogger logger)
+    public CollectService(IOptions<CollectOptions> options, IBarStore store,
+                          TickCsvWriter tickWriter, Serilog.ILogger logger)
     {
         _cfg = options.Value;
+        _store = store;
+        _tickWriter = tickWriter;
         _log = logger;
         _health = new HealthMonitor();
     }
@@ -67,11 +72,9 @@ public class CollectService : BackgroundService
         var tickDir = Path.GetDirectoryName(Path.GetFullPath(_cfg.TickData));
         if (tickDir != null) Directory.CreateDirectory(tickDir);
 
-        var isDuckDB = _cfg.UseDuckDB || _cfg.Database.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase);
-        using IBarStore store = isDuckDB
-            ? new DuckDBStore(_cfg.Database, enableTickPurge: true)
-            : new SqliteBarStore(_cfg.Database);
-        using var tickWriter = new TickCsvWriter(_cfg.TickData);
+        // IBarStore + TickCsvWriter 从 DI 注入（单例，PeriodMaintainer 共享 store）
+        var store = _store;
+        var tickWriter = _tickWriter;
 
         using var healthCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var healthTask = HealthLoop(store, tickWriter, healthCts.Token);

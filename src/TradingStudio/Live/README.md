@@ -56,13 +56,30 @@ Program.RunLiveAsync()
 | `CtpLiveFeed.cs` | `IDataFeed` 实现。CTP 行情接入 → Channel → `IAsyncEnumerable<EngineEvent>` |
 | `CtpTraderBridge.cs` | CTP 交易桥接。`SendToExchange` → CTP InsertOrder，回报 → `FillChannel` |
 | `ContractActivityTracker.cs` | 观察期内统计合约活跃度，筛选高流动性合约减少订阅量 |
-| `NullDataFeed.cs` | 空实现，回退用 |
+| `PeriodMaintainer.cs` | 后台自动维护：每 5min 增量刷新 5min/15min/week 连续合约表 |
+| `LiveDataCollector.cs` | 独立数据落盘：Tick CSV + 1min/day Bar，与引擎并行 |
+
+## 数据存储
+
+默认 DuckDB，`data/bars_live.duckdb`。配置 `appsettings.local.json`:
+
+```json
+"Live": {
+    "UseDuckDB": "true",
+    "Database": "bars_live.duckdb",
+    "DataPath": "data"
+}
+```
+
+多周期（5min/15min/week）和连续合约（xxx000）由 PeriodMaintainer 自动生成，盘中每 5 分钟增量更新。
 
 ## 与回测的差异
 
 | 维度 | 回测 | 实盘 |
 |------|------|------|
 | DataFeed | `HistoricalBarFeed` (DuckDB) | `CtpLiveFeed` (CTP MdApi) |
+| DB | `bars_history.duckdb` (只读) | `bars_live.duckdb` (读写) |
+| 多周期 | 预计算表 | PeriodMaintainer 实时维护 |
 | 撮合 | `ExecutionHandler.ProcessBar/ProcessTick` | `CtpTraderBridge.SendOrder` → CTP |
 | 报告 | 生成 `EngineReport` → JSON | 不生成报告，SignalR 推送实时状态 |
 | 风控 | `CheckPreOrder` (同) | `CheckPreOrder` (同) + CTP 自身风控 |

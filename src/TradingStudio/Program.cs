@@ -57,7 +57,7 @@ static void PrintUsage()
     Console.WriteLine();
     Console.WriteLine("用法:");
     Console.WriteLine("  TradingStudio live              启动实盘引擎 (Windows Service)");
-    Console.WriteLine("  TradingStudio backtest --config <strategy.json> [--db <path>]");
+    Console.WriteLine("  TradingStudio backtest --config <strategy.json> [--db <path>]  (默认: data/bars_history.duckdb)");
     Console.WriteLine("  TradingStudio collect [options]  行情采集");
     Console.WriteLine();
     Console.WriteLine("按任意键退出...");
@@ -166,6 +166,7 @@ static async Task RunLiveAsync(string[] args)
         ? new DuckDBStore(dbPath, enableTickPurge: true)
         : new SqliteBarStore(dbPath);
     builder.Services.AddSingleton(barStore);
+    builder.Services.AddSingleton<TradingStudio.Data.Storage.BuildPeriodsService>();
     var tickWriter = new TickCsvWriter(Path.Combine(dataPath, "TickData"));
     builder.Services.AddSingleton(tickWriter);
 
@@ -250,6 +251,7 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddHostedService<EngineHost>();
     builder.Services.AddHostedService<EngineHubPushService>();
     builder.Services.AddHostedService<LiveDataCollector>();
+    builder.Services.AddHostedService<PeriodMaintainer>();  // 自动维护 5min/15min/week
 
     var app = builder.Build();
 
@@ -323,7 +325,23 @@ static async Task RunCollectAsync(string[] args)
     var cfgSection = builder.Configuration.GetSection(CollectOptions.Section);
     builder.Services.Configure<CollectOptions>(cfgSection);
     builder.Services.PostConfigure<CollectOptions>(opts => { opts.ExchangeFilter = exchange; opts.SymbolFilter = symbol; });
+
+    // ── 基础设施 ──
+    builder.Services.AddSingleton<SessionScheduler>();
+    builder.Services.AddSingleton<HealthMonitor>();
+
+    // ── 数据持久化（DI 单例，PeriodMaintainer 共享）──
+    var collectCfg = builder.Configuration.GetSection(CollectOptions.Section).Get<CollectOptions>()!;
+    var isDuck = collectCfg.UseDuckDB || collectCfg.Database.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase);
+    IBarStore barStore = isDuck
+        ? new DuckDBStore(collectCfg.Database, enableTickPurge: true)
+        : new SqliteBarStore(collectCfg.Database);
+    builder.Services.AddSingleton(barStore);
+    builder.Services.AddSingleton(new TickCsvWriter(collectCfg.TickData));
+    builder.Services.AddSingleton<TradingStudio.Data.Storage.BuildPeriodsService>();
+
     builder.Services.AddHostedService<CollectService>();
+    builder.Services.AddHostedService<PeriodMaintainer>();
     await builder.Build().RunAsync();
 }
 
