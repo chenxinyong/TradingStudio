@@ -40,38 +40,26 @@ public class TickCsvWriter : IDisposable
     }
 
     /// <summary>写入一条 Tick 行（线程安全，单 writer 失败不影响其他合约）</summary>
-    public void Write(string instrumentId, string exchangeId, string tradingDay,
-        string updateTime, int updateMs,
-        double lastPrice, double preSettle, double preClose, double preOI,
-        double openPrice, double highest, double lowest,
-        int volume, double turnover, double openInterest,
-        double closePrice, double settle, double upperLimit, double lowerLimit,
-        double bp1, int bv1, double ap1, int av1,
-        double bp2, int bv2, double ap2, int av2,
-        double bp3, int bv3, double ap3, int av3,
-        double bp4, int bv4, double ap4, int av4,
-        double bp5, int bv5, double ap5, int av5,
-        double avgPrice)
+    public void Write(in CsvTickRecord r)
     {
-        if (string.IsNullOrEmpty(instrumentId) || string.IsNullOrEmpty(tradingDay)) return;
+        if (string.IsNullOrEmpty(r.InstrumentId) || string.IsNullOrEmpty(r.TradingDay)) return;
 
-        var ex = string.IsNullOrEmpty(exchangeId) ? GuessExchange(instrumentId) : exchangeId;
-        var key = $"{instrumentId}_{tradingDay}";
+        var ex = string.IsNullOrEmpty(r.ExchangeId) ? GuessExchange(r.InstrumentId) : r.ExchangeId;
+        var key = $"{r.InstrumentId}_{r.TradingDay}";
 
-        // 已标记为失败的 writer，跳过后续写入
         if (_failed.ContainsKey(key)) return;
 
-        if (!_writers.TryGetValue(key, out var entry) || entry.Day != tradingDay)
+        if (!_writers.TryGetValue(key, out var entry) || entry.Day != r.TradingDay)
         {
             lock (_createLock)
             {
-                if (!_writers.TryGetValue(key, out entry) || entry.Day != tradingDay)
+                if (!_writers.TryGetValue(key, out entry) || entry.Day != r.TradingDay)
                 {
                     _writers.TryRemove(key, out var old);
                     SafeDispose(old.Writer);
                     try
                     {
-                        entry = CreateWriter(instrumentId, tradingDay, ex);
+                        entry = CreateWriter(r.InstrumentId, r.TradingDay, ex);
                         _writers[key] = entry;
                     }
                     catch (Exception)
@@ -89,54 +77,42 @@ public class TickCsvWriter : IDisposable
             lock (entry.Writer)
             {
                 var w = entry.Writer;
-                w.Write(tradingDay); w.Write(','); w.Write(instrumentId); w.Write(',');
-                w.Write(','); w.Write(','); // 交易所代码、合约在交易所的代码留空（匹配金数源）
-                w.Write(F(lastPrice)); w.Write(','); w.Write(F(preSettle)); w.Write(',');
-                w.Write(F(preClose)); w.Write(','); w.Write((long)preOI); w.Write(',');
-                w.Write(F(openPrice)); w.Write(','); w.Write(F(highest)); w.Write(',');
-                w.Write(F(lowest)); w.Write(','); w.Write(volume); w.Write(',');
-                w.Write(Fd(turnover)); w.Write(','); w.Write((long)openInterest); w.Write(',');
-                w.Write(F(closePrice)); w.Write(','); w.Write(F(settle)); w.Write(',');
-                w.Write(F(upperLimit)); w.Write(','); w.Write(F(lowerLimit)); w.Write(',');
-                w.Write("0,0,"); // delta
-                w.Write(updateTime); w.Write(','); w.Write(updateMs); w.Write(',');
-                BP(w, bp1, bv1, ap1, av1); BP(w, bp2, bv2, ap2, av2);
-                BP(w, bp3, bv3, ap3, av3); BP(w, bp4, bv4, ap4, av4);
-                BP(w, bp5, bv5, ap5, av5);
-                w.Write(F(avgPrice)); w.Write(','); w.WriteLine(tradingDay);
+                w.Write(r.TradingDay);           w.Write(',');
+                w.Write(r.InstrumentId);         w.Write(',');
+                w.Write(','); w.Write(',');       // 交易所代码、合约在交易所的代码留空（匹配金数源）
+                w.Write(F(r.LastPrice));         w.Write(',');
+                w.Write(F(r.PreSettlementPrice));w.Write(',');
+                w.Write(F(r.PreClosePrice));     w.Write(',');
+                w.Write((long)r.PreOpenInterest);w.Write(',');
+                w.Write(F(r.OpenPrice));         w.Write(',');
+                w.Write(F(r.HighestPrice));      w.Write(',');
+                w.Write(F(r.LowestPrice));       w.Write(',');
+                w.Write(r.Volume);               w.Write(',');
+                w.Write(Fd(r.Turnover));         w.Write(',');
+                w.Write((long)r.OpenInterest);   w.Write(',');
+                w.Write(F(r.ClosePrice));        w.Write(',');
+                w.Write(F(r.SettlementPrice));   w.Write(',');
+                w.Write(F(r.UpperLimitPrice));   w.Write(',');
+                w.Write(F(r.LowerLimitPrice));   w.Write(',');
+                w.Write("0,0,");                  // 昨/今虚实度
+                w.Write(r.UpdateTime);           w.Write(',');
+                w.Write(r.UpdateMillisec);       w.Write(',');
+                BP(w, r.BidPrice1, r.BidVolume1, r.AskPrice1, r.AskVolume1);
+                BP(w, r.BidPrice2, r.BidVolume2, r.AskPrice2, r.AskVolume2);
+                BP(w, r.BidPrice3, r.BidVolume3, r.AskPrice3, r.AskVolume3);
+                BP(w, r.BidPrice4, r.BidVolume4, r.AskPrice4, r.AskVolume4);
+                BP(w, r.BidPrice5, r.BidVolume5, r.AskPrice5, r.AskVolume5);
+                w.Write(F(r.AveragePrice));      w.Write(',');
+                w.WriteLine(r.TradingDay);
             }
             Interlocked.Increment(ref _written);
         }
         catch (Exception)
         {
-            // 标记失败，后续 Tick 跳过此合约（避免反复抛异常）
             _failed.TryAdd(key, 1);
             Interlocked.Increment(ref _errors);
             try { _writers.TryRemove(key, out var old); SafeDispose(old.Writer); } catch { }
         }
-    }
-
-    /// <summary>便捷方法：TickRecord → 金数源 CSV (仅1档深度，其余填0)</summary>
-    public void WriteTick(TickRecord tick, string instrumentId, DateOnly tradingDay, string exchangeId)
-    {
-        var td = tradingDay.ToString("yyyyMMdd");
-        var dt = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp);
-        var price = tick.LastPrice / (double)TickRecord.PriceScale;
-        var bp1 = tick.BidPrice1 / (double)TickRecord.PriceScale;
-        var ap1 = tick.AskPrice1 / (double)TickRecord.PriceScale;
-
-        Write(instrumentId, exchangeId, td,
-            dt.ToString("HH:mm:ss"), dt.Millisecond,
-            price, 0, 0, 0,  // lastPrice, preSettle, preClose, preOI
-            price, 0, 0,      // open, high, low
-            (int)tick.Volume, tick.Turnover, tick.OpenInterest,
-            0, 0, 0, 0,       // close, settle, upper, lower
-            bp1, tick.BidVolume1, ap1, tick.AskVolume1,
-            0, 0, 0, 0,       // bid2
-            0, 0, 0, 0,       // bid3
-            0, 0, 0, 0,       // bid4
-            0, 0, 0, 0,       // bid5
-            0);                // avgPrice
     }
 
     public void FlushAll()

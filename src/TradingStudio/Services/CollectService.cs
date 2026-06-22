@@ -15,21 +15,22 @@ public class CollectService : BackgroundService
     private readonly SessionScheduler _scheduler = SessionScheduler.CreateWithHolidays();
     private readonly HealthMonitor _health;
     private readonly IBarStore _store;
-    private readonly TickCsvWriter _tickWriter;
+    private readonly QuotePipeline _pipeline;
     private readonly Serilog.ILogger _log;
 
-    private long _quoteCount, _reconnectCount, _tickSkipped;
+    private long _reconnectCount;
     private DateTime _lastConnect, _lastQuote, _lastHealth;
-    private HashSet<string> _top30Codes = new(StringComparer.OrdinalIgnoreCase);
 
     public CollectService(IOptions<CollectOptions> options, IBarStore store,
                           TickCsvWriter tickWriter, Serilog.ILogger logger)
     {
         _cfg = options.Value;
         _store = store;
-        _tickWriter = tickWriter;
         _log = logger;
         _health = new HealthMonitor();
+
+        var registry = FutureRegistry.Load(_cfg.SymbolsPath);
+        _pipeline = new QuotePipeline(tickWriter, registry.Top30Codes);
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -39,8 +40,7 @@ public class CollectService : BackgroundService
         _log.Information("════════════════════════════════");
 
         var registry = FutureRegistry.Load(_cfg.SymbolsPath);
-        _top30Codes = registry.Top30Codes;
-        _log.Information("Top 30 filter loaded: {Count} varieties", _top30Codes.Count);
+        _log.Information("Top 30 filter loaded: {Count} varieties", registry.Top30Codes.Count);
 
         // 命令行过滤
         var futures = registry.All.Values.AsEnumerable();
@@ -69,25 +69,22 @@ public class CollectService : BackgroundService
         // 确保数据目录存在
         var dbDir = Path.GetDirectoryName(Path.GetFullPath(_cfg.Database));
         if (dbDir != null) Directory.CreateDirectory(dbDir);
-        var tickDir = Path.GetDirectoryName(Path.GetFullPath(_cfg.TickData));
-        if (tickDir != null) Directory.CreateDirectory(tickDir);
-
-        // IBarStore + TickCsvWriter 从 DI 注入（单例，PeriodMaintainer 共享 store）
-        var store = _store;
-        var tickWriter = _tickWriter;
 
         using var healthCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var healthTask = HealthLoop(store, tickWriter, healthCts.Token);
+        var healthTask = HealthLoop(healthCts.Token);
+
+        // Wire Bar → Store
+        _pipeline.Agg1Min.OnBar += bar => _store.WriteAsync(bar);
+        _pipeline.AggDay.OnBar  += bar => _store.WriteAsync(bar);
 
         while (!ct.IsCancellationRequested)
         {
-            // 等下一个交易时段
             if (!_scheduler.IsInSession())
             {
                 var wait = _scheduler.WaitUntilNextSession();
                 _log.Information("休市中，{Wait:F0}分钟后开盘（{Time}）",
                     wait.TotalMinutes, SessionScheduler.BeijingNow.Add(wait).ToString("HH:mm"));
-                _health.Update("Idle", _quoteCount, store.WrittenCount, tickWriter.WrittenCount,
+                _health.Update("Idle", _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped,
                     _reconnectCount, "休市", _lastConnect, _lastQuote, _lastHealth);
                 try { await Task.Delay(wait, ct); } catch { break; }
                 if (ct.IsCancellationRequested) break;
@@ -97,20 +94,11 @@ public class CollectService : BackgroundService
             _log.Information("进入{session}时段，开始采集", session);
             _lastConnect = DateTime.Now;
 
-            using var agg1Min = new BarAggregator();
-            using var aggDay = new DailyBarAggregator();
-            agg1Min.OnBar += bar => store.WriteAsync(bar);
-            aggDay.OnBar  += bar => store.WriteAsync(bar);
-
-            // 日线仅在收盘时 flush（避免中途清空丢失数据）
-            // 1min bar 由 BarAggregator 的 CheckTimeouts（30s 无数据兜底）+ 收盘 Flush 保证落盘
-
-            // 会话内：自动重连
             while (_scheduler.IsInSession() && !ct.IsCancellationRequested)
             {
                 try
                 {
-                    await RunSession(agg1Min, aggDay, tickWriter, batches, ct);
+                    await RunSession(batches, ct);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { _log.Error(ex, "Session error"); }
@@ -123,10 +111,8 @@ public class CollectService : BackgroundService
                 try { await Task.Delay(TimeSpan.FromSeconds(delay), ct); } catch { break; }
             }
 
-            // 收盘：flush 所有未完成的 Bar
             _log.Information("{Session}收盘，flush 数据", session);
-            agg1Min.Flush();
-            aggDay.FlushAll();
+            _pipeline.Flush();
             await Task.Delay(500, ct);
         }
 
@@ -134,18 +120,16 @@ public class CollectService : BackgroundService
         try { await healthTask; } catch (OperationCanceledException) { }
 
         _log.Information("Done. quotes={Quotes} bars={Bars} csv={Csv}",
-            _quoteCount, store.WrittenCount, tickWriter.WrittenCount);
+            _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped);
     }
 
-    private async Task RunSession(BarAggregator agg1Min, DailyBarAggregator aggDay,
-        TickCsvWriter tickWriter, List<string[]> batches, CancellationToken ct)
+    private async Task RunSession(List<string[]> batches, CancellationToken ct)
     {
         using var md = new MdApi();
         var connected = new TaskCompletionSource<bool>();
         var loggedIn = new TaskCompletionSource<bool>();
         var session = _scheduler.SessionName();
 
-        // 断线标志 — 用 lock 保护，CTP 回调来自原生线程
         var discLock = new object();
         var disconnected = false;
 
@@ -169,7 +153,7 @@ public class CollectService : BackgroundService
         { if (err.ErrorID != 0) _log.Error("[{Session}] [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg); };
         md.OnQuote += q =>
         {
-            try { HandleQuote(q, agg1Min, aggDay, tickWriter); _lastQuote = DateTime.Now; }
+            try { _pipeline.Feed(q); _lastQuote = DateTime.Now; }
             catch (Exception ex) { _log.Error(ex, "Quote handler error"); }
         };
 
@@ -177,7 +161,7 @@ public class CollectService : BackgroundService
         if (!await WaitFor(connected, 15000, ct)) throw new Exception("Connection timeout");
         if (!await WaitFor(loggedIn, 15000, ct)) throw new Exception("Login timeout");
 
-        _reconnectCount = 0; // 重置重连计数
+        _reconnectCount = 0;
         for (int i = 0; i < batches.Count && _scheduler.IsInSession(); i++)
         {
             md.Subscribe(batches[i]);
@@ -193,38 +177,7 @@ public class CollectService : BackgroundService
         }
     }
 
-    private void HandleQuote(CTP.Quote q, BarAggregator agg1Min, DailyBarAggregator aggDay, TickCsvWriter tickWriter)
-    {
-        if (string.IsNullOrEmpty(q.InstrumentID)) return;
-        var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
-        var record = QuoteConverter.FromCTPQuote(q);
-        var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
-
-        // 所有品种：1min + Day Bar 聚合
-        agg1Min.Feed(record, instId, tradingDay); aggDay.Feed(record, instId, tradingDay);
-        Interlocked.Increment(ref _quoteCount);
-
-        // Top 30 数据分层：若配置了 Top 30 则只写活跃品种，否则全量写 Tick CSV
-        var productCode = instId.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
-        if (_top30Codes.Count > 0 && !_top30Codes.Contains(productCode))
-        {
-            Interlocked.Increment(ref _tickSkipped);
-            return;
-        }
-
-        tickWriter.Write(instId, q.ExchangeID, q.TradingDay,
-            q.UpdateTime, q.UpdateMillisec, q.LastPrice, q.PreSettlementPrice, q.PreClosePrice,
-            q.PreOpenInterest, q.OpenPrice, q.HighestPrice, q.LowestPrice,
-            q.Volume, q.Turnover, q.OpenInterest,
-            q.ClosePrice, q.SettlementPrice, q.UpperLimitPrice, q.LowerLimitPrice,
-            q.BidPrice1, q.BidVolume1, q.AskPrice1, q.AskVolume1,
-            q.BidPrice2, q.BidVolume2, q.AskPrice2, q.AskVolume2,
-            q.BidPrice3, q.BidVolume3, q.AskPrice3, q.AskVolume3,
-            q.BidPrice4, q.BidVolume4, q.AskPrice4, q.AskVolume4,
-            q.BidPrice5, q.BidVolume5, q.AskPrice5, q.AskVolume5, q.AveragePrice);
-    }
-
-    private async Task HealthLoop(IBarStore store, TickCsvWriter tickWriter, CancellationToken ct)
+    private async Task HealthLoop(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -233,10 +186,10 @@ public class CollectService : BackgroundService
             var session = _scheduler.SessionName();
             _health.Update(
                 _scheduler.IsInSession() ? "Connected" : "Idle",
-                _quoteCount, store.WrittenCount, tickWriter.WrittenCount,
+                _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped,
                 _reconnectCount, session, _lastConnect, _lastQuote, _lastHealth);
-            _log.Information("quotes={Quotes} bars={Bars} reconnect={Reconnects} csv={Csv} csvErr={CsvErr} tickSkipped={Skipped} [{Session}]",
-                _quoteCount, store.WrittenCount, _reconnectCount, tickWriter.WrittenCount, tickWriter.ErrorCount, _tickSkipped, session);
+            _log.Information("quotes={Quotes} bars={Bars} reconnect={Reconnects} skipped={Skipped} [{Session}]",
+                _pipeline.QuoteCount, _store.WrittenCount, _reconnectCount, _pipeline.TickSkipped, session);
         }
     }
 

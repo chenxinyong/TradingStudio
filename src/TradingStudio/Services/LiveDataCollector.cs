@@ -24,7 +24,6 @@ public class LiveDataCollector : BackgroundService
 
     private long _tickCount;
     private long _barCount;
-    private long _tickSkipped; // 非 Top 30 跳过的 Tick 数
     private readonly ConcurrentDictionary<string, string> _lastTickKey = new(); // 去重：instId → "UpdateTime_Millisec"
 
     private readonly TickCsvWriter? _tickWriter;
@@ -49,21 +48,17 @@ public class LiveDataCollector : BackgroundService
 
         while (!ct.IsCancellationRequested)
         {
-            BarAggregator? barAgg = null;
-            DailyBarAggregator? dailyAgg = null;
             Channel<Bar>? barChannel = null;
             Task? writeTask = null;
 
             try
             {
-                barAgg = new BarAggregator();
-                dailyAgg = new DailyBarAggregator();
+                var pipeline = new QuotePipeline(_tickWriter!, _top30Codes);
                 barChannel = Channel.CreateBounded<Bar>(4096);
 
-                barAgg.OnBar += bar => { Interlocked.Increment(ref _barCount); barChannel.Writer.TryWrite(bar); };
-                dailyAgg.OnBar += bar => barChannel.Writer.TryWrite(bar);
+                pipeline.Agg1Min.OnBar += bar => { Interlocked.Increment(ref _barCount); barChannel.Writer.TryWrite(bar); };
+                pipeline.AggDay.OnBar += bar => barChannel.Writer.TryWrite(bar);
 
-                // 后台写入 BarStore
                 writeTask = WriteLoop(barChannel.Reader, ct);
 
                 var reader = _feed.PersistChannel.Reader;
@@ -71,46 +66,14 @@ public class LiveDataCollector : BackgroundService
                 {
                     var (instId, quote, tradingDay) = item;
 
-                    // 去重：同一 UpdateTime+Millisec 的重复快照只写一次
+                    // 去重（Live 特有：CTP 可能推送重复快照）
                     var tickKey = $"{quote.UpdateTime}_{quote.UpdateMillisec}";
                     if (_lastTickKey.TryGetValue(instId, out var prevKey) && prevKey == tickKey)
-                        continue;  // 重复快照，跳过
+                        continue;
                     _lastTickKey[instId] = tickKey;
 
                     Interlocked.Increment(ref _tickCount);
-
-                    // Top 30 数据分层：若配置了 Top 30 则只写活跃品种，否则全量写 Tick CSV
-                    var productCode = _registry.Resolve(instId)?.Code;
-                    var isTop30 = _top30Codes.Count == 0
-                        || (productCode != null && _top30Codes.Contains(productCode));
-
-                    if (isTop30)
-                    {
-                        _tickWriter?.Write(
-                            instId,
-                            string.IsNullOrEmpty(quote.ExchangeID) ? TickCsvWriter.GuessExchange(instId) : quote.ExchangeID,
-                            tradingDay.ToString("yyyyMMdd"),
-                            quote.UpdateTime ?? "", quote.UpdateMillisec,
-                            quote.LastPrice, quote.PreSettlementPrice, quote.PreClosePrice, quote.PreOpenInterest,
-                            quote.OpenPrice, quote.HighestPrice, quote.LowestPrice,
-                            quote.Volume, quote.Turnover, quote.OpenInterest,
-                            quote.ClosePrice, quote.SettlementPrice, quote.UpperLimitPrice, quote.LowerLimitPrice,
-                            quote.BidPrice1, quote.BidVolume1, quote.AskPrice1, quote.AskVolume1,
-                            quote.BidPrice2, quote.BidVolume2, quote.AskPrice2, quote.AskVolume2,
-                            quote.BidPrice3, quote.BidVolume3, quote.AskPrice3, quote.AskVolume3,
-                            quote.BidPrice4, quote.BidVolume4, quote.AskPrice4, quote.AskVolume4,
-                            quote.BidPrice5, quote.BidVolume5, quote.AskPrice5, quote.AskVolume5,
-                            quote.AveragePrice);
-                    }
-                    else
-                    {
-                        Interlocked.Increment(ref _tickSkipped);
-                    }
-
-                    // 同时喂 1min + Day Bar 聚合器
-                    var record = QuoteConverter.FromCTPQuote(quote);
-                    barAgg.Feed(record, instId, tradingDay);
-                    dailyAgg.Feed(record, instId, tradingDay);
+                    pipeline.Feed(quote);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -126,17 +89,10 @@ public class LiveDataCollector : BackgroundService
             }
             finally
             {
-                // 清理资源
                 try
                 {
-                    barAgg?.Flush();
-                    dailyAgg?.FlushAll();
                     barChannel?.Writer.Complete();
-                    if (writeTask != null)
-                        await writeTask;
-
-                    barAgg?.Dispose();
-                    dailyAgg?.Dispose();
+                    if (writeTask != null) await writeTask;
                 }
                 catch (Exception ex)
                 {
@@ -145,8 +101,8 @@ public class LiveDataCollector : BackgroundService
             }
         }
 
-        _log.Information("LiveDataCollector stopped — ticks={TickCount} bars={BarCount} skipped={TickSkipped}",
-            _tickCount, _barCount, _tickSkipped);
+        _log.Information("LiveDataCollector stopped — ticks={TickCount} bars={BarCount}",
+            _tickCount, _barCount);
     }
 
     private async Task WriteLoop(ChannelReader<Bar> reader, CancellationToken ct)
