@@ -67,7 +67,7 @@ static void PrintUsage()
 static void PrintBanner()
 {
     Console.WriteLine("════════════════════════════════");
-    Console.WriteLine("  TradingStudio v0.2.0 行情采集");
+    Console.WriteLine("  TradingStudio v0.4.0 行情采集");
     Console.WriteLine("════════════════════════════════");
     Console.WriteLine($"  .NET:    {Environment.Version}");
     Console.WriteLine($"  OS:      {Environment.OSVersion}");
