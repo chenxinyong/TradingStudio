@@ -32,6 +32,11 @@ mkdir "%RELEASE%\configs\strategies" 2>nul
 if exist "%ROOT%deploy\configs\strategies\*.json" (
     copy /Y "%ROOT%deploy\configs\strategies\*.json" "%RELEASE%\configs\strategies\" >nul 2>&1
 )
+REM Copy HTTPS cert
+mkdir "%RELEASE%\certs" 2>nul
+if exist "%ROOT%src\TradingStudio\certs\tradingstudio.pfx" (
+    copy /Y "%ROOT%src\TradingStudio\certs\tradingstudio.pfx" "%RELEASE%\certs\" >nul 2>&1
+)
 echo   OK
 
 REM --- Step 5: Start scripts ---
