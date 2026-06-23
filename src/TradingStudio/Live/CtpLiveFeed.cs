@@ -192,12 +192,11 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                         var filteredCount = _instruments.Count(c => _activeProductSet.Contains(ProductOf(c)));
                         _filterReady = true;
 
+                        var top5 = string.Join(", ", topRanking.Take(5).Select(x =>
+                            $"{x.Product}(V{x.TotalVol},OI{x.TotalOI:F0},{x.Contracts}ct)"));
                         _log.Information(
-                            "Activity soft filter: Top {ProductCount} products → {Filtered}/{Total} engine. " +
-                            "All {Total} persisted. Top5: {Top5}",
-                            topProducts.Count, filteredCount, _instruments.Count,
-                            string.Join(", ", topRanking.Take(5).Select(x =>
-                                $"{x.Product}(V{x.TotalVol},OI{x.TotalOI:F0},{x.Contracts}ct)")));
+                            "Activity filter ready: {ProductCount} products → engine {Filtered}/{Total}, Top5={Top5}",
+                            topProducts.Count, filteredCount, _instruments.Count, top5);
                     }
 
                     // 过滤未就绪前：定期检查观察期（每 5s 超时一次）
