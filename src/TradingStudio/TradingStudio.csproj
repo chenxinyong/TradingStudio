@@ -64,10 +64,10 @@
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
 
-  <!-- Debug 时强制拷贝 CTP DLL 到 VS 可能使用的输出目录 -->
-  <Target Name="CopyCtpNative" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
+  <!-- 拷贝 CTP 原生 DLL 到输出目录 -->
+  <Target Name="CopyCtpNative" AfterTargets="Build">
     <ItemGroup>
-      <_CtpDlls Include="..\CTP\Wrapper\bin\Debug\CTPWrapper.dll" />
+      <_CtpDlls Include="..\CTP\Wrapper\bin\$(Configuration)\CTPWrapper.dll" />
       <_CtpDlls Include="..\CTP\SDK\dll\thostmduserapi_se.dll" />
       <_CtpDlls Include="..\CTP\SDK\dll\thosttraderapi_se.dll" />
       <_CtpDlls Include="C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\10.0.9\runtimes\win-x64\native\ijwhost.dll" />
@@ -76,7 +76,5 @@
       <_CtpDlls Include="C:\Windows\System32\msvcp140.dll" />
     </ItemGroup>
     <Copy SourceFiles="@(_CtpDlls)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
-    <MakeDir Directories="$(MSBuildProjectDirectory)\bin\Debug\net10.0\" />
-    <Copy SourceFiles="@(_CtpDlls)" DestinationFolder="$(MSBuildProjectDirectory)\bin\Debug\net10.0\" SkipUnchangedFiles="true" />
   </Target>
 </Project>

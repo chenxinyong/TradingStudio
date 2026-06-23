@@ -245,7 +245,8 @@ static async Task RunLiveAsync(string[] args)
     // 工厂创建引擎（IDataFeed 需延迟解析）
     builder.Services.AddSingleton(sp => new TradingEngine(
         sp.GetRequiredService<IDataFeed>(), execution, portfolio, indicators, strategies,
-        risk, feedback, tickSnapshot, engineOptions, registry));
+        risk, feedback, tickSnapshot, engineOptions, registry,
+        sp.GetService<Microsoft.Extensions.Logging.ILogger<TradingStudio.Engine.TradingEngine>>()));
 
     // 引擎后台运行 + SignalR 实时推送 + 数据落盘
     builder.Services.AddHostedService<EngineHost>();

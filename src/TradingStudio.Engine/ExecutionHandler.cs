@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Risk;
@@ -6,47 +8,24 @@ namespace TradingStudio.Engine;
 
 /// <summary>
 /// 订单撮合引擎 — 回测和实盘共用。
-///
-/// 订单生命周期:
-///   Strategy.MarketBuy/Sell → EngineStrategyContext → ExecutionHandler.Submit
-///     → RiskController.CheckPreOrder (风控前置，拒绝则立即返回Rejected)
-///     → 回测: 订单进入 ActiveOrders 队列，等待下一 Tick/Bar 撮合
-///     → 实盘: 市价单通过 SendToExchange 发往 CTP TraderApi
-///     → ProcessTick/ProcessBar: 遍历 ActiveOrders，匹配价格 + 流动性约束
-///     → 完全成交: 移除出 ActiveOrders → PortfolioManager.ProcessFill
-///     → 订单事件写入 OrderHistory (完整审计追踪)
-///
-/// 双模式撮合:
-///   - Tick 模式: ProcessTick() — 用增量成交量 + Bid/Ask 五档撮合，每 Tick 可部分成交
-///   - Bar 模式:  ProcessBar()  — 用下一根 Bar 撮合，单笔≤Bar.Volume×10%，Open价成交防前向偏差
-///
-/// 前向偏差防护 (look-ahead bias):
-///   - 市价单: 用 Bar.Open 而非 Bar.Close 成交
-///   - 限价单: 成交价 ≤ min(LimitPrice, Open) 买入 / ≥ max(LimitPrice, Open) 卖出
-///   - 止损单: 成交价 = max(StopPrice, Open) 买入 / min(StopPrice, Open) 卖出
-///   修正前用 Bar.High/Bar.Low 极端价成交 → 回测结果虚高。
 /// </summary>
 public class ExecutionHandler : IExecutionHandler
 {
     private readonly List<Order> _activeOrders = new();
     private readonly List<OrderEvent> _orderHistory = new();
     private readonly RiskController _risk;
+    private readonly ILogger _log;
     private readonly Dictionary<string, int> _lastCumulativeVolume = new();
-    private readonly Dictionary<string, int> _strategyPriority = new();  // StrategyId → Priority (越小越优先)
-    private readonly object _sync = new();  // 保护 _activeOrders / _orderHistory 并发访问（Submit 和 REST API 可能并发）
+    private readonly Dictionary<string, int> _strategyPriority = new();
+    private readonly object _sync = new();
     private long _nextOrderId = 1;
 
-    /// <summary>实盘模式：市价单发往 CTP 而非本地撮合</summary>
     public bool IsLive { get; set; }
-
-    /// <summary>实盘模式：引擎调用此委托将订单发往 CTP。CTP 集成点。</summary>
     public Action<Order>? SendToExchange { get; set; }
 
-    /// <summary>CTP 成交回报通道（实盘模式：CTP 回调写入 FillChannel.Writer，引擎独占消费）</summary>
     public System.Threading.Channels.Channel<OrderEvent> FillChannel { get; }
         = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
 
-    /// <summary>已处理的成交事件输出通道（引擎处理完 FillChannel 后写入，SignalR 推送端消费）</summary>
     public System.Threading.Channels.Channel<OrderEvent> OrderOutbox { get; }
         = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
 
@@ -57,9 +36,10 @@ public class ExecutionHandler : IExecutionHandler
     }
     public IReadOnlyList<OrderEvent> OrderHistory { get { lock (_sync) return _orderHistory.ToList(); } }
 
-    public ExecutionHandler(RiskController risk)
+    public ExecutionHandler(RiskController risk, ILogger<ExecutionHandler>? logger = null)
     {
         _risk = risk;
+        _log = logger ?? NullLogger<ExecutionHandler>.Instance;
     }
 
     /// <summary>注册策略优先级。引擎在注册策略时调用。Priority 越小越优先。</summary>
@@ -101,6 +81,8 @@ public class ExecutionHandler : IExecutionHandler
                     FilledQty = 0, Type = OrderEventType.Rejected,
                     Message = riskResult.Reason, Time = DateTimeOffset.UtcNow,
                 }); }
+                _log.LogWarning("[Order] #{Id} {Dir} {Inst} x{Qty} → REJECTED: {Reason}",
+                    id, order.Direction, order.InstrumentId, order.Quantity, riskResult.Reason);
                 return new OrderTicket { OrderId = id, Status = OrderStatus.Rejected };
             }
         }
@@ -125,6 +107,9 @@ public class ExecutionHandler : IExecutionHandler
         };
         lock (_sync) { _orderHistory.Add(evt); }
 
+        _log.LogInformation("[Order] #{Id} {Dir} {Inst} x{Qty} {Type} [{Strategy}] → Submitted",
+            id, order.Direction, order.InstrumentId, order.Quantity, order.Type, strategyId);
+
         return new OrderTicket { OrderId = id, Status = OrderStatus.Submitted };
     }
 
@@ -145,6 +130,8 @@ public class ExecutionHandler : IExecutionHandler
                 FilledQty = order.FilledQuantity,
                 Type = OrderEventType.Cancelled, Time = DateTimeOffset.UtcNow,
             });
+            _log.LogInformation("[Order] #{Id} {Dir} {Inst} → Cancelled [{Strategy}]",
+                orderId, order.Direction, order.InstrumentId, order.StrategyId);
             return true;
         }
     }
@@ -174,7 +161,13 @@ public class ExecutionHandler : IExecutionHandler
 
             var fill = TryMatchTick(order, tick, future, ref remainingVolume);
             if (fill != null)
+            {
                 fills.Add(fill);
+                if (fill.Type == OrderEventType.Filled)
+                    _log.LogDebug("[Fill] #{Id} {Dir} {Inst} x{Qty} @ {Price:F2} [{Strategy}]",
+                        fill.OrderId, fill.Direction, fill.InstrumentId, fill.FilledQty,
+                        fill.FillPrice, fill.StrategyId);
+            }
         }
 
         // 移除完全成交的订单
@@ -279,7 +272,9 @@ public class ExecutionHandler : IExecutionHandler
             {
                 fills.Add(fill);
                 lock (_sync) { _orderHistory.Add(fill); }
-                // MatchBar 已设置 order.FilledQuantity/Status — 仅移除完全成交的
+                _log.LogDebug("[Fill] #{Id} {Dir} {Inst} x{Qty} @ {Price:F2} [{Strategy}]",
+                    fill.OrderId, fill.Direction, fill.InstrumentId, fill.FilledQty,
+                    fill.FillPrice, fill.StrategyId);
                 if (order.FilledQuantity >= order.Quantity)
                     lock (_sync) { _activeOrders.Remove(order); }
             }

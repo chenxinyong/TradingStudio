@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Indicators;
 using TradingStudio.Core.Models;
@@ -17,20 +18,12 @@ internal class EngineStrategyContext : StrategyContext
     private readonly FutureRegistry _registry;
     private readonly IReadOnlyList<string> _instruments;
     private readonly List<Bar> _barHistory;
+    private readonly ILogger _log;
 
     private DateTimeOffset _currentTime;
     public override DateTimeOffset CurrentTime => _currentTime;
     public override IReadOnlyList<string> SubscribedInstruments => _instruments;
-
-    /// <inheritdoc />
     public override bool IsWarmup { get; set; }
-
-    /// <summary>跳过预热期订单（返回 Rejected）</summary>
-    private OrderTicket SkipIfWarmup(string action)
-    {
-        if (IsWarmup) return new OrderTicket { OrderId = -1, Status = OrderStatus.Rejected };
-        return null!; // 调用方会继续
-    }
 
     public EngineStrategyContext(
         string strategyId,
@@ -39,7 +32,8 @@ internal class EngineStrategyContext : StrategyContext
         IndicatorManager indicators,
         FutureRegistry registry,
         IReadOnlyList<string> instruments,
-        List<Bar> barHistory)
+        List<Bar> barHistory,
+        ILogger logger)
         : base(strategyId)
     {
         _execution = execution;
@@ -48,6 +42,7 @@ internal class EngineStrategyContext : StrategyContext
         _registry = registry;
         _instruments = instruments;
         _barHistory = barHistory;
+        _log = logger;
     }
 
     public void SetCurrentTime(DateTimeOffset time) => _currentTime = time;
@@ -75,28 +70,32 @@ internal class EngineStrategyContext : StrategyContext
     // ═══ 交易 ═══
     public override OrderTicket MarketBuy(string instrumentId, int quantity, string? tag = null)
     {
-        if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
-        return _execution.Submit(new Order
-        {
-            InstrumentId = instrumentId,
-            Direction = OrderDirection.Buy,
-            Type = OrderType.Market,
-            Quantity = quantity,
-            Tag = tag,
-        }, StrategyId, _portfolio);
+        var warmup = IsWarmup;
+        var ticket = warmup ? new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected }
+            : _execution.Submit(new Order
+            {
+                InstrumentId = instrumentId, Direction = OrderDirection.Buy,
+                Type = OrderType.Market, Quantity = quantity, Tag = tag,
+            }, StrategyId, _portfolio);
+        if (!warmup)
+            _log.LogDebug("[{Strategy}] MarketBuy {Inst} x{Qty} {Tag} → {Status}",
+                StrategyId, instrumentId, quantity, tag ?? "", ticket.Status);
+        return ticket;
     }
 
     public override OrderTicket MarketSell(string instrumentId, int quantity, string? tag = null)
     {
-        if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
-        return _execution.Submit(new Order
-        {
-            InstrumentId = instrumentId,
-            Direction = OrderDirection.Sell,
-            Type = OrderType.Market,
-            Quantity = quantity,
-            Tag = tag,
-        }, StrategyId, _portfolio);
+        var warmup = IsWarmup;
+        var ticket = warmup ? new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected }
+            : _execution.Submit(new Order
+            {
+                InstrumentId = instrumentId, Direction = OrderDirection.Sell,
+                Type = OrderType.Market, Quantity = quantity, Tag = tag,
+            }, StrategyId, _portfolio);
+        if (!warmup)
+            _log.LogDebug("[{Strategy}] MarketSell {Inst} x{Qty} {Tag} → {Status}",
+                StrategyId, instrumentId, quantity, tag ?? "", ticket.Status);
+        return ticket;
     }
 
     public override OrderTicket ClosePosition(string instrumentId)
@@ -105,9 +104,12 @@ internal class EngineStrategyContext : StrategyContext
         var pos = _portfolio.GetPosition(instrumentId);
         if (pos == null || pos.Quantity == 0)
             throw new InvalidOperationException($"No position to close: {instrumentId}");
-        return pos.Quantity > 0
+        var ticket = pos.Quantity > 0
             ? MarketSell(instrumentId, pos.Quantity, "平多")
             : MarketBuy(instrumentId, -pos.Quantity, "平空");
+        _log.LogInformation("[{Strategy}] ClosePosition {Inst} x{Qty} → {Status}",
+            StrategyId, instrumentId, Math.Abs(pos.Quantity), ticket.Status);
+        return ticket;
     }
 
     public override OrderTicket LimitBuy(string instrumentId, int quantity, decimal limitPrice)
@@ -162,13 +164,13 @@ internal class EngineStrategyContext : StrategyContext
     public override Future GetFuture(string instrumentId) =>
         _registry.Resolve(instrumentId)!;
 
-    // ═══ 日志 ═══
+    // ═══ 策略信号日志 (Serilog 结构化) ═══
     public override void Log(string message) =>
-        Console.WriteLine($"[{StrategyId}] {message}");
+        _log.LogInformation("[{Strategy}] {Message}", StrategyId, message);
 
     public override void LogWarning(string message) =>
-        Console.WriteLine($"[{StrategyId}] ⚠ {message}");
+        _log.LogWarning("[{Strategy}] ⚠ {Message}", StrategyId, message);
 
     public override void LogError(string message) =>
-        Console.WriteLine($"[{StrategyId}] ✗ {message}");
+        _log.LogError("[{Strategy}] ✗ {Message}", StrategyId, message);
 }

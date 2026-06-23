@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Strategy;
@@ -19,6 +20,7 @@ public class TradingEngine
     private readonly TickSnapshot _tickSnapshot;
     private readonly EngineOptions _options;
     private readonly FutureRegistry _registry;
+    private readonly ILogger _log;
 
     public TradingEngine(
         IDataFeed dataFeed,
@@ -30,7 +32,8 @@ public class TradingEngine
         FeedbackMonitor feedback,
         TickSnapshot tickSnapshot,
         EngineOptions options,
-        FutureRegistry registry)
+        FutureRegistry registry,
+        ILogger<TradingEngine>? logger = null)
     {
         _dataFeed = dataFeed;
         _execution = execution;
@@ -42,6 +45,7 @@ public class TradingEngine
         _tickSnapshot = tickSnapshot;
         _options = options;
         _registry = registry;
+        _log = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<TradingEngine>.Instance;
     }
 
     /// <summary>运行引擎，返回完整报告。</summary>
@@ -97,7 +101,8 @@ public class TradingEngine
                 var loadStart = _options.StartTime.AddDays(-Math.Max(_options.WarmupDays * 2, 10));
                 var loadEnd = _options.StartTime.AddDays(1);
 
-                Console.WriteLine($"[Warmup] Loading {_options.WarmupDays}d worth from {loadStart:yyyy-MM-dd} to {loadEnd:yyyy-MM-dd}");
+                _log.LogInformation("[Warmup] Loading {Days}d from {Start:yyyy-MM-dd} to {End:yyyy-MM-dd}",
+                    _options.WarmupDays, loadStart, loadEnd);
                 foreach (var inst in config.Instruments)
                 {
                     if (!warmupCache.TryGetValue(inst, out var loaded))
@@ -108,11 +113,11 @@ public class TradingEngine
                             if (bars.Count == 0)
                                 bars = await _options.WarmupStore.QueryBarsAsync(inst, loadStart, loadEnd, $"bars_{inst}_1min");
                             loaded = bars.ToList();
-                            Console.WriteLine($"[Warmup] {inst}: {loaded.Count} bars loaded");
+                            _log.LogInformation("[Warmup] {Inst}: {Count} bars loaded", inst, loaded.Count);
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"[Warmup] {inst}: FAILED — {ex.Message}");
+                            _log.LogWarning(ex, "[Warmup] {Inst}: FAILED", inst);
                             loaded = new List<Bar>();
                         }
                         warmupCache[inst] = loaded;
@@ -124,7 +129,7 @@ public class TradingEngine
 
             var ctx = new EngineStrategyContext(
                 config.StrategyId, _execution, _portfolio, _indicators,
-                _registry, config.Instruments, barHistory);
+                _registry, config.Instruments, barHistory, _log);
             strategy.Initialize(ctx);
 
             // 预热：喂入历史 Bar 到策略（Warmup 模式，策略只更新状态不产生信号）
@@ -139,7 +144,8 @@ public class TradingEngine
             _strategies.Register(strategy, config, ctx);
             if (_execution is ExecutionHandler eh)
                 eh.SetStrategyPriority(config.StrategyId, config.Priority);
-            Console.WriteLine($"[Engine] Strategy '{config.StrategyId}' ({strategy.Name}) initialized (history={barHistory.Count} bars)");
+            _log.LogInformation("[Engine] Strategy '{Id}' ({Name}) initialized (warmup={Count} bars)",
+                config.StrategyId, strategy.Name, barHistory.Count);
         }
 
         // 2. 主循环
@@ -297,7 +303,8 @@ public class TradingEngine
         }
 
         // 回测模式：生成报告
-        Console.WriteLine($"[Engine] Done. Trades={globalTrades.Count} FinalEquity={_portfolio.Equity:C}");
+        _log.LogInformation("[Engine] Done. Trades={TradeCount} FinalEquity={Equity:C}",
+            globalTrades.Count, _portfolio.Equity);
 
         return new EngineReport
         {

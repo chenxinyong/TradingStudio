@@ -131,7 +131,8 @@ public class BacktestCommand
         // 5. 创建引擎并运行
         var engine = new TradingEngine(
             dataFeed, execution, portfolio, indicators, strategies,
-            risk, feedback, tickSnapshot, options, registry);
+            risk, feedback, tickSnapshot, options, registry,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<TradingStudio.Engine.TradingEngine>.Instance);
 
         var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
