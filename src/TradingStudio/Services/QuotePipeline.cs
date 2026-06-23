@@ -30,13 +30,13 @@ public class QuotePipeline : IDisposable
     }
 
     /// <summary>处理一条 CTP Quote。线程安全。</summary>
-    public void Feed(dynamic quote)
+    public void Feed(CTP.Quote q)
     {
-        if (string.IsNullOrEmpty(quote.InstrumentID)) return;
+        if (string.IsNullOrEmpty(q.InstrumentID)) return;
 
-        var instId = ContractCodeGenerator.Normalize(quote.InstrumentID);
-        var record = QuoteConverter.FromCTPQuote(quote);
-        var tradingDay = QuoteConverter.ParseTradingDay(quote.TradingDay);
+        var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
+        var record = QuoteConverter.FromCTPQuote(q);
+        var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
 
         // Bar 聚合
         Agg1Min.Feed(record, instId, tradingDay);
@@ -51,10 +51,10 @@ public class QuotePipeline : IDisposable
             return;
         }
 
-        var row = CsvTickRecord.FromCtpQuote(quote, instId,
-            string.IsNullOrEmpty(quote.ExchangeID) ? TickCsvWriter.GuessExchange(instId) : quote.ExchangeID,
-            quote.TradingDay);
-        _tickWriter.Write(row);
+        var row = CsvTickRecord.FromCtpQuote(q, instId,
+            string.IsNullOrEmpty(q.ExchangeID) ? TickCsvWriter.GuessExchange(instId) : q.ExchangeID,
+            q.TradingDay);
+        _tickWriter.Write(in row);
     }
 
     /// <summary>收盘/会话结束时 flush 未完成的 Bar</summary>
