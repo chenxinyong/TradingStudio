@@ -32,7 +32,7 @@ echo   OK
 
 REM --- README ---
 (
-echo TradingStudio - Market Data Collect v0.2.0
+echo TradingStudio - Market Data Collect v0.4.0
 echo ==========================================
 echo.
 echo One-click real-time market data collection for China's six futures exchanges.

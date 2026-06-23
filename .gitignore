@@ -464,3 +464,6 @@ examples/college-advisor/output/
 configs/batch/
 configs/grid/
 **/TickData/
+
+# Local dev certificates
+**/certs/
