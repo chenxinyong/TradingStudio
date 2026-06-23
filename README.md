@@ -61,7 +61,7 @@ TradingStudio 是一个**从头自研**的国内期货量化交易系统。不�
 | Bar 聚合入库 | ✅ 完成 | 1min + Day Bar → SQLite，健康监控 |
 | 历史数据验证 | ✅ 完成 | 2020-2025，5908 万条 Bar，0 硬伤 |
 | 缠论引擎 | ✅ 完成 | C# 实现：包含/分型/笔/线段/中枢/买卖点 |
-| ToolBox CLI | ✅ 完成 | 6 命令：import/export/verify/info/convert |
+| ToolBox CLI | ✅ 完成 | 9 命令：import/import-jinshuyuan/import-url/verify/merge/append/build-periods/analyze/continuous |
 | 🔥 回测引擎 | 开发中 | Phase 2 — 事件驱动，Tick 级精度 |
 | WPF 监控客户端 | 设计完成 | Dashboard + Chart + CodeEditor，3 阶段 |
 | 策略研发 | 规划中 | MTF+ChanLun 融合策略先行验证 |

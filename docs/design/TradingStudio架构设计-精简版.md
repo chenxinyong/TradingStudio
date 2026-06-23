@@ -4,8 +4,8 @@
 >
 > **约束条件：** C# / 国内期货 / 中低频 / 个人使用
 >
-> **当前阶段 (2026-06-13):** Phase 1 数据基建已完成 (Core/Data/Ctp)。
-> 本文描述的 5 项目架构中，Execution/Strategy/UI 尚未实现。
+> **当前阶段 (2026-06-23):** Phase 1 数据基建已完成，Phase 2 回测引擎实施中。
+> 实际实现采用 **6 项目架构**（增加了 ToolBox CLI，Research/UI 推迟），详见 §2 修订。
 
 ---
 
@@ -41,22 +41,34 @@
 
 ---
 
-## 2. 精简架构：7 个项目
+## 2. 精简架构：6 个项目（实际实现，2026-06-23）
 
 ```
 TradingStudio/
-├── TradingStudio.Core/           — 核心抽象（接口 + 共享类型 + 技术指标）
-├── TradingStudio.Ctp/             — C# 适配层（CTP C++ bridge → Channel<Tick>）
-├── TradingStudio.Data/            — 行情接入 + 数据存储 + K 线合成
-├── TradingStudio.Engine/          — 策略引擎 + 回测引擎 + 执行 + 风控
-├── TradingStudio.Research/        — 量化研究（BarReader + 统计 + 可视化）
-├── TradingStudio/                 — 控制台主机（collect/import/backtest/live）
-└── TradingStudio.UI/              — WPF 桌面（K线图表 + 监控面板）
+├── TradingStudio.Core/           — 核心抽象 (接口+共享类型+技术指标+CsvTickRecord)
+├── TradingStudio.Ctp/             — C# 适配层 (CTP C++ bridge → Channel<Tick>)
+├── TradingStudio.Data/            — 行情接入+数据存储+K线合成+BuildPeriodsService
+├── TradingStudio.Engine/          — 策略引擎+回测引擎+执行+风控+策略日志
+├── TradingStudio/                 — 控制台主机 (live/collect/backtest + REST API)
+│   ├── Services/                 PeriodMaintainer, QuotePipeline, LiveDataCollector
+│   └── Commands/                 BacktestCommand
+├── TradingStudio.ToolBox/         — 数据工具 CLI (import/verify/append/build-periods/...)
+└── test/                          — 测试 (Core 17 + Data 16 + Engine 116 = 149 tests)
 
 外部依赖:
 ├── CTP/Wrapper/                   — C++/CLI 封装 (CTPWrapper.dll)
 └── CTP/SDK/                       — CTP 6.7.13 原生库
+
+未实现 (推迟 Phase 4):
+├── TradingStudio.Research/        — 量化研究 (Python + Jupyter 替代)
+└── TradingStudio.UI/              — WPF 桌面 (设计完备, 14-wpf-monitoring-client-design.md)
 ```
+
+**与原始设计的差异：**
+- 增加了 `TradingStudio.ToolBox`（独立 CLI 工具，不依赖主程序）
+- `BuildPeriodsService` 等共享逻辑在 Data 层，两个 exe 共用
+- `Research` 由 Python 脚本 + Jupyter 替代，`UI` 推迟到 Phase 4
+- DuckDB 替代 SQLite 为默认存储引擎
 
 > 7 个 .NET 项目 + 1 个 C++/CLI bridge vs Lean 的 25+ 个项目。够用就好。
 >

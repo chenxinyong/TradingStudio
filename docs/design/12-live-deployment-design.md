@@ -2,8 +2,9 @@
 
 > 最终实盘部署的全景规划。从当前 v0.1.0（纯行情采集）到完整自动交易的演进路线。
 >
-> **版本**: v1.2 | **日期**: 2026-06-14 | **状态**: 设计文档，随 Phase 2-4 推进持续细化
+> **版本**: v1.4 | **日期**: 2026-06-23 | **状态**: 设计文档，持续细化
 >
+> **v1.4 修订**: 存储引擎已切 DuckDB (默认), 新增 PeriodMaintainer 多周期维护, 告警仍待实施
 > **v1.3 修订**: 附录 B 新增 13-UI技术选型、14-WPF监控客户端设计；v1.2 新增 ToolBox 三进程；v1.1 SSE → SignalR
 
 ---
@@ -821,3 +822,33 @@ CTP 行情断了 = 数据缺口。应用层检测断线后自动重连；缺口�
 | [[phase2-multi-strategy-and-deployment]] | 内存：多策略 + 部署架构 |
 | [[database-architecture]] | 内存：DuckDB + PostgreSQL 选型 |
 | [[phase2-architecture-critical-phase]] | 内存：当前关键决策期注意事项 |
+
+---
+
+## 13. v1.4 实施状态 (2026-06-23)
+
+### 已实现
+
+| 设计项 | 实际实现 |
+|--------|----------|
+| 行情采集 (Collect) | ✅ `CollectService` + 883 合约全量订阅 |
+| 实盘引擎 (Live) | ✅ `LiveDataCollector` + REST API :59661 |
+| 数据落盘 | ✅ Tick CSV (GBK/金数源) + DuckDB bars_1min/day |
+| 多周期维护 | ✅ `PeriodMaintainer` — 每 5min 自动构建 5min/15min/week |
+| 连续合约 | ✅ `BuildContinuousContracts` — 50+ 品种 xxx000 自动生成 |
+| 存储引擎 | ✅ DuckDB 默认 (8.4 GB 历史库) |
+| 风控横切层 | ✅ `RiskController.CheckPreOrder` |
+| 回测引擎 | ✅ `TradingEngine` — Tick + Bar 双模式 |
+| 策略框架 | ✅ `StrategyContainer` + JSON 配置驱动 |
+| 日志系统 | ✅ Serilog 结构化日志 + 策略信号日志 |
+| CI/CD | ✅ GitHub Actions (ubuntu test + windows build) |
+| 测试 | ✅ 149 tests (Core 17 + Data 16 + Engine 116) |
+
+### 未实现
+
+| 设计项 | 状态 | 计划 |
+|--------|------|------|
+| 告警通道 (Layer 4) | ❌ | P1, 计划本周 |
+| 数据库审计 (Layer 2) | ❌ | Phase 3 (PostgreSQL) |
+| WPF 监控客户端 | ❌ | Phase 4 |
+| Simnow 完整交易日验证 | ⚠️ 今晚 | 配置就绪, 等待开盘 |

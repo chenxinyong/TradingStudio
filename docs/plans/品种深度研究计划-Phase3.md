@@ -13,7 +13,7 @@
 | Tick 数据 | 当前仅保留当日（2026-06-18），55 品种，~542 文件 / 23.6 MB/日 |
 | 品种规格 | symbols.json (75品种) + 知识库合约规格表 (82品种) |
 | 历史Tick | 金数源 RAR 归档（2020-2025 每日收盘包），可按需回补 |
-| 现有工具 | ToolBox: import / import-jinshuyuan / verify / info / export |
+| 现有工具 | ToolBox: import / import-jinshuyuan / import-url / verify / merge / append / build-periods / analyze / continuous |
 | 缺失 | CZCE Tick 目录未创建、无连续合约工具、无品种排名工具 |
 
 ### 品种代码映射（DB ↔ 标准代码）

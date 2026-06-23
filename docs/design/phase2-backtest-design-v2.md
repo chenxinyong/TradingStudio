@@ -1916,3 +1916,49 @@ CTP 的 TickRecord.Volume 是当日累计成交量。必须用增量（当前 Ti
 4. **策略间通信**：Phase 2c 是否需要？默认完全隔离。
 5. **API 安全**：localhost only，但控制命令（暂停/平仓）是否需要确认机制？
 6. **TickFillDelay 默认值**：Tick 模式下同 Tick 成交（0）vs 延迟 1 Tick（1）？默认 0（即时），保守场景可配置 1。
+
+---
+
+## 附录 C：实施状态 (2026-06-23)
+
+### 已实现 (与设计对齐)
+
+| 设计项 | 状态 |
+|--------|------|
+| 统一 TradingEngine (回测=实盘同一代码) | ✅ |
+| DataEvent 统一事件流 (TickEvent + BarEvent) | ✅ |
+| Tick + Bar 双撮合 (ProcessTick/ProcessBar) | ✅ |
+| 前向偏差防护 (Bar 撮合用 Open 价) | ✅ |
+| 风控横切层 (RiskController) | ✅ |
+| 反馈监控 (FeedbackMonitor 四维度) | ✅ |
+| 策略 JSON 配置驱动 (StrategyConfig) | ✅ |
+| 多策略隔离 (StrategyContainer) | ✅ |
+| 指标引擎 (IndicatorManager, SMA/EMA/MACD/RSI/BOLL) | ✅ |
+| 仓位资金管理 (PortfolioManager 多策略分账) | ✅ |
+| 绩效报告 (EngineReport) | ✅ |
+| 引擎/UI 分离 (SignalR Hub) | ✅ |
+| Tick CSV 回放 (HistoricalTickFeed) | ✅ |
+| Bar 回放 (HistoricalBarFeed → DuckDB) | ✅ |
+
+### 超出设计 (设计时未规划)
+
+| 实现 | 说明 |
+|------|------|
+| DuckDB 历史库 8.4 GB | 2020-2026, 多周期 1min/5min/15min/day/week |
+| 连续合约自动生成 (BuildContinuousContracts) | 50+ 品种 xxx000 |
+| PeriodMaintainer | 每 5min 自动多周期维护 |
+| 每日导入管线 (daily_import.ps1) | 金数源+本地→追加→多周期→验证 |
+| ToolBox CLI 10 命令 | import/verify/append/build-periods/merge/... |
+| CI/CD (GitHub Actions) | ubuntu test + windows build |
+| 149 测试 (Core 17 + Data 16 + Engine 116) | 全绿 |
+| 策略信号+订单生命周期日志 | Serilog 结构化 |
+
+### 未实现
+
+| 设计项 | 状态 |
+|--------|------|
+| 因子层 (FactorManager) | ❌ Phase 2c |
+| WPF 监控客户端 | ❌ Phase 4 |
+| Simnow 完整验证 | ⚠️ 配置就绪, 今晚开盘 |
+
+**一致性**: 6 条设计原则 100% 落实。开放性附录 A 中的 6 个问题，4/6 已决策 (1→CSV+SQLite, 2→引擎过滤, 5→后续加, 6→默认0)，余下 2 个换月处理和策略间通信仍待决策。

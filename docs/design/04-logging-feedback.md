@@ -269,3 +269,20 @@ app.MapGet("/health", () => new
 ```
 
 > Phase 2+ 再补充：SignalR 推送、手机告警、WPF 监控面板集成。
+
+---
+
+## 实施状态 (2026-06-23)
+
+| Layer | 设计要求 | 实现状态 |
+|-------|----------|----------|
+| Layer 1: 结构化日志→文件 | Serilog → 滚动文件 | ✅ `log.txt`, 全项目统一 Serilog |
+| Layer 2: 关键事件→DB | PostgreSQL 审计日志 | ❌ 推迟 Phase 3 |
+| Layer 3: 实时反馈→SignalR | SignalR Hub 推送 | ⚠️ Hub 就绪, EngineHubPushService 基础实现 |
+| Layer 4: 紧急告警→手机 | 桌面通知/企业微信 | ❌ 计划本周 |
+
+**已增强 (vs 设计):**
+- 策略信号日志: `EngineStrategyContext.Log/LogWarning/LogError` → Serilog 结构化
+- 订单生命周期日志: `ExecutionHandler` Submit/Fill/Reject/Cancel 完整审计
+- 引擎生命周期日志: `TradingEngine` Warmup/Init/End 全部 Serilog
+- 全项目 0 `Console.WriteLine` 残留 (除 CLI 工具输出)
