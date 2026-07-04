@@ -8,9 +8,11 @@ namespace TradingStudio;
 /// </summary>
 public class EngineHub : Hub
 {
+    /// <summary>订阅指定策略的实时事件推送</summary>
     public async Task SubscribeStrategy(string strategyId)
         => await Groups.AddToGroupAsync(Context.ConnectionId, strategyId);
 
+    /// <summary>取消订阅策略事件推送</summary>
     public async Task UnsubscribeStrategy(string strategyId)
         => await Groups.RemoveFromGroupAsync(Context.ConnectionId, strategyId);
 

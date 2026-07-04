@@ -3,7 +3,7 @@
   "StrategyType": "MaCross",
   "Description": "双均线实盘测试 — simnow",
   "Version": 1,
-  "Instruments": ["ag2608"],
+  "Instruments": ["ag2612"],
   "PrimaryBarType": "bars_1min",
   "AllocatedCapital": 1000000,
   "MaxDrawdownPct": 0.20,

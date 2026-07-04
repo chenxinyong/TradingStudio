@@ -432,6 +432,7 @@ ctp_flow/
 
 # 本地配置覆盖（含敏感凭证，不提交）
 appsettings*.local.json
+src/TradingStudio/appsettings.json
 
 # Deploy output (regenerate with deploy.bat / release-collect.bat)
 dist/
