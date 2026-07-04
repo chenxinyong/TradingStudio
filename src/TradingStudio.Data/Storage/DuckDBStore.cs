@@ -78,9 +78,11 @@ public class DuckDBStore : IBarStore, ITickStore
         foreach (var g in groups)
         {
             var table = g.Key;
+            // 去重：1min 午夜 Bar 会被 TableName 路由到 bars_day，与日线 Bar 主键冲突
+            var deduped = g.DistinctBy(b => (b.InstrumentId, b.BarTime));
             using var conn = OpenConnection();
             using var appender = conn.CreateAppender(table);
-            foreach (var bar in g)
+            foreach (var bar in deduped)
             {
                 if (ct.IsCancellationRequested) break;
                 appender.CreateRow()

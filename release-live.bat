@@ -37,6 +37,13 @@ mkdir "%RELEASE%\certs" 2>nul
 if exist "%ROOT%src\TradingStudio\certs\tradingstudio.pfx" (
     copy /Y "%ROOT%src\TradingStudio\certs\tradingstudio.pfx" "%RELEASE%\certs\" >nul 2>&1
 )
+REM Copy local config template (first build only — don't overwrite user's credentials)
+if not exist "%RELEASE%\appsettings.local.json" (
+    if exist "%ROOT%deploy\configs\appsettings.live.local.json" (
+        copy /Y "%ROOT%deploy\configs\appsettings.live.local.json" "%RELEASE%\appsettings.local.json" >nul 2>&1
+        echo   [INFO] appsettings.local.json created from template — edit with your credentials
+    )
+)
 echo   OK
 
 REM --- Step 5: Start scripts ---
@@ -45,10 +52,10 @@ echo [5/5] start scripts + README...
 echo @echo off
 echo chcp 65001 ^>nul 2^>^&1
 echo cd /d "%%~dp0"
-echo title TradingStudio Live v0.3.0
+echo title TradingStudio Live v0.4.0
 echo mkdir logs 2^>nul
 echo echo ========================================
-echo echo   TradingStudio - Live Engine v0.3.0
+echo echo   TradingStudio - Live Engine v0.4.0
 echo echo ========================================
 echo echo   .NET 10 x64 ^| CTP 6.7.13
 echo echo   REST: http://localhost:59661/api/health
@@ -76,14 +83,14 @@ echo   OK
 
 REM --- README ---
 (
-echo TradingStudio - Live Engine v0.2.0
+echo TradingStudio - Live Engine v0.4.0
 echo ================================
 echo.
 echo Real-time trading engine with SignalR hub + REST API.
 echo Protocol: CTP 6.7.13  ^|  .NET 10 ^(SelfContained^)
 echo.
 echo --- Quick Start ---
-echo   1. Edit appsettings.json ^(Live section^):
+echo   1. Edit appsettings.local.json ^(Live section^):
 echo      MdFront, TraderFront, UserId, Password, StrategyConfig
 echo   2. Edit configs\strategies\live-test.json
 echo   3. Run: start.bat
@@ -91,23 +98,24 @@ echo   4. Open http://localhost:59661/api/health for health check
 echo.
 echo --- Ports ---
 echo   59661  HTTP REST API + SignalR Hub ^(/hubs/engine^)
+echo   59662  HTTPS (if cert configured)
 echo.
 echo --- Install as Windows Service ---
 echo   sc create TradingStudio binPath= "%CD%\TradingStudio.exe live" start= auto
 echo   sc start TradingStudio
 echo.
 echo --- Output ---
-echo   bars_live.db  1-min + daily K bars
-echo   TickData/     42-column Tick CSV
-echo   logs/         Serilog rolling log
-echo   health.json   Health status ^(every minute^)
+echo   bars_live.duckdb  1-min + daily K bars
+echo   TickData/    44-column Tick CSV (GBK)
+echo   logs/        Serilog rolling log
+echo   health.json  Health status ^(every minute^)
 ) > "%RELEASE%\README.txt"
 
 echo.
 echo ========================================
 echo   BUILD COMPLETE - release/live/
 echo ========================================
-echo   1. Edit release\live\appsettings.json
+echo   1. Edit release\live\appsettings.local.json
 echo   2. Edit release\live\configs\strategies\live-test.json
 echo   3. Run  release\live\start.bat
 echo.

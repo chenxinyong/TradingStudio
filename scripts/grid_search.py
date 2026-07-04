@@ -1,150 +1,166 @@
-"""GridSearch — MA 双均线参数优化 × RB 连续合约"""
-import json, subprocess, sys, io, time, itertools
+"""参数网格搜索 — SmaMacd × al000"""
+import json, subprocess, sys, time, os, re, tempfile, io, itertools
 from pathlib import Path
-from collections import defaultdict
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-REPO = Path('c:/Works/ClaudeCode/TradingStudio')
-PROJECT = REPO / 'src' / 'TradingStudio' / 'TradingStudio.csproj'
-CONTINUOUS = REPO / 'data' / 'continuous'
-OUT_DIR = REPO / 'configs' / 'grid'
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PROJECT = REPO_ROOT / "src" / "TradingStudio" / "TradingStudio.csproj"
+HISTORY_DB = REPO_ROOT / "data" / "bars_history.duckdb"
 
-# 参数网格（核心维度，控制在 30 组合以内）
-FAST = [5, 10, 15, 20]
-SLOW = [20, 30, 40, 60]
-ATR_MULT = [2.0, 2.5]
-MAX_POS = [2]
-RISK_PCT = [0.02]
+START_DATE = "2024-01-01"
+END_DATE = "2026-06-30"
 
-# 过滤无效组合 (fast >= slow)
-combos = [(f, s, a, mp, r) for f, s, a, mp, r in
-          itertools.product(FAST, SLOW, ATR_MULT, MAX_POS, RISK_PCT)
-          if f < s]
-# 加上默认参数（确保至少跑一次）
-combos = list(set(combos))
-print(f"Grid: FAST×{len(FAST)} SLOW×{len(SLOW)} ATR×{len(ATR_MULT)} Pos×{len(MAX_POS)} Risk×{len(RISK_PCT)}")
-print(f"Total combos: {len(combos)}")
+BASE = {
+    "StrategyType": "SmaMacd", "PrimaryBarType": "bars_1min",
+    "BarPeriodMinutes": 1, "AllocatedCapital": 1_000_000,
+    "MaxDrawdownPct": 0.20, "MaxPositionPerInstrument": 50,
+    "Priority": 1, "SessionFilter": "All", "SkipAuction": True,
+}
 
-# 只跑 RB
-INST = "rb"
-results = []
-start_time = time.time()
+BASE_PARAMS = {
+    "SmaPeriodsStr": "5,13,34,89,233",
+    "MacdFast": 12, "MacdSlow": 26, "MacdSignal": 9,
+    "MaxPositionRatio": 0.25, "StopLossPct": 0.02, "MaxLots": 20,
+    "RequireSmaAlignment": True, "RequireMacdConfirm": True,
+    "RequireDailyTrend": False, "Require1minConfirm": False,
+}
 
-for i, (fast, slow, atr_mult, max_pos, risk_pct) in enumerate(combos):
-    sid = f"GS-{INST}-F{fast}S{slow}A{int(atr_mult*10)}P{max_pos}R{int(risk_pct*1000)}"
-    config = {
-        "Parameters": {
-            "FastPeriod": fast, "SlowPeriod": slow,
-            "MaxMarginRatio": 0.25, "StopAtrMult": atr_mult,
-            "AtrPeriod": 20, "RiskPerTrade": risk_pct,
-            "MaxPosition": max_pos
-        },
-        "AllocatedCapital": 1_000_000, "MaxDrawdownPct": 0.3,
-        "BarPeriodMinutes": 15,
-        "Instruments": [INST], "SkipAuction": True,
-        "MaxPositionPerInstrument": 5, "Priority": 1,
-        "SessionFilter": "All", "PrimaryBarType": "bars_1min",
-        "StrategyType": "MaCross", "StrategyId": sid
-    }
+# 核心参数搜索空间
+GRID = {
+    "StopLossPct": [0.01, 0.015, 0.02, 0.025, 0.03, 0.04, 0.05],
+    "RequireSmaAlignment": [True, False],
+    "RequireMacdConfirm": [True, False],
+    "RequireDailyTrend": [True, False],
+}
 
-    cp = OUT_DIR / f"{sid}.json"
-    json.dump(config, open(str(cp), 'w'), indent=2)
+SMA_COMBOS = [
+    "5,13,34,89,233",
+    "5,13,34,55,144",
+    "8,21,55,144,233",
+    "10,20,50,100,200",
+    "5,20,60,120,250",
+    "3,8,21,55,144",
+]
 
-    if i % 10 == 0:
-        print(f"[{i+1}/{len(combos)}] Running F={fast} S={slow}...", end=" ", flush=True)
+
+def run(instrument: str, params: dict) -> dict | None:
+    cfg = dict(BASE)
+    cfg["Instruments"] = [instrument]
+    cfg["StrategyId"] = f"gs-{instrument}"
+    p = dict(BASE_PARAMS)
+    p.update(params)
+    cfg["Parameters"] = p
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json',
+                                     delete=False, encoding='utf-8') as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+        cp = f.name
 
     try:
-        r = subprocess.run([
-            "dotnet", "run", "--project", str(PROJECT), "--",
-            "backtest",
-            "--config", str(cp.resolve()),
-            "--continuous-dir", str(CONTINUOUS.resolve()),
-            "--start", "2021-01-01", "--end", "2025-12-31"
-        ], capture_output=True, text=True, timeout=120)
+        r = subprocess.run(
+            ["dotnet", "run", "--project", str(PROJECT), "--", "backtest",
+             "--config", cp, "--db", str(HISTORY_DB.resolve()),
+             "--start", START_DATE, "--end", END_DATE],
+            capture_output=True, text=True, timeout=120,
+            encoding='utf-8', errors='replace')
+        if r.returncode != 0: return None
+        s = r.stdout or ""
+        out = {"params": params}
+        for label, pat in [
+            ("return", r'Total Return:\s*([+-]?[\d.]+)%'),
+            ("maxDD", r'Max Drawdown:\s*([\d.]+)%'),
+            ("trades", r'Trades:\s*(\d+)'),
+            ("winRate", r'Win Rate:\s*([\d.]+)%'),
+            ("netProfit", r'Net Profit:\s*[¥￥]\s*([+-]?[\d,]+\.?\d*)'),
+        ]:
+            m = re.search(pat, s)
+            if m: out[label] = float(m.group(1).replace(',', ''))
+        if "return" not in out: return None
+        ret = out.get("return", 0)
+        dd = out.get("maxDD", 0.01) or 0.01
+        tr = out.get("trades", 0)
+        # Score: 优先盈利+低回撤，惩罚过少交易
+        out["score"] = (ret / dd) * min(1.0, tr / 20.0) * 100
+        return out
+    except: return None
+    finally:
+        try: os.unlink(cp)
+        except: pass
 
-        if r.returncode == 0:
-            rp = cp.with_suffix('.report.json')
-            if rp.exists():
-                with open(str(rp)) as f:
-                    data = json.load(f)
-                sr = data["strategyReports"][0]
 
-                # 计算综合评分：利润因子、夏普近似
-                trades = sr["totalTrades"]
-                wr = sr["winRate"]
-                pnl = sr["totalNetProfit"]
-                dd = sr.get("maxDrawdown", 1.0)
-                eq = sr["finalEquity"]
-
-                # 简化夏普：平均收益/收益标准差 近似
-                total_return = (eq - 1_000_000) / 1_000_000
-
-                results.append({
-                    "fast": fast, "slow": slow, "atr": atr_mult,
-                    "pos": max_pos, "risk": risk_pct,
-                    "trades": trades, "winRate": wr, "pnl": pnl,
-                    "maxDD": dd, "finalEq": eq, "return": total_return,
-                    "combo": f"F{fast}S{slow}A{atr_mult}P{max_pos}R{risk_pct:.3f}"
-                })
-
-                if i % 10 == 0:
-                    print(f"✓ T={trades} PnL={pnl:+,.0f} DD={dd:.1%}")
-            else:
-                if i % 10 == 0: print("✗ no report")
-        else:
-            if i % 10 == 0: print("✗ FAIL")
-    except subprocess.TimeoutExpired:
-        if i % 10 == 0: print("✗ TIMEOUT")
-    except Exception as e:
-        if i % 10 == 0: print(f"✗ {e}")
-
-elapsed = time.time() - start_time
-print(f"\n{'='*80}")
-print(f"GridSearch complete: {len(results)}/{len(combos)} succeeded in {elapsed:.0f}s")
-print(f"{'='*80}")
-
-if not results:
-    print("No results!")
-    sys.exit(1)
-
-# Sort by total return (or could use Sharpe)
-results.sort(key=lambda x: x["return"], reverse=True)
-
-# Top 10
-print(f"\n{'Rank':<5} {'Params':<25} {'Trades':>6} {'Win%':>6} {'PnL':>12} {'MaxDD':>7} {'Return':>8}")
-print("-" * 76)
-for i, r in enumerate(results[:10]):
-    print(f"{i+1:<5} {r['combo']:<25} {r['trades']:>6} {r['winRate']:>5.0%} {r['pnl']:>12,.0f} {r['maxDD']:>6.1%} {r['return']:>7.1%}")
-
-# Bottom 5
-print(f"...")
-for i, r in enumerate(results[-5:]):
-    print(f"{len(results)-5+i+1:<5} {r['combo']:<25} {r['trades']:>6} {r['winRate']:>5.0%} {r['pnl']:>12,.0f} {r['maxDD']:>6.1%} {r['return']:>7.1%}")
-
-# Best by metric
-print(f"\n--- Best by Metric ---")
-best_pnl = max(results, key=lambda x: x["pnl"])
-best_wr = max(results, key=lambda x: x["winRate"])
-best_dd = min(results, key=lambda x: x["maxDD"])
-print(f"  Best PnL:     {best_pnl['combo']}  PnL={best_pnl['pnl']:,.0f}")
-print(f"  Best WinRate: {best_wr['combo']}  WR={best_wr['winRate']:.1%}")
-print(f"  Best MaxDD:   {best_dd['combo']}  DD={best_dd['maxDD']:.1%}")
-
-# Parameter sensitivity
-print(f"\n--- Parameter Sensitivity (Avg Return by Value) ---")
-for param, key in [("FastPeriod", "fast"), ("SlowPeriod", "slow"), ("ATR Mult", "atr")]:
-    by_val = defaultdict(list)
-    for r in results: by_val[r[key]].append(r["return"])
-    print(f"  {param}: ", end="")
-    for val in sorted(by_val):
-        avg = sum(by_val[val]) / len(by_val[val])
-        print(f"{val}={avg:.1%}  ", end="")
+def main():
+    inst = "al000"
+    print(f"Grid Search: SmaMacd x {inst} | {START_DATE} -> {END_DATE}")
+    print(f"Baseline: ret=-1.5% DD=8.3% 44t score={-1.5/8.3*100*min(1,44/20):.1f}")
     print()
 
-# Save full results
-summary_path = OUT_DIR / "grid_summary.json"
-json.dump({"generated": time.strftime("%Y-%m-%d %H:%M:%S"), "total": len(results), "results": results},
-          open(str(summary_path), 'w'), indent=2, ensure_ascii=False)
-print(f"\nSaved: {summary_path}")
+    # Phase 1: core grid
+    keys = list(GRID.keys())
+    vals = list(GRID.values())
+    total = 1
+    for v in vals: total *= len(v)
+    print(f"Phase 1: {total} combos ({len(keys)} params)")
+
+    results = []
+    t0 = time.time()
+    for i, combo in enumerate(itertools.product(*vals)):
+        params = dict(zip(keys, combo))
+        print(f"[{i+1:3d}/{total}] {params} ... ", end="", flush=True)
+        tt = time.time()
+        r = run(inst, params)
+        dt = time.time() - tt
+        if r:
+            results.append(r)
+            sc = r["score"]
+            print(f"{'WIN' if sc>0 else '-'} ret={r['return']:+.1f}% DD={r['maxDD']:.1f}% "
+                  f"tr={r['trades']:.0f} wr={r['winRate']:.0f}% sc={sc:+.1f} | {dt:.0f}s")
+        else:
+            print(f"FAIL | {dt:.0f}s")
+
+    elapsed = time.time() - t0
+
+    # Phase 2: SMA combos with top params
+    results.sort(key=lambda x: x["score"], reverse=True)
+    if results:
+        best = results[0]["params"]
+        print(f"\nPhase 2: SMA scan with best params {best}")
+        for i, sma in enumerate(SMA_COMBOS):
+            params = dict(best)
+            params["SmaPeriodsStr"] = sma
+            print(f"[{i+1}/{len(SMA_COMBOS)}] SMA={sma} ... ", end="", flush=True)
+            tt = time.time()
+            r = run(inst, params)
+            dt = time.time() - tt
+            if r:
+                results.append(r)
+                sc = r["score"]
+                print(f"{'WIN' if sc>0 else '-'} ret={r['return']:+.1f}% DD={r['maxDD']:.1f}% "
+                      f"tr={r['trades']:.0f} sc={sc:+.1f} | {dt:.0f}s")
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+
+    print(f"\n{'='*100}")
+    print(f"  TOP RESULTS — {elapsed/60:.1f}min phase1 + SMA scan | {len(results)} valid")
+    print(f"{'='*100}")
+    hdr = f"{'#':>3s} │ {'Score':>6s} │ {'Ret':>6s} │ {'DD':>5s} │ {'Tr':>4s} │ {'WR':>5s} │ {'Stop%':>6s} │ {'Align':>5s} │ {'MACD':>4s} │ {'DayTr':>5s} │ {'SMA periods'}"
+    print(hdr)
+    print("-" * 100)
+
+    for i, r in enumerate(results[:25]):
+        p = r["params"]
+        sma = p.get("SmaPeriodsStr", "default")
+        if len(sma) > 30: sma = sma[:30]
+        print(f"{i+1:3d} │ {r.get('score',0):5.1f} │ {r.get('return',0):5.1f}% │ {r.get('maxDD',0):4.1f}% │ {r.get('trades',0):4.0f} │ {r.get('winRate',0):4.0f}% │ {p.get('StopLossPct',0):5.3f} │ {str(p.get('RequireSmaAlignment',''))[0]:>5s} │ {str(p.get('RequireMacdConfirm',''))[0]:>4s} │ {str(p.get('RequireDailyTrend',''))[0]:>5s} │ {sma}")
+
+    # Save
+    out = REPO_ROOT / "configs" / "batch" / f"grid_{inst}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump({"instrument": inst, "baseline": {"return": -1.5, "dd": 8.3, "trades": 44},
+                   "results": results[:50]}, f, indent=2, ensure_ascii=False, default=str)
+    print(f"\nSaved: {out}")
+
+
+if __name__ == "__main__":
+    main()

@@ -24,11 +24,24 @@ try
 {
     if (args.Length == 0) { PrintUsage(); return; }
 
+    // 1. 获取当前运行环境
+    string environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Production";
+    Console.WriteLine($"当前运行环境：{environment}");
+
+    // 2. 分层加载配置
+    IConfiguration config = new ConfigurationBuilder()
+        .SetBasePath(Directory.GetCurrentDirectory())
+        // 基础配置（必选）
+        .AddJsonFile("appsettings.json", false, true)
+        // 环境差异化配置（可选，没有该文件不会抛异常）
+        .AddJsonFile($"appsettings.{environment}.json", true, true)
+        .Build();
+
     switch (args[0])
     {
-        case "live":     await RunLiveAsync(args[1..]);     break;
-        case "backtest": await RunBacktestAsync(args[1..]); break;
-        case "collect":  await RunCollectAsync(args[1..]);  break;
+        case "live":     await RunLiveAsync(args[1..], config);     break;
+        case "backtest": await RunBacktestAsync(args[1..], config); break;
+        case "collect":  await RunCollectAsync(args[1..], config);  break;
         default:         PrintUsage(); break;
     }
 }
@@ -77,16 +90,15 @@ static void PrintBanner()
     Console.WriteLine("════════════════════════════════");
 }
 
-
 // ═══════════════════════════════════════════════════════════════
 // live — 实盘引擎 (Windows Service + REST API + SignalR Hub)
 // ═══════════════════════════════════════════════════════════════
-static async Task RunLiveAsync(string[] args)
+static async Task RunLiveAsync(string[] args, IConfiguration config)
 {
     var builder = WebApplication.CreateBuilder(args);
 
     // 本地配置覆盖（含敏感凭证，不提交 Git）
-    builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
+    // builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
 
     // Windows Service
     builder.Host.UseWindowsService(o => o.ServiceName = "TradingStudio");
@@ -98,29 +110,28 @@ static async Task RunLiveAsync(string[] args)
 
     // Serilog
     builder.Services.AddSerilog((_, cfg) =>
-        cfg.ReadFrom.Configuration(builder.Configuration));
+        cfg.ReadFrom.Configuration(config));
     builder.Host.UseSerilog();  // 配置静态 Log.Logger（CtpTraderBridge 回调需要）
 
     // ── 启动配置验证 ──
-    var cfg = builder.Configuration;
-    ValidateLiveConfig(cfg);
+    ValidateLiveConfig(config);
 
     // ── 基础设施 (时段 + 健康) ──
     builder.Services.AddSingleton<SessionScheduler>();
     builder.Services.AddSingleton<HealthMonitor>();
 
     // ── 品种注册表 ──
-    var symbolsPath = cfg["Live:SymbolsPath"] ?? "symbols.json";
+    var symbolsPath = config["Live:SymbolsPath"] ?? "symbols.json";
     var registry = FutureRegistry.Load(symbolsPath);
     builder.Services.AddSingleton(registry);
 
     // ── 数据源: CTP 行情 ──
     var mdOpts = new CtpMdOptions
     {
-        MdFront = cfg["Live:MdFront"]!,
-        BrokerId = cfg["Live:BrokerId"] ?? "9999",
-        UserId = cfg["Live:UserId"]!,
-        Password = cfg["Live:Password"]!,
+        MdFront = config["Live:MdFront"]!,
+        BrokerId = config["Live:BrokerId"] ?? "9999",
+        UserId = config["Live:UserId"]!,
+        Password = config["Live:Password"]!,
     };
     // 工厂注入：ILogger 在 app.Build() 后才可用
     var activityTracker = new ContractActivityTracker(observationSeconds: 60);
@@ -135,9 +146,10 @@ static async Task RunLiveAsync(string[] args)
 
     // 风控阈值（从 appsettings.json Risk 段读取，缺失时使用安全默认值）
     var risk = new RiskController(
-        maxPosition: int.Parse(cfg["Risk:MaxPositionPerInstrument"] ?? "5"),
-        maxOrderQty: int.Parse(cfg["Risk:MaxOrderQuantity"] ?? "100"),
-        maxDrawdown: decimal.Parse(cfg["Risk:MaxDrawdownPct"] ?? "0.25"));
+        maxPosition: int.Parse(config["Risk:MaxPositionPerInstrument"] ?? "5"),
+        maxOrderQty: int.Parse(config["Risk:MaxOrderQuantity"] ?? "100"),
+        maxDrawdown: decimal.Parse(config["Risk:MaxDrawdownPct"] ?? "0.25"));
+
     builder.Services.AddSingleton(risk);
     var execution = new ExecutionHandler(risk);
     builder.Services.AddSingleton<IExecutionHandler>(execution);
@@ -156,11 +168,11 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddSingleton(strategies);
 
     // ── 数据持久化 ──
-    var dataPath = cfg["Live:DataPath"] ?? "data";
-    var dbPath = Path.Combine(dataPath, cfg["Live:Database"] ?? "bars_live.db");
+    var dataPath = config["Live:DataPath"] ?? "data";
+    var dbPath = Path.Combine(dataPath, config["Live:Database"] ?? "bars_live.db");
     // 自动识别存储引擎：.duckdb 扩展名 → DuckDB, 否则 SQLite
     // UseDuckDB 可强制覆盖（兼容旧配置）
-    var forceDuckDB = cfg["Live:UseDuckDB"]?.ToLowerInvariant() == "true";
+    var forceDuckDB = config["Live:UseDuckDB"]?.ToLowerInvariant() == "true";
     var isDuckDB = forceDuckDB || dbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase);
     IBarStore barStore = isDuckDB
         ? new DuckDBStore(dbPath, enableTickPurge: true)
@@ -171,21 +183,21 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddSingleton(tickWriter);
 
     // 资金管理
-    var startCapital = decimal.Parse(cfg["Live:StartingCapital"] ?? "100000");
+    var startCapital = decimal.Parse(config["Live:StartingCapital"] ?? "100000");
     var portfolio = new PortfolioManager(startCapital);
     builder.Services.AddSingleton(portfolio);
 
     // CTP 交易桥接
-    if (!string.IsNullOrEmpty(cfg["Live:TraderFront"]))
+    if (!string.IsNullOrEmpty(config["Live:TraderFront"]))
     {
         var traderOpts = new CtpTraderOptions
         {
-            TraderFront = cfg["Live:TraderFront"]!,
-            BrokerId = cfg["Live:BrokerId"] ?? "9999",
-            UserId = cfg["Live:UserId"] ?? "",
-            Password = cfg["Live:Password"] ?? "",
-            AuthCode = cfg["Live:AuthCode"] ?? "0000000000000000",
-            AppId = cfg["Live:AppId"] ?? "simnow_client_test",
+            TraderFront = config["Live:TraderFront"]!,
+            BrokerId = config["Live:BrokerId"] ?? "9999",
+            UserId = config["Live:UserId"] ?? "",
+            Password = config["Live:Password"] ?? "",
+            AuthCode = config["Live:AuthCode"] ?? "0000000000000000",
+            AppId = config["Live:AppId"] ?? "simnow_client_test",
         };
         // CtpTraderBridge: 先注册，app.Build() 后由 EngineHost 调用 Connect
         var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts);
@@ -211,7 +223,7 @@ static async Task RunLiveAsync(string[] args)
     builder.Services.AddSingleton(engineOptions);
 
     // 加载策略
-    var strategyConfigPath = cfg["Live:StrategyConfig"];
+    var strategyConfigPath = config["Live:StrategyConfig"];
     if (!string.IsNullOrEmpty(strategyConfigPath) && File.Exists(strategyConfigPath))
     {
         var json = File.ReadAllText(strategyConfigPath);
@@ -219,11 +231,11 @@ static async Task RunLiveAsync(string[] args)
             json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         if (strategyConfig != null)
         {
-            var warmupDays = int.Parse(cfg["Live:WarmupDays"] ?? "5");
+            var warmupDays = int.Parse(config["Live:WarmupDays"] ?? "5");
             IBarStore? warmupStore = null;
             if (warmupDays > 0)
             {
-                var warmupDb = Path.Combine(dataPath, cfg["Live:WarmupDatabase"] ?? "bars_history.duckdb");
+                var warmupDb = Path.Combine(dataPath, config["Live:WarmupDatabase"] ?? "bars_history.duckdb");
                 if (File.Exists(warmupDb))
                     warmupStore = new DuckDBStore(warmupDb, readOnly: true);
             }
@@ -275,14 +287,13 @@ static async Task RunLiveAsync(string[] args)
 // ═══════════════════════════════════════════════════════════════
 // backtest — 回测引擎
 // ═══════════════════════════════════════════════════════════════
-static async Task RunBacktestAsync(string[] args)
+static async Task RunBacktestAsync(string[] args, IConfiguration config)
 {
     var exitCode = await TradingStudio.Commands.BacktestCommand.RunAsync(args);
     Environment.Exit(exitCode);
 }
 
-
-static async Task RunCollectAsync(string[] args)
+static async Task RunCollectAsync(string[] args, IConfiguration config)
 {
     PrintBanner();
 
