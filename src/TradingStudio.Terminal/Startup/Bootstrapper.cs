@@ -61,6 +61,7 @@ public static class Bootstrapper
 
         // ── UI Windows ──
         services.AddSingleton<MainWindow>();
+        services.AddSingleton<ChartWindow>();
 
         var provider = services.BuildServiceProvider();
 

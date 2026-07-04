@@ -14,8 +14,21 @@ public partial class App : Application
 
         Services = Bootstrapper.ConfigureServices();
 
-        var mainWindow = Services.GetRequiredService<MainWindow>();
-        mainWindow.Show();
+        // ── 启动模式判断 ──
+        var args = e.Args;
+        bool chartOnly = args.Contains("--chart-only") || args.Contains("--chart");
+
+        if (chartOnly)
+        {
+            // 轻量模式：仅 K 线图，无仪表盘/侧栏/命令栏
+            var chartWindow = Services.GetRequiredService<ChartWindow>();
+            chartWindow.Show();
+        }
+        else
+        {
+            var mainWindow = Services.GetRequiredService<MainWindow>();
+            mainWindow.Show();
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

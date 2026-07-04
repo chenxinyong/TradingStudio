@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Microsoft.AspNetCore.SignalR;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Storage;
 using TradingStudio.Data.Aggregation;
@@ -12,6 +13,7 @@ namespace TradingStudio.Services;
 /// <summary>
 /// Live 模式数据落盘 — 独立消费 CtpLiveFeed.PersistChannel，写入 IBarStore。
 /// 与 TradingEngine 并行运行，引擎崩溃不影响数据持久化。
+/// 同时将完成的 1min Bar 通过 SignalR 推送到监控客户端。
 /// </summary>
 public class LiveDataCollector : BackgroundService
 {
@@ -21,17 +23,20 @@ public class LiveDataCollector : BackgroundService
     private readonly Serilog.ILogger _log;
     private readonly FutureRegistry _registry;
     private readonly HashSet<string> _top30Codes;
+    private readonly IHubContext<EngineHub>? _hub;
 
     private long _tickCount;
     private long _barCount;
-    private readonly ConcurrentDictionary<string, string> _lastTickKey = new(); // 去重：instId → "UpdateTime_Millisec"
+    private long _barsPushed;
+    private readonly ConcurrentDictionary<string, string> _lastTickKey = new();
 
     private readonly TickCsvWriter? _tickWriter;
 
     public LiveDataCollector(CtpLiveFeed feed, IBarStore barStore,
                              HealthMonitor health, Serilog.ILogger log,
                              FutureRegistry registry,
-                             TickCsvWriter? tickWriter = null)
+                             TickCsvWriter? tickWriter = null,
+                             IHubContext<EngineHub>? hub = null)
     {
         _feed = feed;
         _barStore = barStore;
@@ -40,6 +45,7 @@ public class LiveDataCollector : BackgroundService
         _registry = registry;
         _top30Codes = registry.Top30Codes;
         _tickWriter = tickWriter;
+        _hub = hub;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -56,7 +62,11 @@ public class LiveDataCollector : BackgroundService
                 var pipeline = new QuotePipeline(_tickWriter!, _top30Codes);
                 barChannel = Channel.CreateBounded<Bar>(4096);
 
-                pipeline.Agg1Min.OnBar += bar => { Interlocked.Increment(ref _barCount); barChannel.Writer.TryWrite(bar); };
+                pipeline.Agg1Min.OnBar += bar => {
+                    Interlocked.Increment(ref _barCount);
+                    barChannel.Writer.TryWrite(bar);
+                    PushBarToSignalR(bar);
+                };
                 pipeline.AggDay.OnBar += bar => barChannel.Writer.TryWrite(bar);
 
                 writeTask = WriteLoop(barChannel.Reader, ct);
@@ -101,8 +111,25 @@ public class LiveDataCollector : BackgroundService
             }
         }
 
-        _log.Information("LiveDataCollector stopped — ticks={TickCount} bars={BarCount}",
-            _tickCount, _barCount);
+        _log.Information("LiveDataCollector stopped — ticks={TickCount} bars={BarCount} pushed={Pushed}",
+            _tickCount, _barCount, _barsPushed);
+    }
+
+    private void PushBarToSignalR(Bar bar)
+    {
+        if (_hub == null) return;
+        var payload = new
+        {
+            InstrumentId = bar.InstrumentId,
+            BarTime = bar.BarTime,
+            Open = bar.OpenDouble,
+            High = bar.HighDouble,
+            Low = bar.LowDouble,
+            Close = bar.CloseDouble,
+            Volume = bar.Volume,
+        };
+        _ = _hub.Clients.Group($"bars:{bar.InstrumentId}").SendAsync("BarUpdated", payload);
+        Interlocked.Increment(ref _barsPushed);
     }
 
     private async Task WriteLoop(ChannelReader<Bar> reader, CancellationToken ct)

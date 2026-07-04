@@ -26,6 +26,7 @@ public class EngineHubClient : IAsyncDisposable
     public event Action<IReadOnlyList<StrategySnapshot>>? StrategiesUpdated;
     public event Action<OrderEvent>? OrderUpdated;
     public event Action<MonitorAlert>? AlertReceived;
+    public event Action<BarPayload>? BarUpdated;
 
     public EngineHubClient(string url = "http://localhost:5199/hubs/engine",
                            ILogger<EngineHubClient>? log = null,
@@ -96,6 +97,16 @@ public class EngineHubClient : IAsyncDisposable
             catch (Exception ex) { _log.LogError(ex, "Alert handler error"); }
         });
 
+        _connection.On<BarPayload>("BarUpdated", bar =>
+        {
+            try
+            {
+                BarUpdated?.Invoke(bar);
+                _eventBus?.Publish(new BarCompleted(bar));
+            }
+            catch (Exception ex) { _log.LogError(ex, "BarUpdated handler error"); }
+        });
+
         _connection.Reconnecting += _ =>
         {
             SetState(ConnectionState.Connecting);
@@ -131,6 +142,20 @@ public class EngineHubClient : IAsyncDisposable
     {
         if (_connection?.State == HubConnectionState.Connected)
             await _connection.InvokeAsync("SubscribeStrategy", strategyId);
+    }
+
+    /// <summary>订阅指定品种的实时 Bar 推送 (服务端会按 instrumentId 分组推送)</summary>
+    public async Task SubscribeBarsAsync(string instrumentId)
+    {
+        if (_connection?.State == HubConnectionState.Connected)
+            await _connection.InvokeAsync("SubscribeBars", instrumentId);
+    }
+
+    /// <summary>取消订阅品种 Bar 推送</summary>
+    public async Task UnsubscribeBarsAsync(string instrumentId)
+    {
+        if (_connection?.State == HubConnectionState.Connected)
+            await _connection.InvokeAsync("UnsubscribeBars", instrumentId);
     }
 
     private void SetState(ConnectionState state)
@@ -181,6 +206,10 @@ public record OrderEvent(long OrderId, string InstrumentId, string StrategyId,
 public record MonitorAlert(string Type, string StrategyId, string Message,
     string Severity, DateTimeOffset Timestamp);
 
+/// <summary>服务端推送的已完成 Bar</summary>
+public record BarPayload(string InstrumentId, DateTime BarTime,
+    double Open, double High, double Low, double Close, long Volume);
+
 // ── EventBus 消息类型（SignalR → EventBus）──
 
 public record TickBatchReceived(IReadOnlyList<TickSnapshotItem> Items);
@@ -189,3 +218,4 @@ public record StrategiesChanged(IReadOnlyList<StrategySnapshot> Strategies);
 public record OrderFlowReceived(OrderEvent Order);
 public record AlertOccurred(MonitorAlert Alert);
 public record EngineConnectionChanged(ConnectionState State);
+public record BarCompleted(BarPayload Bar);
