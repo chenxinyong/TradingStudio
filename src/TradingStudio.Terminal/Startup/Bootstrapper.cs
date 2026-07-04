@@ -40,12 +40,17 @@ public static class Bootstrapper
         services.AddSingleton<KeybindingRegistry>();
 
         // ── Engine Connection ──
+        var engineUrl = config["Engine:Url"] ?? "http://localhost:5199";
+        services.AddSingleton<EngineApiClient>(sp =>
+        {
+            var log = sp.GetRequiredService<ILogger<EngineApiClient>>();
+            return new EngineApiClient(engineUrl, log);
+        });
         services.AddSingleton<EngineHubClient>(sp =>
         {
             var log = sp.GetRequiredService<ILogger<EngineHubClient>>();
             var eventBus = sp.GetRequiredService<EventBus>();
-            var url = config["Engine:Url"] ?? "http://localhost:5199/hubs/engine";
-            return new EngineHubClient(url, log, eventBus);
+            return new EngineHubClient($"{engineUrl}/hubs/engine", log, eventBus);
         });
 
         // ── Navigation ──

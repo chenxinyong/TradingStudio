@@ -1,3 +1,4 @@
+using DuckDB.NET.Data;
 using Microsoft.AspNetCore.Mvc;
 using TradingStudio.Engine;
 
@@ -86,6 +87,27 @@ public static class EngineMonitorApi
             return Results.Ok(new { StrategyId = strategyId, Phase = 3 });
         });
 
+        // ═══ 品种列表 ═══
+        api.MapGet("/products", () =>
+        {
+            var products = BarQueryHelper.QueryProducts();
+            return Results.Ok(products.Select(p => new {
+                p.Code, p.InstrumentId, p.BarCount, p.FirstBar, p.LastBar
+            }));
+        });
+
+        // ═══ Bar 数据查询 ═══
+        api.MapGet("/bars/{instrumentId}", (
+            string instrumentId,
+            [FromQuery] string? freq,
+            [FromQuery] string? table) =>
+        {
+            var f = freq ?? "15min";
+            var tbl = table ?? "bars_5min";
+            var bars = BarQueryHelper.QueryBars(instrumentId, f, tbl);
+            return bars.Count > 0 ? Results.Ok(bars) : Results.NotFound();
+        });
+
         // ═══ 控制命令 (POST) ═══
 
         api.MapPost("/strategies/{id}/pause", (string id, [FromServices] StrategyContainer strategies) =>
@@ -122,3 +144,97 @@ public static class EngineMonitorApi
 
 public record TightenRiskRequest(string RuleName, string NewValue);
 public record ClosePositionRequest(string InstrumentId);
+
+/// <summary>API 响应类型</summary>
+public record BarDto(DateTime Dt, double Open, double High, double Low, double Close, long Volume);
+public record ProductInfo(string Code, string InstrumentId, long BarCount, string FirstBar, string LastBar);
+
+/// <summary>Bar 数据查询辅助方法</summary>
+internal static class BarQueryHelper
+{
+    private const string DbPath = "data/bars_history.duckdb";
+
+    public static List<ProductInfo> QueryProducts()
+    {
+        try
+        {
+            using var conn = new DuckDBConnection($"Data Source={DbPath}");
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                SELECT REPLACE(instrument_id, '000', '') as code,
+                       instrument_id, COUNT(*) as bars,
+                       MIN(bar_time)::VARCHAR, MAX(bar_time)::VARCHAR
+                FROM bars_5min
+                WHERE instrument_id LIKE '%000' AND instrument_id NOT LIKE '%F000'
+                GROUP BY instrument_id ORDER BY code
+                """;
+            using var reader = (DuckDBDataReader)cmd.ExecuteReader();
+            var list = new List<ProductInfo>();
+            while (reader.Read())
+                list.Add(new ProductInfo(reader.GetString(0).ToUpper(), reader.GetString(1),
+                    reader.GetInt64(2), reader.GetString(3), reader.GetString(4)));
+            return list;
+        }
+        catch { return new List<ProductInfo>(); }
+    }
+
+    public static List<BarDto> QueryBars(string instrumentId, string freq, string table)
+    {
+        try
+        {
+            using var conn = new DuckDBConnection($"Data Source={DbPath}");
+            conn.Open();
+
+            string sql = freq switch
+            {
+                "day" => $"""
+                    SELECT trading_day::TIMESTAMP as dt,
+                        FIRST(open)/1e7, MAX(high)/1e7, MIN(low)/1e7, LAST(close)/1e7, SUM(volume)
+                    FROM {table} WHERE instrument_id = '{instrumentId}'
+                    GROUP BY trading_day ORDER BY dt
+                    """,
+                "week" => $"""
+                    SELECT trading_week::TIMESTAMP as dt,
+                        FIRST(open)/1e7, MAX(high)/1e7, MIN(low)/1e7, LAST(close)/1e7, SUM(volume)
+                    FROM {table} WHERE instrument_id = '{instrumentId}'
+                    GROUP BY trading_week ORDER BY dt
+                    """,
+                _ => int.TryParse(freq.Replace("min", ""), out int p) && p > 1
+                    ? $"""
+                    SELECT date_trunc('hour', bar_time::TIMESTAMP) +
+                           INTERVAL (FLOOR(EXTRACT(minute FROM bar_time::TIMESTAMP) / {p}) * {p}) MINUTE as dt,
+                        FIRST(open)/1e7, MAX(high)/1e7, MIN(low)/1e7, LAST(close)/1e7, SUM(volume)
+                    FROM {table} WHERE instrument_id = '{instrumentId}'
+                    GROUP BY dt ORDER BY dt
+                    """
+                    : $"""
+                    SELECT bar_time::TIMESTAMP as dt,
+                        open/1e7, high/1e7, low/1e7, close/1e7, volume
+                    FROM {table} WHERE instrument_id = '{instrumentId}'
+                    ORDER BY dt
+                    """
+            };
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            using var reader = (DuckDBDataReader)cmd.ExecuteReader();
+
+            var bars = new List<BarDto>();
+            var dtIdx = reader.GetOrdinal("dt");
+            while (reader.Read())
+            {
+                bars.Add(new BarDto(
+                    reader.GetDateTime(dtIdx),
+                    reader.GetDouble(1), reader.GetDouble(2),
+                    reader.GetDouble(3), reader.GetDouble(4),
+                    reader.GetInt64(5)));
+            }
+            return bars;
+        }
+        catch
+        {
+            return new List<BarDto>();
+        }
+    }
+}

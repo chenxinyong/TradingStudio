@@ -24,6 +24,10 @@ public partial class ChartViewModel : ObservableObject
 {
     private readonly ILogger<ChartViewModel> _logger;
     private readonly Dispatcher _dispatcher;
+    private readonly EngineApiClient? _api;
+
+    // === 离线模拟器 (所有数据源都不可用时 fallback) ===
+    private DataSimulator? _simulator;
 
     // === 技术指标引擎 ===
     private SmaIndicator _ma5 = new(5);
@@ -92,10 +96,12 @@ public partial class ChartViewModel : ObservableObject
 
     public ChartViewModel(ILogger<ChartViewModel> logger,
                           EngineHubClient? hub = null,
+                          EngineApiClient? api = null,
                           string? dbPath = null)
     {
         _logger = logger;
         _hub = hub;
+        _api = api;
         _dbPath = dbPath ?? DefaultDbPath;
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
 
@@ -109,6 +115,23 @@ public partial class ChartViewModel : ObservableObject
 
     private void LoadProductList()
     {
+        // 优先从引擎 API 加载
+        if (_api != null)
+        {
+            var products = Task.Run(() => _api.GetProductsAsync()).Result;
+            if (products != null && products.Count > 0)
+            {
+                AvailableProducts.Clear();
+                foreach (var p in products)
+                    AvailableProducts.Add(new ProductItem(p.Code, p.InstrumentId, p.BarCount, p.FirstBar, p.LastBar));
+                _logger.LogInformation("Loaded {count} products from Engine API", AvailableProducts.Count);
+                if (AvailableProducts.Count > 0)
+                    SelectedProduct = AvailableProducts.FirstOrDefault(p => p.Code == "SA") ?? AvailableProducts[0];
+                return;
+            }
+        }
+
+        // Fallback: DuckDB 直读
         try
         {
             using var conn = new DuckDBConnection($"Data Source={_dbPath}");
@@ -117,52 +140,32 @@ public partial class ChartViewModel : ObservableObject
             var sql = """
                 SELECT DISTINCT
                     REPLACE(instrument_id, '000', '') as code,
-                    instrument_id,
-                    COUNT(*) as bars,
-                    MIN(bar_time) as first_bar,
-                    MAX(bar_time) as last_bar
+                    instrument_id, COUNT(*) as bars,
+                    MIN(bar_time) as first_bar, MAX(bar_time) as last_bar
                 FROM bars_5min
-                WHERE instrument_id LIKE '%000'
-                  AND instrument_id NOT LIKE '%F000'
-                GROUP BY instrument_id
-                ORDER BY code
+                WHERE instrument_id LIKE '%000' AND instrument_id NOT LIKE '%F000'
+                GROUP BY instrument_id ORDER BY code
                 """;
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
             using var reader = (DuckDBDataReader)cmd.ExecuteReader();
 
-            var codeIdx = reader.GetOrdinal("code");
-            var idIdx = reader.GetOrdinal("instrument_id");
-            var barsIdx = reader.GetOrdinal("bars");
-            var firstIdx = reader.GetOrdinal("first_bar");
-            var lastIdx = reader.GetOrdinal("last_bar");
-
             AvailableProducts.Clear();
             while (reader.Read())
             {
-                var item = new ProductItem(
-                    reader.GetString(codeIdx).ToUpper(),
-                    reader.GetString(idIdx),
-                    reader.GetInt64(barsIdx),
-                    reader.GetString(firstIdx),
-                    reader.GetString(lastIdx));
-                AvailableProducts.Add(item);
+                AvailableProducts.Add(new ProductItem(
+                    reader.GetString(0).ToUpper(), reader.GetString(1),
+                    reader.GetInt64(2), reader.GetString(3), reader.GetString(4)));
             }
 
             _logger.LogInformation("Loaded {count} products from DuckDB", AvailableProducts.Count);
-
-            // 默认选中第一个品种
             if (AvailableProducts.Count > 0)
-            {
-                SelectedProduct = AvailableProducts.FirstOrDefault(p => p.Code == "SA")
-                                  ?? AvailableProducts[0];
-            }
+                SelectedProduct = AvailableProducts.FirstOrDefault(p => p.Code == "SA") ?? AvailableProducts[0];
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to load product list from DuckDB, using defaults");
-            // fallback: 少量常见品种
+            _logger.LogWarning(ex, "Failed to load product list, using defaults");
             foreach (var code in new[] { "SA", "RB", "AG", "CU", "AU", "MA", "FG", "TA", "I", "M" })
                 AvailableProducts.Add(new ProductItem(code, code.ToLower() + "000", 0, "", ""));
             if (AvailableProducts.Count > 0) SelectedProduct = AvailableProducts[0];
@@ -200,16 +203,69 @@ public partial class ChartViewModel : ObservableObject
         StatusText = $"加载中... {SelectedProduct.Code} {freq}";
         _logger.LogInformation("Reloading chart: {Product} {Freq}", product, freq);
 
-        // 重置指标引擎
         ResetIndicators();
 
-        // 尝试 DuckDB 加载
+        // 1. 优先从引擎 API 加载
+        if (_api != null && TryLoadFromApi(product, freq))
+            return;
+
+        // 2. Fallback: DuckDB 直读
         if (TryLoadFromDuckDB(product, freq))
             return;
 
-        // Fallback: 模拟数据
-        _logger.LogWarning("DuckDB load failed, using simulator for {Product}", product);
-        StatusText = $"模拟 {SelectedProduct.Code} {freq} | DuckDB 不可用";
+        // 3. 最终 Fallback: DataSimulator 模拟数据
+        _simulator?.StopRealtime();
+        _simulator?.Dispose();
+        _simulator = new DataSimulator(startPrice: 5200);
+        _simulator.BarUpdated += OnSimulatorBar;
+        var historyBars = _simulator.GenerateHistory(500);
+        foreach (var bar in historyBars)
+            FeedIndicators(bar);
+        lock (_barLock) { _loadedBars = historyBars; }
+        BuildAllSeries(historyBars);
+        RefreshAllPlotModels();
+        StatusText = $"模拟 {SelectedProduct.Code} {freq} | 500 bars | 离线模式 (DuckDB 不可用)";
+    }
+
+    private bool TryLoadFromApi(string instrumentId, string freq)
+    {
+        try
+        {
+            var barsDto = Task.Run(() => _api!.GetBarsAsync(instrumentId, freq)).Result;
+            if (barsDto == null || barsDto.Count < 5) return false;
+
+            var bars = barsDto.Select(d => new Bar
+            {
+                InstrumentId = instrumentId,
+                BarTime = d.Dt,
+                Open = (long)(d.Open * 1e7),
+                High = (long)(d.High * 1e7),
+                Low = (long)(d.Low * 1e7),
+                Close = (long)(d.Close * 1e7),
+                Volume = d.Volume,
+            }).ToList();
+
+            foreach (var bar in bars) FeedIndicators(bar);
+            lock (_barLock) { _loadedBars = bars; }
+            BuildAllSeries(bars);
+            RefreshAllPlotModels();
+
+            var visible = Math.Min(200, bars.Count);
+            double xMin = DateTimeAxis.ToDouble(bars[^visible].BarTime);
+            double xMax = DateTimeAxis.ToDouble(bars[^1].BarTime);
+            foreach (var ax in _xAxes) ax.Zoom(xMin, xMax);
+
+            StatusText = $"{SelectedProduct!.Code} {freq} | {bars.Count:N0} bars (引擎 API) | "
+                       + $"{bars[0].BarTime:yyyy-MM-dd} ~ {bars[^1].BarTime:yyyy-MM-dd}";
+            _logger.LogInformation("Chart loaded via API: {Product} {Freq} {Count} bars",
+                instrumentId, freq, bars.Count);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "API load failed for {Product} {Freq}", instrumentId, freq);
+            return false;
+        }
     }
 
     private bool TryLoadFromDuckDB(string instrumentId, string freq)
@@ -603,9 +659,13 @@ public partial class ChartViewModel : ObservableObject
         _barSubscription = null;
     }
 
+    private void OnSimulatorBar(Bar bar)
+    {
+        _dispatcher.InvokeAsync(() => AppendBarToChart(bar));
+    }
+
     private void OnSignalRBar(BarPayload bar)
     {
-        // 只处理当前品种的 Bar
         if (SelectedProduct == null || bar.InstrumentId != SelectedProduct.InstrumentId)
             return;
 
@@ -613,33 +673,27 @@ public partial class ChartViewModel : ObservableObject
         {
             var b = new Bar
             {
-                InstrumentId = bar.InstrumentId,
-                BarTime = bar.BarTime,
-                Open = (long)(bar.Open * 1e7),
-                High = (long)(bar.High * 1e7),
-                Low = (long)(bar.Low * 1e7),
-                Close = (long)(bar.Close * 1e7),
+                InstrumentId = bar.InstrumentId, BarTime = bar.BarTime,
+                Open = (long)(bar.Open * 1e7), High = (long)(bar.High * 1e7),
+                Low = (long)(bar.Low * 1e7), Close = (long)(bar.Close * 1e7),
                 Volume = bar.Volume,
             };
-
             FeedIndicators(b);
-            double x = DateTimeAxis.ToDouble(b.BarTime);
+            AppendBarToChart(b, isRealtime: true);
+        });
+    }
+
+    /// <summary>将一根 Bar 追加到图表（Simulator 和 SignalR 共用）</summary>
+    private void AppendBarToChart(Bar b, bool isRealtime = false)
+    {
+        double x = DateTimeAxis.ToDouble(b.BarTime);
 
             // K线追加
             var candleItems = _candleSeries.ItemsSource.Cast<HighLowItem>().ToList();
-            // 如果最后一根 Bar 时间相同，替换；否则追加
-            if (candleItems.Count > 0)
-            {
-                var last = candleItems[^1];
-                if (Math.Abs(last.X - x) < 0.001)
-                    candleItems[^1] = new HighLowItem(x, b.HighDouble, b.LowDouble, b.OpenDouble, b.CloseDouble);
-                else
-                    candleItems.Add(new HighLowItem(x, b.HighDouble, b.LowDouble, b.OpenDouble, b.CloseDouble));
-            }
+            if (candleItems.Count > 0 && Math.Abs(candleItems[^1].X - x) < 0.001)
+                candleItems[^1] = new HighLowItem(x, b.HighDouble, b.LowDouble, b.OpenDouble, b.CloseDouble);
             else
-            {
                 candleItems.Add(new HighLowItem(x, b.HighDouble, b.LowDouble, b.OpenDouble, b.CloseDouble));
-            }
             _candleSeries.ItemsSource = candleItems;
 
             // 均线追加
@@ -683,9 +737,10 @@ public partial class ChartViewModel : ObservableObject
 
             KeepWindowScrolling(150);
             RefreshAllPlotModels();
-            StatusText = $"实时 | {SelectedProduct!.Code} {SelectedFrequency} | "
-                       + $"{b.BarTime:HH:mm:ss} | C={b.CloseDouble:F1}";
-        });
+
+            if (isRealtime)
+                StatusText = $"实时 | {SelectedProduct!.Code} {SelectedFrequency} | "
+                           + $"{b.BarTime:HH:mm:ss} | C={b.CloseDouble:F1}";
     }
 
     // ============================================================
