@@ -1,5 +1,6 @@
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Sizing;
 using TradingStudio.Core.Strategy;
 using TradingStudio.Strategy.ChanLun;
 
@@ -252,7 +253,9 @@ public class ChanLunStrategy : IStrategy
         {
             if (dayDir == DirectionType.Up && completedBi.Type == ChanLun.Direction.Up)
             {
-                var qty = CalculatePosition(bar.CloseDouble, s, DirectionType.Up);
+                var qty = PositionSizer.FromAtrStop(bar.CloseDouble, s.CurrentAtr, StopAtrMult,
+                    _ctx.GetFuture(s.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, (double)MaxMarginRatio);
                 if (qty > 0)
                 {
                     _ctx.MarketBuy(s.InstrumentId, qty, $"BI入场: 日线Up+30min底分型");
@@ -264,7 +267,9 @@ public class ChanLunStrategy : IStrategy
             }
             else if (dayDir == DirectionType.Down && completedBi.Type == ChanLun.Direction.Down)
             {
-                var qty = CalculatePosition(bar.CloseDouble, s, DirectionType.Down);
+                var qty = PositionSizer.FromAtrStop(bar.CloseDouble, s.CurrentAtr, StopAtrMult,
+                    _ctx.GetFuture(s.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, (double)MaxMarginRatio);
                 if (qty > 0)
                 {
                     _ctx.MarketSell(s.InstrumentId, qty, $"BI入场: 日线Down+30min顶分型");
@@ -313,22 +318,7 @@ public class ChanLunStrategy : IStrategy
         }
     }
 
-    private int CalculatePosition(double entryPrice, InstrumentState s, DirectionType dir)
-    {
-        var stopDistActual = StopAtrMult * s.CurrentAtr;
-        if (stopDistActual < entryPrice * 0.005) return 0;
-
-        var totalEquity = (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital);
-        var riskAmount = totalEquity * RiskPerTrade;
-        int lots = (int)(riskAmount / (stopDistActual * s.ContractMultiplier));
-        if (lots < 1) lots = 1;
-
-        var marginPerLot = entryPrice * s.ContractMultiplier * s.MarginRate;
-        var maxMargin = totalEquity * MaxMarginRatio;
-        while (lots > 1 && marginPerLot * lots > maxMargin) lots--;
-        if (lots < 1) return 0;
-        return lots;
-    }
+    // PositionSizer.FromAtrStop 替代
 
     private static List<Bar> BuildDayBars(IReadOnlyList<Bar> history)
     {

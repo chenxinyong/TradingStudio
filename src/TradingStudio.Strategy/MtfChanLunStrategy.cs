@@ -1,5 +1,6 @@
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Sizing;
 using TradingStudio.Core.Strategy;
 using TradingStudio.Strategy.ChanLun;
 
@@ -183,14 +184,18 @@ public class MtfChanLunStrategy : IStrategy
         {
             if (RequirePriceSide == 1 && bar.CloseDouble < s.DaySma[^1]) return;   // 要求价格在SMA上方
             if (RequirePriceSide == -1 && bar.CloseDouble > s.DaySma[^1]) return;  // 要求价格在SMA下方(抄底)
-            var q = CalcLots(bar.CloseDouble, s);
+            var q = PositionSizer.FromAtrStop(bar.CloseDouble, s.CurrentAtr, StopAtrMult,
+                    _ctx.GetFuture(s.InstId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, (double)MaxMarginRatio);
             if (q > 0) { _ctx.MarketBuy(s.InstId, q, "MTF+CL做多"); s.Trail = bar.CloseDouble - StopAtrMult * s.CurrentAtr; }
         }
         else if (!trendUp && bi.Type == Direction.Down)
         {
             if (RequirePriceSide == 1 && bar.CloseDouble > s.DaySma[^1]) return;
             if (RequirePriceSide == -1 && bar.CloseDouble < s.DaySma[^1]) return;
-            var q = CalcLots(bar.CloseDouble, s);
+            var q = PositionSizer.FromAtrStop(bar.CloseDouble, s.CurrentAtr, StopAtrMult,
+                    _ctx.GetFuture(s.InstId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, (double)MaxMarginRatio);
             if (q > 0) { _ctx.MarketSell(s.InstId, q, "MTF+CL做空"); s.Trail = bar.CloseDouble + StopAtrMult * s.CurrentAtr; }
         }
     }
@@ -202,22 +207,6 @@ public class MtfChanLunStrategy : IStrategy
         bool stopped = (pos.Quantity > 0 && bar.LowDouble <= s.Trail)
                     || (pos.Quantity < 0 && bar.HighDouble >= s.Trail);
         if (stopped) { _ctx.ClosePosition(s.InstId); s.Trail = 0; }
-    }
-
-    private int CalcLots(double price, State s)
-    {
-        if (s.CurrentAtr <= 0) return 0;
-        var mult = s.ContractMultiplier;
-        var marginRate = s.MarginRate;
-        var equity = (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital);
-        var stopDist = StopAtrMult * s.CurrentAtr;
-        var riskAmt = equity * RiskPerTrade;
-        int lots = Math.Max(1, (int)(riskAmt / (stopDist * mult)));
-        var marginPerLot = price * mult * marginRate;
-        var maxByMargin = (int)(equity * MaxMarginRatio / marginPerLot);
-        if (lots > maxByMargin) lots = maxByMargin;
-        if (lots > 20) lots = 20;
-        return lots;
     }
 
     // ═══ 日线工具 ═══

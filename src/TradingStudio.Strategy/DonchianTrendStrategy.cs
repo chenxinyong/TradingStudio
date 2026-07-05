@@ -1,5 +1,6 @@
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Sizing;
 using TradingStudio.Core.Strategy;
 
 namespace TradingStudio.Strategy;
@@ -231,7 +232,9 @@ public class DonchianTrendStrategy : IStrategy
             // 多头: High突破 + MA向上
             if (bar.HighDouble > prevChHi && trendUp)
             {
-                var qty = CalculateLots(bar.CloseDouble, s);
+                var qty = PositionSizer.FromAtrStop(bar.CloseDouble, s.CurrentAtr, StopAtrMult,
+                    _ctx.GetFuture(s.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, 0.5);
                 if (qty > 0)
                 {
                     _ctx.MarketBuy(s.InstrumentId, qty, $"突破入场: H{bar.HighDouble:F0}>{prevChHi:F0}");
@@ -245,7 +248,9 @@ public class DonchianTrendStrategy : IStrategy
             // 空头: Low跌破 + MA向下
             else if (bar.LowDouble < prevChLo && trendDown)
             {
-                var qty = CalculateLots(bar.CloseDouble, s);
+                var qty = PositionSizer.FromAtrStop(bar.CloseDouble, s.CurrentAtr, StopAtrMult,
+                    _ctx.GetFuture(s.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, 0.5);
                 if (qty > 0)
                 {
                     _ctx.MarketSell(s.InstrumentId, qty, $"突破入场: L{bar.LowDouble:F0}<{prevChLo:F0}");
@@ -280,33 +285,6 @@ public class DonchianTrendStrategy : IStrategy
             var pos = _ctx.GetPosition(inst);
             _ctx.Log($"{inst}: Equity={_ctx.Equity:C} Position={pos?.Quantity ?? 0}");
         }
-    }
-
-    // ═══ 仓位计算 ═══
-
-    private int CalculateLots(double price, InstrumentState s)
-    {
-        if (s.CurrentAtr <= 0) return 0;
-
-        var future = _ctx.GetFuture(s.InstrumentId);
-        var mult = (double)(future?.TradingUnit ?? 1m);
-        var totalEquity = (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital);
-        var riskAmount = totalEquity * RiskPerTrade;
-        var stopDist = StopAtrMult * s.CurrentAtr;
-
-        if (stopDist < price * 0.005) return 0;
-
-        int lots = (int)(riskAmount / (stopDist * mult));
-        if (lots < 1) lots = 1;
-
-        // 保证金限制
-        var marginRate = (double)(future?.MarginRate ?? 0.08m);
-        var marginPerLot = price * mult * marginRate;
-        var maxMargin = totalEquity * 0.5;
-        while (lots > 1 && marginPerLot * lots > maxMargin)
-            lots--;
-
-        return lots;
     }
 
     // ═══ 品种状态 ═══

@@ -1,6 +1,7 @@
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Indicators;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Sizing;
 using TradingStudio.Core.Strategy;
 
 namespace TradingStudio.Engine.Examples;
@@ -151,7 +152,9 @@ public class BollingerReversionStrategy : IStrategy
             var lowerZone = s.Lower + (s.MidBand - s.Lower) * zone;
             if (price <= lowerZone)
             {
-                var q = CalcLots(price, s, bar.InstrumentId);
+                var q = PositionSizer.FromPctStop(price, StopLossPct,
+                    _ctx.GetFuture(bar.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, 0.5, MaxPosition);
                 if (q > 0)
                 {
                     _ctx.MarketBuy(bar.InstrumentId, q, $"超卖 BW={bandWidth*100:F1}%");
@@ -160,7 +163,9 @@ public class BollingerReversionStrategy : IStrategy
             }
             else if (price >= s.Upper - (s.Upper - s.MidBand) * zone)
             {
-                var q = CalcLots(price, s, bar.InstrumentId);
+                var q = PositionSizer.FromPctStop(price, StopLossPct,
+                    _ctx.GetFuture(bar.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, 0.5, MaxPosition);
                 if (q > 0)
                 {
                     _ctx.MarketSell(bar.InstrumentId, q, $"超买 BW={bandWidth*100:F1}%");
@@ -168,21 +173,6 @@ public class BollingerReversionStrategy : IStrategy
                 }
             }
         }
-    }
-
-    private int CalcLots(double price, InstrumentState s, string instId)
-    {
-        if (s.Atr <= 0) return 0;
-        var f = _ctx.GetFuture(instId);
-        var mult = (double)(f?.TradingUnit ?? 10m);
-        var equity = (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital);
-        var riskAmt = equity * RiskPerTrade;
-        var stopDist = StopLossPct * price;
-        int lots = Math.Max(1, (int)(riskAmt / (stopDist * mult)));
-        var marginRate = (double)(f?.MarginRate ?? 0.08m);
-        while (lots > 1 && price * mult * marginRate * lots > equity * 0.5) lots--;
-        if (lots > MaxPosition) lots = MaxPosition;
-        return lots;
     }
 
     private class InstrumentState
