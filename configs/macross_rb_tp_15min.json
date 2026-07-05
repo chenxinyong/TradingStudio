@@ -4,7 +4,7 @@
   "Description": "螺纹钢 双均线(10/30) 15min — ATR动态仓位+止盈2.5ATR",
   "Version": 1,
   "Instruments": ["rb000"],
-  "PrimaryBarType": "bars_5min",
+  "PrimaryBarType": "bars_1min",
   "BarPeriodMinutes": 15,
   "AllocatedCapital": 1000000,
   "MaxDrawdownPct": 0.30,

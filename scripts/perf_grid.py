@@ -53,7 +53,7 @@ def generate_configs(varieties: list[str] = None, dry_run: bool = True):
                 "Description": f"{var} MA({fast}/{slow}) 15min TP={tp}",
                 "Version": 1,
                 "Instruments": [inst],
-                "PrimaryBarType": "bars_5min",
+                "PrimaryBarType": "bars_1min",
                 "BarPeriodMinutes": 15,
                 "AllocatedCapital": 1000000,
                 "MaxDrawdownPct": 0.30,
