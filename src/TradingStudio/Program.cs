@@ -9,7 +9,6 @@ using TradingStudio.Data.Storage;
 using TradingStudio.Live;
 using TradingStudio.Options;
 using TradingStudio.Services;
-using TradingStudio.Services;
 
 // ================================================================
 // TradingStudio — 量化交易工作室
@@ -98,204 +97,31 @@ static async Task RunLiveAsync(string[] args, IConfiguration config)
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // 本地配置覆盖（含敏感凭证，不提交 Git）
-    // builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
-
-    // 非交易时段也能启动HTTP: Kestrel HTTP必须可用，HTTPS失败不阻塞
-    builder.WebHost.ConfigureKestrel(o =>
-    {
-        // HTTPS端口绑定失败不崩溃（证书可能不存在或过期）
-        o.ConfigureEndpointDefaults(ep => { });
-    });
-    // 确保HTTP端口在CTP连接失败时仍可访问
+    // 非交易时段也能启动HTTP
+    builder.WebHost.ConfigureKestrel(o => o.ConfigureEndpointDefaults(ep => { }));
     var httpUrl = config["Urls"]?.Split(';').FirstOrDefault(u => u.StartsWith("http:")) ?? "http://0.0.0.0:59661";
     builder.WebHost.UseUrls(httpUrl);
-
-    // Windows Service
     builder.Host.UseWindowsService(o => o.ServiceName = "TradingStudio");
 
-    // SignalR
     builder.Services.AddSignalR();
-    builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-        p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+    builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+    builder.Services.AddSerilog((_, cfg) => cfg.ReadFrom.Configuration(config));
+    builder.Host.UseSerilog();
 
-    // Serilog
-    builder.Services.AddSerilog((_, cfg) =>
-        cfg.ReadFrom.Configuration(config));
-    builder.Host.UseSerilog();  // 配置静态 Log.Logger（CtpTraderBridge 回调需要）
-
-    // ── 启动配置验证 ──
     ValidateLiveConfig(config);
-
-    // ── 基础设施 (时段 + 健康) ──
-    builder.Services.AddSingleton<SessionScheduler>();
-    builder.Services.AddSingleton<HealthMonitor>();
-
-    // ── 品种注册表 ──
-    var symbolsPath = config["Live:SymbolsPath"] ?? "symbols.json";
-    var registry = FutureRegistry.Load(symbolsPath);
-    builder.Services.AddSingleton(registry);
-
-    // ── 数据源: CTP 行情 ──
-    var mdOpts = new CtpMdOptions
-    {
-        MdFront = config["Live:MdFront"]!,
-        BrokerId = config["Live:BrokerId"] ?? "9999",
-        UserId = config["Live:UserId"]!,
-        Password = config["Live:Password"]!,
-    };
-    // 工厂注入：ILogger 在 app.Build() 后才可用
-    var activityTracker = new ContractActivityTracker(observationSeconds: 60);
-    builder.Services.AddSingleton(activityTracker);
-    builder.Services.AddSingleton<IDataFeed>(sp =>
-    {
-        var feed = new CtpLiveFeed(mdOpts, sp.GetRequiredService<Serilog.ILogger>());
-        feed.ActivityTracker = activityTracker;
-        return feed;
-    });
-    builder.Services.AddSingleton(sp => (CtpLiveFeed)sp.GetRequiredService<IDataFeed>());
-
-    // 风控阈值（从 appsettings.json Risk 段读取，缺失时使用安全默认值）
-    var risk = new RiskController(
-        maxPosition: config.GetValue("Risk:MaxPositionPerInstrument", 5),
-        maxOrderQty: config.GetValue("Risk:MaxOrderQuantity", 100),
-        maxDrawdown: config.GetValue<decimal>("Risk:MaxDrawdownPct", 0.25m));
-
-    builder.Services.AddSingleton(risk);
-    var execution = new ExecutionHandler(risk);
-    builder.Services.AddSingleton<IExecutionHandler>(execution);
-    builder.Services.AddSingleton(execution);  // EngineMonitorApi 直接依赖具体类型
-
-    // 反馈 + 行情快照
-    var feedback = new FeedbackMonitor();
-    builder.Services.AddSingleton(feedback);
-    var tickSnapshot = new TickSnapshot();
-    builder.Services.AddSingleton(tickSnapshot);
-
-    // 指标 + 策略容器
-    var indicators = new IndicatorManager();
-    builder.Services.AddSingleton(indicators);
-    var strategies = new StrategyContainer();
-    builder.Services.AddSingleton(strategies);
-
-    // ── 回测执行器 (live模式下由WPF触发) ──
-    builder.Services.AddSingleton<BacktestRunner>();
-
-    // ── 数据持久化 ──
-    var dataPath = config["Live:DataPath"] ?? "data";
-    var dbPath = Path.Combine(dataPath, config["Live:Database"] ?? "bars_live.db");
-    // 自动识别存储引擎：.duckdb 扩展名 → DuckDB, 否则 SQLite
-    // UseDuckDB 可强制覆盖（兼容旧配置）
-    var forceDuckDB = config["Live:UseDuckDB"]?.ToLowerInvariant() == "true";
-    var isDuckDB = forceDuckDB || dbPath.EndsWith(".duckdb", StringComparison.OrdinalIgnoreCase);
-    IBarStore barStore = isDuckDB
-        ? new DuckDBStore(dbPath, enableTickPurge: true)
-        : new SqliteBarStore(dbPath);
-    builder.Services.AddSingleton(barStore);
-    builder.Services.AddSingleton<TradingStudio.Data.Storage.BuildPeriodsService>();
-    var tickWriter = new TickCsvWriter(Path.Combine(dataPath, "TickData"));
-    builder.Services.AddSingleton(tickWriter);
-
-    // 资金管理
-    var startCapital = decimal.Parse(config["Live:StartingCapital"] ?? "100000");
-    var portfolio = new PortfolioManager(startCapital);
-    builder.Services.AddSingleton(portfolio);
-
-    // CTP 交易桥接
-    if (!string.IsNullOrEmpty(config["Live:TraderFront"]))
-    {
-        var traderOpts = new CtpTraderOptions
-        {
-            TraderFront = config["Live:TraderFront"]!,
-            BrokerId = config["Live:BrokerId"] ?? "9999",
-            UserId = config["Live:UserId"] ?? "",
-            Password = config["Live:Password"] ?? "",
-            AuthCode = config["Live:AuthCode"] ?? "0000000000000000",
-            AppId = config["Live:AppId"] ?? "simnow_client_test",
-        };
-        // CtpTraderBridge: 先注册，app.Build() 后由 EngineHost 调用 Connect
-        var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts);
-        builder.Services.AddSingleton(bridge);
-        execution.SendToExchange = bridge.SendOrder;
-    }
-    execution.IsLive = true;
-
-    // 引擎 — Live 模式全品种订阅（数据采集需全量 Tick）
-    // ContractCodeGenerator 将品种代码展开为实际合约代码（如 "ag" → "ag2608","ag2609"...）
-    var allInstruments = ContractCodeGenerator.BatchSubscribe(registry.All.Values, 50)
-        .SelectMany(b => b)
-        .ToList();
-    Console.WriteLine($"Live: {allInstruments.Count} contracts from {registry.All.Count} products");
-    var engineOptions = new EngineOptions
-    {
-        StartTime = DateTime.Today,
-        EndTime = DateTime.Today.AddDays(1),
-        Instruments = allInstruments,
-        StartingCapital = startCapital,
-        IsLive = true,
-    };
-    builder.Services.AddSingleton(engineOptions);
-
-    // 加载策略
-    var strategyConfigPath = config["Live:StrategyConfig"];
-    if (!string.IsNullOrEmpty(strategyConfigPath) && File.Exists(strategyConfigPath))
-    {
-        var json = File.ReadAllText(strategyConfigPath);
-        var strategyConfig = System.Text.Json.JsonSerializer.Deserialize<TradingStudio.Core.Strategy.StrategyConfig>(
-            json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        if (strategyConfig != null)
-        {
-            var warmupDays = int.Parse(config["Live:WarmupDays"] ?? "5");
-            IBarStore? warmupStore = null;
-            if (warmupDays > 0)
-            {
-                var warmupDb = Path.Combine(dataPath, config["Live:WarmupDatabase"] ?? "bars_history.duckdb");
-                if (File.Exists(warmupDb))
-                    warmupStore = new DuckDBStore(warmupDb, readOnly: true);
-            }
-            engineOptions = new EngineOptions
-            {
-                StartTime = DateTime.Today,
-                EndTime = DateTime.Today.AddDays(1),
-                Instruments = allInstruments,
-                StrategyConfigs = [strategyConfig],
-                StartingCapital = strategyConfig.AllocatedCapital > 0 ? strategyConfig.AllocatedCapital : startCapital,
-                IsLive = true,
-                WarmupDays = warmupDays,
-                WarmupStore = warmupStore,
-            };
-            StrategyFactory.DiscoverFromAssembly(typeof(TradingEngine).Assembly);
-        }
-    }
-
-    // 工厂创建引擎（IDataFeed 需延迟解析）
-    builder.Services.AddSingleton(sp => new TradingEngine(
-        sp.GetRequiredService<IDataFeed>(), execution, portfolio, indicators, strategies,
-        risk, feedback, tickSnapshot, engineOptions, registry,
-        sp.GetService<Microsoft.Extensions.Logging.ILogger<TradingStudio.Engine.TradingEngine>>()));
-
-    // 引擎后台运行 + SignalR 实时推送 + 数据落盘
-    builder.Services.AddHostedService<EngineHost>();
-    builder.Services.AddHostedService<EngineHubPushService>();
-    builder.Services.AddHostedService<LiveDataCollector>();
-    builder.Services.AddHostedService<PeriodMaintainer>();  // 自动维护 5min/15min/week
+    LiveComposer.Configure(builder, config);
 
     var app = builder.Build();
 
-    // app.Build() 后静态 Logger 已配置，交易桥接异步启动（不阻塞HTTP服务）
+    // 交易桥接异步启动（不阻塞HTTP）
     var traderBridge = app.Services.GetService<CtpTraderBridge>();
     if (traderBridge != null)
         _ = Task.Run(() => { try { traderBridge.Connect(); } catch (Exception ex) { Log.Warning(ex, "TraderBridge connection failed (non-fatal)"); } });
 
     app.UseCors();
-
-    // REST API
     TradingStudio.EngineMonitorApi.MapEndpoints(app);
-
-    // SignalR Hub
     app.MapHub<TradingStudio.EngineHub>("/hubs/engine");
 
-    // HTTP服务器立即启动（即使CTP未连接，API/回测服务可用）
     Log.Information("TradingStudio HTTP server starting on {Urls}...", string.Join(", ", app.Urls));
     await app.RunAsync();
 }
