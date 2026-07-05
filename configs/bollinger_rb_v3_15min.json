@@ -1,5 +1,5 @@
 {
-  "StrategyId": "Bollinger-RB-v2-15min",
+  "StrategyId": "Bollinger-RB-v3-15min",
   "StrategyType": "BollingerReversion",
   "Instruments": ["rb000"],
   "PrimaryBarType": "bars_1min",
@@ -13,6 +13,6 @@
     "AtrPeriod": 14, "TrailAtrMult": 1.5,
     "RiskPerTrade": 0.015, "MaxPosition": 2,
     "MaxAdx": 0, "AdxPeriod": 14,
-    "MinBandWidth": 0.02, "EntryCooldown": 10, "EntryZoneRatio": 0.20
+    "MinBandWidth": 0.01, "EntryCooldown": 5, "EntryZoneRatio": 0.25
   }
 }

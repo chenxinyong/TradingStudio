@@ -48,6 +48,15 @@ public class BollingerReversionStrategy : IStrategy
     [StrategyParameter(Description = "ADX周期", DefaultValue = 14, Min = 7, Max = 30, Category = "Filter")]
     public int AdxPeriod { get; set; } = 14;
 
+    [StrategyParameter(Description = "最低带宽%(布林带宽度/Mid, 0=关闭)", DefaultValue = 0.02, Min = 0, Max = 0.10, Category = "Filter")]
+    public double MinBandWidth { get; set; } = 0.02;
+
+    [StrategyParameter(Description = "入场冷却期(K线数)", DefaultValue = 10, Min = 0, Max = 50, Category = "Filter")]
+    public int EntryCooldown { get; set; } = 10;
+
+    [StrategyParameter(Description = "入场区域比例(0-0.5, 越小越严格)", DefaultValue = 0.20, Min = 0.05, Max = 0.50, Category = "Entry")]
+    public double EntryZoneRatio { get; set; } = 0.20;
+
     public string Name => "布林带均值回归";
 
     private StrategyContext _ctx = null!;
@@ -86,10 +95,11 @@ public class BollingerReversionStrategy : IStrategy
 
         s.Feed(bar);
 
-        // 趋势太强不交易 (布林带回归在震荡市有效)
+        // 趋势太强 / 带宽太窄 / 未就绪
         if (MaxAdx > 0 && s.Adx > MaxAdx) return;
-        // 布林带未就绪
         if (!s.IsReady) return;
+        s.Cooldown--;
+        var bandWidth = s.MidBand > 0 ? (s.Upper - s.Lower) / s.MidBand : 0;
 
         var price = bar.CloseDouble;
         var pos = _ctx.GetPosition(bar.InstrumentId);
@@ -115,7 +125,7 @@ public class BollingerReversionStrategy : IStrategy
             else
             { var t = price - TrailAtrMult * s.Atr; if (t > s.TrailStop) s.TrailStop = t; }
 
-            if (exit) { _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"多头出场: {bar.InstrumentId} {reason}"); s.ResetTrade(); }
+            if (exit) { _ctx.ClosePosition(bar.InstrumentId); s.ResetTrade(); s.Cooldown = EntryCooldown; }
         }
         else if (hasShort)
         {
@@ -131,33 +141,30 @@ public class BollingerReversionStrategy : IStrategy
             else
             { var t = price + TrailAtrMult * s.Atr; if (t < s.TrailStop) s.TrailStop = t; }
 
-            if (exit) { _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"空头出场: {bar.InstrumentId} {reason}"); s.ResetTrade(); }
+            if (exit) { _ctx.ClosePosition(bar.InstrumentId); s.ResetTrade(); s.Cooldown = EntryCooldown; }
         }
 
-        // ── 入场 ──
-        if (!hasLong && !hasShort)
+        // ── 入场 (带带宽过滤+冷却+收紧入场区) ──
+        if (!hasLong && !hasShort && s.Cooldown <= 0 && bandWidth >= MinBandWidth)
         {
-            // 多头: 价格触碰下轨区域 (下轨到中轨的1/3区间)
-            var lowerZone = s.Lower + (s.MidBand - s.Lower) * 0.33;
+            var zone = EntryZoneRatio;
+            var lowerZone = s.Lower + (s.MidBand - s.Lower) * zone;
             if (price <= lowerZone)
             {
                 var q = CalcLots(price, s, bar.InstrumentId);
                 if (q > 0)
                 {
-                    _ctx.MarketBuy(bar.InstrumentId, q, $"超卖区 {price:F0}<={lowerZone:F0}");
-                    s.EntryPrice = price;
-                    s.TrailStop = price - TrailAtrMult * s.Atr;
+                    _ctx.MarketBuy(bar.InstrumentId, q, $"超卖 BW={bandWidth*100:F1}%");
+                    s.EntryPrice = price; s.TrailStop = price - TrailAtrMult * s.Atr;
                 }
             }
-            // 空头: 价格触碰上轨区域
-            else if (price >= s.Upper - (s.Upper - s.MidBand) * 0.33)
+            else if (price >= s.Upper - (s.Upper - s.MidBand) * zone)
             {
                 var q = CalcLots(price, s, bar.InstrumentId);
                 if (q > 0)
                 {
-                    _ctx.MarketSell(bar.InstrumentId, q, $"超买区 {price:F0}>={s.Upper - (s.Upper-s.MidBand)*0.33:F0}");
-                    s.EntryPrice = price;
-                    s.TrailStop = price + TrailAtrMult * s.Atr;
+                    _ctx.MarketSell(bar.InstrumentId, q, $"超买 BW={bandWidth*100:F1}%");
+                    s.EntryPrice = price; s.TrailStop = price + TrailAtrMult * s.Atr;
                 }
             }
         }
@@ -189,6 +196,7 @@ public class BollingerReversionStrategy : IStrategy
         public double MidBand, Upper, Lower, Atr;
         public double Adx, PrevClose;
         public double EntryPrice, TrailStop;
+        public int Cooldown;
         public bool IsReady;
 
         public InstrumentState(int period, int atrPeriod, int adxPeriod, double stdMult)

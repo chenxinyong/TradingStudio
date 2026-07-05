@@ -15,6 +15,7 @@
   "Parameters": {
     "AtrPeriod": 20,
     "StopAtrMult": 2.0,
+    "HardStopPct": 0.05,
     "MinBiPower": 200,
     "MinBiLen": 3,
     "RiskPerTrade": 0.02,

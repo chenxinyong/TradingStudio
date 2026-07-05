@@ -1,7 +1,7 @@
 {
-  "StrategyId": "Bollinger-RB-v2-15min",
+  "StrategyId": "Bollinger-FG-15min",
   "StrategyType": "BollingerReversion",
-  "Instruments": ["rb000"],
+  "Instruments": ["fg000"],
   "PrimaryBarType": "bars_1min",
   "BarPeriodMinutes": 15,
   "AllocatedCapital": 1000000,
@@ -13,6 +13,6 @@
     "AtrPeriod": 14, "TrailAtrMult": 1.5,
     "RiskPerTrade": 0.015, "MaxPosition": 2,
     "MaxAdx": 0, "AdxPeriod": 14,
-    "MinBandWidth": 0.02, "EntryCooldown": 10, "EntryZoneRatio": 0.20
+    "MinBandWidth": 0.01, "EntryCooldown": 5, "EntryZoneRatio": 0.25
   }
 }

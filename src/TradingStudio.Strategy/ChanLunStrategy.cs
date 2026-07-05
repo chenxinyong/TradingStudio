@@ -13,6 +13,9 @@ public class ChanLunStrategy : IStrategy
     [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2, Min = 1, Max = 5, Category = "Risk")]
     public double StopAtrMult { get; set; } = 2.0;
 
+    [StrategyParameter(Description = "硬止损比例 (0=关闭)", DefaultValue = 0.05, Min = 0, Max = 0.15, Category = "Risk")]
+    public double HardStopPct { get; set; } = 0.05;
+
     [StrategyParameter(Description = "最小笔力度(万分比)", DefaultValue = 200, Min = 10, Max = 500, Category = "Signal")]
     public double MinBiPower { get; set; } = 200;
 
@@ -255,6 +258,7 @@ public class ChanLunStrategy : IStrategy
                     _ctx.MarketBuy(s.InstrumentId, qty, $"BI入场: 日线Up+30min底分型");
                     s.HasPendingEntry = true; s.EntryBarTime = bar.BarTime;
                     s.StopPrice = bar.CloseDouble - StopAtrMult * s.CurrentAtr;
+                    s.EntryPrice = bar.CloseDouble;
                     s.ActiveBi = completedBi;
                 }
             }
@@ -266,6 +270,7 @@ public class ChanLunStrategy : IStrategy
                     _ctx.MarketSell(s.InstrumentId, qty, $"BI入场: 日线Down+30min顶分型");
                     s.HasPendingEntry = true; s.EntryBarTime = bar.BarTime;
                     s.StopPrice = bar.CloseDouble + StopAtrMult * s.CurrentAtr;
+                    s.EntryPrice = bar.CloseDouble;
                     s.ActiveBi = completedBi;
                 }
             }
@@ -275,16 +280,36 @@ public class ChanLunStrategy : IStrategy
     private void CheckStopLoss(InstrumentState s, Bar bar)
     {
         var pos = _ctx.GetPosition(s.InstrumentId);
-        if (pos is null || pos.Quantity == 0 || s.StopPrice <= 0) return;
+        if (pos is null || pos.Quantity == 0) return;
 
-        bool stopped = (pos.Quantity > 0 && bar.LowDouble <= s.StopPrice)
-                    || (pos.Quantity < 0 && bar.HighDouble >= s.StopPrice);
+        bool stopped = false; string reason = "";
+
+        // 硬止损 (优先): 价格反向超过 HardStopPct
+        if (HardStopPct > 0 && s.EntryPrice > 0)
+        {
+            double pnlPct = pos.Quantity > 0
+                ? (bar.LowDouble - s.EntryPrice) / s.EntryPrice
+                : (s.EntryPrice - bar.HighDouble) / s.EntryPrice;
+            if (pnlPct <= -HardStopPct)
+            {
+                stopped = true;
+                reason = $"硬止损 -{HardStopPct:P0} (跌={-pnlPct:P1})";
+            }
+        }
+
+        // ATR跟踪止损
+        if (!stopped && s.StopPrice > 0)
+        {
+            stopped = (pos.Quantity > 0 && bar.LowDouble <= s.StopPrice)
+                   || (pos.Quantity < 0 && bar.HighDouble >= s.StopPrice);
+            if (stopped) reason = $"ATR止损 @ {s.StopPrice:F2}";
+        }
 
         if (stopped)
         {
             _ctx.ClosePosition(s.InstrumentId);
-            _ctx.Log($"止损: {s.InstrumentId} @ {s.StopPrice:F2}");
-            s.EntryBarTime = null; s.StopPrice = 0; s.ActiveBi = null;
+            _ctx.Log($"止损: {s.InstrumentId} {reason}");
+            s.EntryBarTime = null; s.StopPrice = 0; s.EntryPrice = 0; s.ActiveBi = null;
         }
     }
 
@@ -361,6 +386,7 @@ public class ChanLunStrategy : IStrategy
         public bool HasPendingEntry;
         public DateTime? EntryBarTime;
         public double StopPrice;
+        public double EntryPrice;              // 入场价(硬止损用)
         public Bi? ActiveBi;
 
         public InstrumentState(string inst, double multiplier, double marginRate,
