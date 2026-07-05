@@ -69,7 +69,7 @@ public class BacktestRunner
 
     private EngineReport ExecuteBacktest(StrategyConfig config, string? dbPath, string? symbolsPath)
     {
-        var db = dbPath ?? "data/bars_history.duckdb";
+        var db = dbPath ?? "../../data/bars_history.duckdb";
         var sym = symbolsPath ?? "symbols.json";
 
         var registry = FutureRegistry.Load(sym);

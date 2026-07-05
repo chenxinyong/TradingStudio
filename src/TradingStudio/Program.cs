@@ -101,6 +101,16 @@ static async Task RunLiveAsync(string[] args, IConfiguration config)
     // 本地配置覆盖（含敏感凭证，不提交 Git）
     // builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
 
+    // 非交易时段也能启动HTTP: Kestrel HTTP必须可用，HTTPS失败不阻塞
+    builder.WebHost.ConfigureKestrel(o =>
+    {
+        // HTTPS端口绑定失败不崩溃（证书可能不存在或过期）
+        o.ConfigureEndpointDefaults(ep => { });
+    });
+    // 确保HTTP端口在CTP连接失败时仍可访问
+    var httpUrl = config["Urls"]?.Split(';').FirstOrDefault(u => u.StartsWith("http:")) ?? "http://0.0.0.0:59661";
+    builder.WebHost.UseUrls(httpUrl);
+
     // Windows Service
     builder.Host.UseWindowsService(o => o.ServiceName = "TradingStudio");
 
@@ -272,9 +282,10 @@ static async Task RunLiveAsync(string[] args, IConfiguration config)
 
     var app = builder.Build();
 
-    // app.Build() 后静态 Logger 已配置，启动交易桥接
+    // app.Build() 后静态 Logger 已配置，交易桥接异步启动（不阻塞HTTP服务）
     var traderBridge = app.Services.GetService<CtpTraderBridge>();
-    traderBridge?.Connect();
+    if (traderBridge != null)
+        _ = Task.Run(() => { try { traderBridge.Connect(); } catch (Exception ex) { Log.Warning(ex, "TraderBridge connection failed (non-fatal)"); } });
 
     app.UseCors();
 
@@ -284,6 +295,8 @@ static async Task RunLiveAsync(string[] args, IConfiguration config)
     // SignalR Hub
     app.MapHub<TradingStudio.EngineHub>("/hubs/engine");
 
+    // HTTP服务器立即启动（即使CTP未连接，API/回测服务可用）
+    Log.Information("TradingStudio HTTP server starting on {Urls}...", string.Join(", ", app.Urls));
     await app.RunAsync();
 }
 

@@ -15,7 +15,7 @@ public partial class BacktestViewModel : ViewModelBase
 {
     private readonly ILogger<BacktestViewModel> _log;
     private readonly HttpClient _http;
-    private string _apiBase = "http://localhost:5001";
+    private string _apiBase = "http://localhost:59661";
 
     // ── 表单 ──
     public ObservableCollection<string> StrategyTypes { get; } = new()

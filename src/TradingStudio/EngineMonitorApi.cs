@@ -194,7 +194,7 @@ public record ProductInfo(string Code, string InstrumentId, long BarCount, strin
 /// <summary>Bar 数据查询辅助方法</summary>
 internal static class BarQueryHelper
 {
-    private const string DbPath = "data/bars_history.duckdb";
+    private const string DbPath = "../../data/bars_history.duckdb";
 
     public static List<ProductInfo> QueryProducts()
     {
