@@ -46,6 +46,12 @@ public partial class ChartWindow : Window
         Title = "TradingStudio — K线图";
     }
 
+    private void OpenReplay_Click(object sender, RoutedEventArgs e)
+    {
+        var replay = App.Services.GetRequiredService<ReplayWindow>();
+        replay.Show();
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         _vm.UnsubscribeRealTimeBars();

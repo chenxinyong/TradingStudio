@@ -89,8 +89,17 @@ public partial class ChartViewModel : ObservableObject
 
     // === 数据源路径 ===
     private string _dbPath;
-    private static string DefaultDbPath =>
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "data", "bars_history.duckdb");
+    private static string ResolveDbPath()
+    {
+        foreach (var tryPath in new[] {
+            "../../data/bars_history.duckdb",
+            "../../../data/bars_history.duckdb",
+            "../../../../data/bars_history.duckdb",
+            "data/bars_history.duckdb",
+        }) if (File.Exists(tryPath)) return Path.GetFullPath(tryPath);
+        return "../../data/bars_history.duckdb"; // fallback
+    }
+    private static string DefaultDbPath => ResolveDbPath();
 
     // === SignalR 实时 Bar ===
     private EngineHubClient? _hub;

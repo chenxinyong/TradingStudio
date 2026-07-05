@@ -35,10 +35,13 @@
                 <TextBlock Text="{Binding SelectedFrequency, FallbackValue=—}"
                            Foreground="White" FontSize="11" FontWeight="SemiBold"
                            VerticalAlignment="Center" />
+                <Button Content="⏯ 回放" Click="OpenReplay_Click" Height="22" Width="60"
+                        Background="{StaticResource VsBgTertiary}" Foreground="{StaticResource VsFgPrimary}"
+                        BorderBrush="{StaticResource VsBorder}" FontSize="10" Cursor="Hand" Margin="20,0,0,0" />
                 <TextBlock Text="Ctrl+D 仪表盘  |  Ctrl+C K线  |  滚轮缩放  |  右键拖拽"
                            Foreground="{StaticResource VsFgMuted}" FontSize="10"
                            VerticalAlignment="Center" HorizontalAlignment="Right"
-                           Margin="40,0,0,0" />
+                           Margin="16,0,0,0" />
             </StackPanel>
         </Border>
     </Grid>

@@ -19,17 +19,11 @@ public partial class App : Application
             var args = e.Args;
 
             if (args.Contains("--replay"))
-            {
                 Services.GetRequiredService<ReplayWindow>().Show();
-            }
             else if (args.Contains("--chart-only") || args.Contains("--chart") || args.Length == 0)
-            {
                 Services.GetRequiredService<ChartWindow>().Show();
-            }
             else
-            {
                 Services.GetRequiredService<MainWindow>().Show();
-            }
         }
         catch (Exception ex)
         {

@@ -92,23 +92,32 @@ public partial class ReplayViewModel : ObservableObject
         try
         {
             StatusText = $"加载 {InstrumentId} {StartDate}~{EndDate}...";
-            var dbPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", DefaultDbPath);
-            if (!File.Exists(dbPath)) dbPath = DefaultDbPath;
+            // 从项目目录或多级向根目录查找 DuckDB
+            var dbPath = DefaultDbPath;
+            foreach (var tryPath in new[] { DefaultDbPath, "../../data/bars_history.duckdb", "../../../data/bars_history.duckdb", "../../../../data/bars_history.duckdb" })
+                if (File.Exists(tryPath)) { dbPath = tryPath; break; }
+            StatusText = $"DB: {dbPath} | 加载中...";
 
+            StatusText = $"连接 DuckDB: {dbPath}...";
             using var conn = new DuckDBConnection($"Data Source={dbPath}");
             conn.Open();
 
+            // 自动选表: 先试 bars_5min
             var table = "bars_5min";
+
             var sql = $"""
                 SELECT bar_time::TIMESTAMP as dt, open/1e7 as o, high/1e7 as h, low/1e7 as l, close/1e7 as c, volume as v
                 FROM {table} WHERE instrument_id = '{InstrumentId}'
                 AND bar_time >= '{StartDate}' AND bar_time <= '{EndDate} 23:59:59'
                 ORDER BY dt
                 """;
+            StatusText = $"查询 {table}...";
 
             using var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
-            using var reader = (DuckDBDataReader)cmd.ExecuteReader();
+            DuckDBDataReader reader;
+            try { reader = (DuckDBDataReader)cmd.ExecuteReader(); }
+            catch { table = "bars_1min"; cmd.CommandText = sql.Replace("bars_5min", "bars_1min"); reader = (DuckDBDataReader)cmd.ExecuteReader(); }
 
             _allBars = new List<Bar>();
             while (reader.Read())
