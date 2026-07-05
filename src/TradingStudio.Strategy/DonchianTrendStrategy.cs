@@ -8,8 +8,8 @@ namespace TradingStudio.Strategy;
 /// ATR通道突破趋势跟踪策略 — 多品种日内中频。
 ///
 /// 核心逻辑:
-///   多头: Close突破N根Bar最高价 + MA趋势向上 → 入场
-///   空头: Close跌破N根Bar最低价 + MA趋势向下 → 入场
+///   多头: High突破N根Bar最高价 + MA趋势向上 → 入场 (Market at Close)
+///   空头: Low跌破N根Bar最低价 + MA趋势向下 → 入场
 ///   止损: 2×ATR 跟踪止损
 ///   止盈: 3×ATR 目标价止盈
 ///   出场: 反向突破M根Bar边界 或 跟踪止损触发 或 止盈触发
@@ -56,7 +56,7 @@ public class DonchianTrendStrategy : IStrategy
 
     private StrategyContext _ctx = null!;
     private readonly Dictionary<string, InstrumentState> _state = new();
-    private int _barCount;  // 总 Bar 计数（用于阶段性日志）
+    private int _barCount;
 
     public void Initialize(StrategyContext context)
     {
@@ -69,11 +69,14 @@ public class DonchianTrendStrategy : IStrategy
             var state = new InstrumentState(inst, ChannelPeriod, ExitPeriod, TrendMAPeriod, AtrPeriod);
             _state[inst] = state;
 
-            // 预热：用历史数据初始化指标
+            // 预热：用历史数据初始化指标（跳过零成交量 Bar）
             if (history.Count > 0)
             {
                 foreach (var bar in history)
-                    state.Warmup(bar);
+                {
+                    if (bar.Volume > 0)
+                        state.Warmup(bar);
+                }
             }
 
             if (history.Count < minNeeded)
@@ -90,10 +93,12 @@ public class DonchianTrendStrategy : IStrategy
 
     public void OnBar(Bar bar)
     {
+        // ── 过滤零成交量 Bar（连续合约展期缺口标记） ──
+        if (bar.Volume <= 0) return;
+
         // ── 懒初始化：应对 Initialize 时无历史数据的情况 ──
         if (!_state.TryGetValue(bar.InstrumentId, out var s))
         {
-            // 如果品种在订阅列表中但未初始化（极边缘情况），动态创建状态
             s = new InstrumentState(bar.InstrumentId, ChannelPeriod, ExitPeriod, TrendMAPeriod, AtrPeriod);
             _state[bar.InstrumentId] = s;
         }
@@ -184,7 +189,7 @@ public class DonchianTrendStrategy : IStrategy
                 _ctx.ClosePosition(s.InstrumentId);
                 _ctx.Log($"出场: {s.InstrumentId} {exitReason} @ {bar.CloseDouble:F2}");
                 s.ResetTrade();
-                s.CooldownRemaining = ReentryCooldown;  // 启动冷却期
+                s.CooldownRemaining = ReentryCooldown;
                 return;
             }
 
@@ -223,35 +228,33 @@ public class DonchianTrendStrategy : IStrategy
                     $"MA={s.CurrentMA:F0} Trend={(trendUp?"↑":trendDown?"↓":"→")} " +
                     $"Vol={volatility*100:F2}% ATR={s.CurrentAtr:F2}");
 
-            // 多头: 价格突破通道高点 + MA趋势向上
-            if (bar.CloseDouble > s.ChannelHigh && trendUp)
+            // 多头: High突破通道高点 + MA趋势向上 (标准 Donchian/Turtle 入场)
+            if (bar.HighDouble > s.ChannelHigh && trendUp)
             {
                 var qty = CalculateLots(bar.CloseDouble, s);
                 if (qty > 0)
                 {
-                    _ctx.MarketBuy(s.InstrumentId, qty, $"突破入场: {bar.CloseDouble:F0}>{s.ChannelHigh:F0}");
+                    _ctx.MarketBuy(s.InstrumentId, qty, $"突破入场: H{bar.HighDouble:F0}>{s.ChannelHigh:F0}");
                     s.TrailingStop = bar.CloseDouble - StopAtrMult * s.CurrentAtr;
                     s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble + TakeProfitAtrMult * s.CurrentAtr : 0;
                     s.EntryPrice = bar.CloseDouble; s.Direction = "Long"; s.BarsInTrade = 0;
-                    var tpStr = s.TakeProfit > 0 ? s.TakeProfit.ToString("F0") : "∞";
                     _ctx.Log($"多头入场: {s.InstrumentId} @{bar.CloseDouble:F0} " +
-                             $"SL={s.TrailingStop:F0} TP={tpStr} " +
+                             $"SL={s.TrailingStop:F0} TP={(s.TakeProfit>0?s.TakeProfit.ToString("F0"):"∞")} " +
                              $"Qty={qty} R:R={TakeProfitAtrMult/StopAtrMult:F1}:1");
                 }
             }
-            // 空头: 价格跌破通道低点 + MA趋势向下
-            else if (bar.CloseDouble < s.ChannelLow && trendDown)
+            // 空头: Low跌破通道低点 + MA趋势向下
+            else if (bar.LowDouble < s.ChannelLow && trendDown)
             {
                 var qty = CalculateLots(bar.CloseDouble, s);
                 if (qty > 0)
                 {
-                    _ctx.MarketSell(s.InstrumentId, qty, $"突破入场: <{s.ChannelLow:F0}");
+                    _ctx.MarketSell(s.InstrumentId, qty, $"突破入场: L{bar.LowDouble:F0}<{s.ChannelLow:F0}");
                     s.TrailingStop = bar.CloseDouble + StopAtrMult * s.CurrentAtr;
                     s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble - TakeProfitAtrMult * s.CurrentAtr : 0;
                     s.EntryPrice = bar.CloseDouble; s.Direction = "Short"; s.BarsInTrade = 0;
-                    var tpStr = s.TakeProfit > 0 ? s.TakeProfit.ToString("F0") : "∞";
                     _ctx.Log($"空头入场: {s.InstrumentId} @{bar.CloseDouble:F0} " +
-                             $"SL={s.TrailingStop:F0} TP={tpStr} " +
+                             $"SL={s.TrailingStop:F0} TP={(s.TakeProfit>0?s.TakeProfit.ToString("F0"):"∞")} " +
                              $"Qty={qty} R:R={TakeProfitAtrMult/StopAtrMult:F1}:1");
                 }
             }
@@ -339,7 +342,7 @@ public class DonchianTrendStrategy : IStrategy
         public double EntryPrice;
         public string? Direction;
         public int BarsInTrade;
-        public int CooldownRemaining;  // 重新入场冷却倒计时
+        public int CooldownRemaining;
 
         // 诊断
         public int _diag, _diagBlocked, _notReadyLog, _totalFed;
@@ -356,7 +359,7 @@ public class DonchianTrendStrategy : IStrategy
             _atrTrueRanges = new Queue<double>(atrN + 1);
         }
 
-        /// <summary>历史数据预热（只更新指标，不检查信号）</summary>
+        /// <summary>历史数据预热</summary>
         public void Warmup(Bar bar) => Feed(bar);
 
         /// <summary>喂一根 Bar，更新所有指标</summary>
@@ -364,7 +367,7 @@ public class DonchianTrendStrategy : IStrategy
         {
             _totalFed++;
 
-            // 保存 MA 前值（用于判断趋势方向）
+            // 保存 MA 前值
             PrevMA = CurrentMA;
 
             // ── ATR ──
@@ -420,7 +423,6 @@ public class DonchianTrendStrategy : IStrategy
             EntryPrice = 0;
             Direction = null;
             BarsInTrade = 0;
-            // CooldownRemaining is set separately after reset
         }
     }
 }

@@ -175,6 +175,7 @@ public class BacktestCommand
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Converters = { new EquityCurveJsonConverter() },
             });
             File.WriteAllText(reportPath, reportJson);
             Console.WriteLine($"  Report saved: {reportPath}");
