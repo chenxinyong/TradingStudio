@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -88,7 +89,8 @@ public partial class ChartViewModel : ObservableObject
 
     // === 数据源路径 ===
     private string _dbPath;
-    private const string DefaultDbPath = @"C:\Works\ClaudeCode\TradingStudio\data\bars_history.duckdb";
+    private static string DefaultDbPath =>
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "data", "bars_history.duckdb");
 
     // === SignalR 实时 Bar ===
     private EngineHubClient? _hub;
@@ -115,10 +117,10 @@ public partial class ChartViewModel : ObservableObject
 
     private void LoadProductList()
     {
-        // 优先从引擎 API 加载
+        // 优先从引擎 API 加载 (异步, 不阻塞UI线程)
         if (_api != null)
         {
-            var products = Task.Run(() => _api.GetProductsAsync()).Result;
+            var products = _api.GetProductsAsync().GetAwaiter().GetResult(); // 构造器中不得已同步, 但配置了10s超时
             if (products != null && products.Count > 0)
             {
                 AvailableProducts.Clear();
@@ -231,7 +233,7 @@ public partial class ChartViewModel : ObservableObject
     {
         try
         {
-            var barsDto = Task.Run(() => _api!.GetBarsAsync(instrumentId, freq)).Result;
+            var barsDto = _api!.GetBarsAsync(instrumentId, freq).GetAwaiter().GetResult();
             if (barsDto == null || barsDto.Count < 5) return false;
 
             var bars = barsDto.Select(d => new Bar

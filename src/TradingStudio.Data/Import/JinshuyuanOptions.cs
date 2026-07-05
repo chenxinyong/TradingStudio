@@ -6,8 +6,8 @@ namespace TradingStudio.Data.Import;
 /// </summary>
 public sealed class JinshuyuanOptions
 {
-    /// <summary>金数源数据根目录</summary>
-    public string DataDir { get; init; } = @"C:\Works\Datas\Jinshuyuan";
+    /// <summary>金数源数据根目录 (可通过 CLI --data-dir 覆盖)</summary>
+    public string DataDir { get; init; } = "";
 
     /// <summary>输出 SQLite 路径</summary>
     public string DbPath { get; init; } = "bars_history.db";

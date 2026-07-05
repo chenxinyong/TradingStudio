@@ -157,9 +157,9 @@ static async Task RunLiveAsync(string[] args, IConfiguration config)
 
     // 风控阈值（从 appsettings.json Risk 段读取，缺失时使用安全默认值）
     var risk = new RiskController(
-        maxPosition: int.Parse(config["Risk:MaxPositionPerInstrument"] ?? "5"),
-        maxOrderQty: int.Parse(config["Risk:MaxOrderQuantity"] ?? "100"),
-        maxDrawdown: decimal.Parse(config["Risk:MaxDrawdownPct"] ?? "0.25"));
+        maxPosition: config.GetValue("Risk:MaxPositionPerInstrument", 5),
+        maxOrderQty: config.GetValue("Risk:MaxOrderQuantity", 100),
+        maxDrawdown: config.GetValue<decimal>("Risk:MaxDrawdownPct", 0.25m));
 
     builder.Services.AddSingleton(risk);
     var execution = new ExecutionHandler(risk);
