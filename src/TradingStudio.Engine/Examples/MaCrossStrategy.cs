@@ -38,6 +38,18 @@ public class MaCrossStrategy : IStrategy
     [StrategyParameter(Description = "最大持仓手数", DefaultValue = 2, Min = 1, Max = 20, Category = "Position")]
     public int MaxPosition { get; set; } = 2;
 
+    [StrategyParameter(Description = "ADX趋势过滤周期 (0=关闭)", DefaultValue = 14, Min = 0, Max = 30, Category = "Filter")]
+    public int AdxPeriod { get; set; } = 14;
+
+    [StrategyParameter(Description = "最低ADX (ADX<此值不交易, 0=关闭)", DefaultValue = 20, Min = 0, Max = 50, Category = "Filter")]
+    public int MinAdx { get; set; } = 20;
+
+    [StrategyParameter(Description = "日线趋势过滤 (仅日线MA向上做多)", DefaultValue = false, Category = "Filter")]
+    public bool DailyTrendFilter { get; set; } = false;
+
+    [StrategyParameter(Description = "日线趋势MA周期", DefaultValue = 50, Min = 20, Max = 200, Category = "Filter")]
+    public int DailyTrendPeriod { get; set; } = 50;
+
     public string Name => "双均线趋势跟踪(ATR风控)";
 
     private StrategyContext _ctx = null!;
@@ -67,13 +79,16 @@ public class MaCrossStrategy : IStrategy
             _fastSmas[inst] = fastSma;
             _slowSmas[inst] = slowSma;
 
-            // 预热：手动 Feed 指标 + ATR
-            var s = new InstrumentState(AtrPeriod);
+            // 预热：手动 Feed 指标 + ATR + ADX + Trend
+            var trendPeriod = DailyTrendFilter ? DailyTrendPeriod : 0;
+            var s = new InstrumentState(AtrPeriod, AdxPeriod, trendPeriod);
             foreach (var bar in history)
             {
                 fastSma.Update(bar);
                 slowSma.Update(bar);
                 s.UpdateAtr(bar);
+                s.UpdateAdx(bar);
+                s.UpdateTrendSma(bar);
             }
             _state[inst] = s;
 
@@ -91,12 +106,14 @@ public class MaCrossStrategy : IStrategy
     {
         if (!_state.TryGetValue(bar.InstrumentId, out var s)) return;
 
-        // 预热期：手动 Feed 指标（IndicatorManager.Feed 在实盘主循环才调用）
+        // 预热期：手动 Feed 指标
         if (_ctx.IsWarmup)
         {
             _fastSmas[bar.InstrumentId].Update(bar);
             _slowSmas[bar.InstrumentId].Update(bar);
             s.UpdateAtr(bar);
+            s.UpdateAdx(bar);
+            s.UpdateTrendSma(bar);
             s.PrevFast = _ctx.GetIndicatorValue(bar.InstrumentId, "SMA", FastPeriod.ToString());
             s.PrevSlow = _ctx.GetIndicatorValue(bar.InstrumentId, "SMA", SlowPeriod.ToString());
             return;
@@ -181,30 +198,43 @@ public class MaCrossStrategy : IStrategy
         {
             if (s.Atr / bar.CloseDouble < 0.003) return;
 
+            // ADX 趋势过滤: ADX低于阈值 → 震荡市，不交易
+            if (MinAdx > 0 && s.Adx < MinAdx) return;
+
+            // 金叉做多
             if (prevFast <= prevSlow && curFast > curSlow)
             {
+                // 日线趋势过滤: 仅日线上升时做多
+                if (DailyTrendFilter && s.TrendSma > 0 && bar.CloseDouble < s.TrendSma) return;
+
                 var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
                 if (q > 0)
                 {
-                    _ctx.MarketBuy(bar.InstrumentId, q, "金叉");
+                    var filterInfo = MinAdx > 0 ? $" ADX={s.Adx:F0}" : "";
+                    _ctx.MarketBuy(bar.InstrumentId, q, $"金叉{filterInfo}");
                     s.Trail = bar.CloseDouble - StopAtrMult * s.Atr;
                     s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble + TakeProfitAtrMult * s.Atr : 0;
                     s.EntryPrice = bar.CloseDouble; s.Direction = "Long"; s.BarsHeld = 0;
                     if (TakeProfitAtrMult > 0)
-                        _ctx.Log($"多头入场: {bar.InstrumentId} @{bar.CloseDouble:F0} SL={s.Trail:F0} TP={s.TakeProfit:F0} (R={TakeProfitAtrMult/StopAtrMult:F1}:1)");
+                        _ctx.Log($"多头入场: {bar.InstrumentId} @{bar.CloseDouble:F0} SL={s.Trail:F0} TP={s.TakeProfit:F0} (R={TakeProfitAtrMult/StopAtrMult:F1}:1){filterInfo}");
                 }
             }
+            // 死叉做空
             else if (prevFast >= prevSlow && curFast < curSlow)
             {
+                // 日线趋势过滤: 仅日线下降时做空
+                if (DailyTrendFilter && s.TrendSma > 0 && bar.CloseDouble > s.TrendSma) return;
+
                 var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
                 if (q > 0)
                 {
-                    _ctx.MarketSell(bar.InstrumentId, q, "死叉");
+                    var filterInfo = MinAdx > 0 ? $" ADX={s.Adx:F0}" : "";
+                    _ctx.MarketSell(bar.InstrumentId, q, $"死叉{filterInfo}");
                     s.Trail = bar.CloseDouble + StopAtrMult * s.Atr;
                     s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble - TakeProfitAtrMult * s.Atr : 0;
                     s.EntryPrice = bar.CloseDouble; s.Direction = "Short"; s.BarsHeld = 0;
                     if (TakeProfitAtrMult > 0)
-                        _ctx.Log($"空头入场: {bar.InstrumentId} @{bar.CloseDouble:F0} SL={s.Trail:F0} TP={s.TakeProfit:F0} (R={TakeProfitAtrMult/StopAtrMult:F1}:1)");
+                        _ctx.Log($"空头入场: {bar.InstrumentId} @{bar.CloseDouble:F0} SL={s.Trail:F0} TP={s.TakeProfit:F0} (R={TakeProfitAtrMult/StopAtrMult:F1}:1){filterInfo}");
                 }
             }
         }
@@ -247,21 +277,35 @@ public class MaCrossStrategy : IStrategy
         return lots;
     }
 
-    /// <summary>品种状态 — ATR + 止损/止盈位 + 退出原因追踪</summary>
+    /// <summary>品种状态 — ATR + ADX + 止损/止盈 + 退出追踪</summary>
     private class InstrumentState
     {
-        private readonly int _an;
+        private readonly int _an, _adxn;
         private readonly Queue<double> _trq;
         private double _ts, _prev = double.NaN;
-        public double Atr, Trail;
-        public double TakeProfit;                     // 止盈目标价
-        public double EntryPrice;                     // 入场价（用于退出原因日志）
-        public string? Direction;                     // "Long" / "Short"
-        public int BarsHeld;                          // 已持仓K线数
-        public double PrevFast = double.NaN, PrevSlow = double.NaN;
+        // ADX
+        private readonly List<double> _dmP, _dmM, _trAdx;
+        private double _ph = double.NaN, _pl = double.NaN, _pc = double.NaN;
+        // Trend SMA (日线代理)
+        private readonly Queue<double> _trendPrices;
+        private readonly int _trendN;
 
-        public InstrumentState(int atrPeriod)
-        { _an = atrPeriod; _trq = new(atrPeriod + 1); }
+        public double Atr, Trail;
+        public double TakeProfit, EntryPrice;
+        public string? Direction;
+        public int BarsHeld;
+        public double PrevFast = double.NaN, PrevSlow = double.NaN;
+        public double Adx;              // 当前ADX值
+        public double TrendSma;         // 日线趋势代理SMA
+
+        public InstrumentState(int atrPeriod, int adxPeriod = 0, int trendPeriod = 0)
+        {
+            _an = atrPeriod; _trq = new(atrPeriod + 1);
+            _adxn = adxPeriod;
+            _dmP = new(adxPeriod); _dmM = new(adxPeriod); _trAdx = new(adxPeriod);
+            _trendN = trendPeriod;
+            _trendPrices = new(trendPeriod > 0 ? trendPeriod + 1 : 1);
+        }
 
         public void UpdateAtr(Bar bar)
         {
@@ -274,6 +318,38 @@ public class MaCrossStrategy : IStrategy
                 if (_trq.Count >= _an) Atr = _ts / _an;
             }
             _prev = bar.CloseDouble;
+        }
+
+        public void UpdateAdx(Bar bar)
+        {
+            if (_adxn <= 0) return;
+            if (!double.IsNaN(_ph))
+            {
+                var up = bar.HighDouble - _ph;
+                var down = _pl - bar.LowDouble;
+                double plusDM = (up > down && up > 0) ? up : 0;
+                double minusDM = (down > up && down > 0) ? down : 0;
+                var tr = Math.Max(bar.HighDouble - bar.LowDouble,
+                    Math.Max(Math.Abs(bar.HighDouble - _pc), Math.Abs(bar.LowDouble - _pc)));
+                _dmP.Add(plusDM); _dmM.Add(minusDM); _trAdx.Add(tr);
+                if (_dmP.Count > _adxn) { _dmP.RemoveAt(0); _dmM.RemoveAt(0); _trAdx.RemoveAt(0); }
+                if (_dmP.Count >= _adxn && _trAdx.Sum() > 0)
+                {
+                    var diP = _dmP.Sum() / _trAdx.Sum() * 100;
+                    var diM = _dmM.Sum() / _trAdx.Sum() * 100;
+                    Adx = Math.Abs(diP - diM) / (diP + diM) * 100;
+                }
+            }
+            _ph = bar.HighDouble; _pl = bar.LowDouble; _pc = bar.CloseDouble;
+        }
+
+        public void UpdateTrendSma(Bar bar)
+        {
+            if (_trendN <= 0) return;
+            _trendPrices.Enqueue(bar.CloseDouble);
+            if (_trendPrices.Count > _trendN) _trendPrices.Dequeue();
+            if (_trendPrices.Count >= _trendN)
+                TrendSma = _trendPrices.Average();
         }
 
         public void ResetTrade()

@@ -1,0 +1,27 @@
+{
+  "StrategyId": "Bollinger-RB-15min",
+  "StrategyType": "BollingerReversion",
+  "Description": "螺纹钢 布林带(20/2.0)均值回归 15min — 震荡市策略",
+  "Version": 1,
+  "Instruments": ["rb000"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 15,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.30,
+  "MaxPositionPerInstrument": 2,
+  "Priority": 1,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "Period": 20,
+    "StdDevMult": 2.0,
+    "StopLossPct": 0.015,
+    "TakeProfitBand": 1.0,
+    "AtrPeriod": 14,
+    "TrailAtrMult": 1.5,
+    "RiskPerTrade": 0.015,
+    "MaxPosition": 2,
+    "MaxAdx": 0,
+    "AdxPeriod": 14
+  }
+}

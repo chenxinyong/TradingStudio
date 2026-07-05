@@ -1,0 +1,30 @@
+{
+  "StrategyId": "MaCross-RB-ADX-15min",
+  "StrategyType": "MaCross",
+  "Description": "螺纹钢 双均线(10/30) 15min — ADX趋势过滤 + 止盈",
+  "Version": 1,
+  "Instruments": ["rb000"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 15,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.30,
+  "MaxPositionPerInstrument": 2,
+  "Priority": 1,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "FastPeriod": 10,
+    "SlowPeriod": 30,
+    "AtrPeriod": 20,
+    "StopAtrMult": 2.0,
+    "TakeProfitAtrMult": 2.5,
+    "RiskPerTrade": 0.02,
+    "MaxMarginRatio": 0.25,
+    "AdxPeriod": 14,
+    "MinAdx": 15,
+    "DailyTrendFilter": true,
+    "DailyTrendPeriod": 200,
+    "DailyTrendFilter": false,
+    "DailyTrendPeriod": 50
+  }
+}
