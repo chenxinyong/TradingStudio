@@ -40,7 +40,7 @@ public static class Bootstrapper
         services.AddSingleton<KeybindingRegistry>();
 
         // ── Engine Connection ──
-        var engineUrl = config["Engine:Url"] ?? "http://localhost:5199";
+        var engineUrl = config["Engine:Url"] ?? "http://localhost:5001";
         services.AddSingleton<EngineApiClient>(sp =>
         {
             var log = sp.GetRequiredService<ILogger<EngineApiClient>>();

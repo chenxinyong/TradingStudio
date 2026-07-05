@@ -340,7 +340,7 @@
                     <TextBlock Text="  MA趋势" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
                     <TextBlock Text="  网格策略" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
                     <TextBlock Text="📂 服务器" FontSize="12" Foreground="{StaticResource VsFgPrimary}" Margin="0,12,0,0"/>
-                    <TextBlock Text="  localhost:5199" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
+                    <TextBlock Text="  localhost:5001" FontSize="12" Foreground="{StaticResource VsFgMuted}" Margin="8,2,0,0"/>
                 </StackPanel>
             </Border>
 
