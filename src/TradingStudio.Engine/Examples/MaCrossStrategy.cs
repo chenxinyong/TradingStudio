@@ -1,6 +1,7 @@
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Indicators;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Sizing;
 using TradingStudio.Core.Strategy;
 
 namespace TradingStudio.Engine.Examples;
@@ -156,7 +157,9 @@ public class MaCrossStrategy : IStrategy
                 s.ResetTrade();
                 if (reverse)
                 {
-                    var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
+                    var q = PositionSizer.FromAtrStop(bar.CloseDouble, s.Atr, StopAtrMult,
+                    _ctx.GetFuture(bar.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, (double)MaxMarginRatio, MaxPosition);
                     if (q > 0) { _ctx.MarketSell(bar.InstrumentId, q, "反手");
                         s.Trail = bar.CloseDouble + StopAtrMult * s.Atr;
                         s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble - TakeProfitAtrMult * s.Atr : 0;
@@ -183,7 +186,9 @@ public class MaCrossStrategy : IStrategy
                 s.ResetTrade();
                 if (reverse)
                 {
-                    var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
+                    var q = PositionSizer.FromAtrStop(bar.CloseDouble, s.Atr, StopAtrMult,
+                    _ctx.GetFuture(bar.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, (double)MaxMarginRatio, MaxPosition);
                     if (q > 0) { _ctx.MarketBuy(bar.InstrumentId, q, "反手");
                         s.Trail = bar.CloseDouble - StopAtrMult * s.Atr;
                         s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble + TakeProfitAtrMult * s.Atr : 0;
@@ -207,7 +212,9 @@ public class MaCrossStrategy : IStrategy
                 // 日线趋势过滤: 仅日线上升时做多
                 if (DailyTrendFilter && s.TrendSma > 0 && bar.CloseDouble < s.TrendSma) return;
 
-                var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
+                var q = PositionSizer.FromAtrStop(bar.CloseDouble, s.Atr, StopAtrMult,
+                    _ctx.GetFuture(bar.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, (double)MaxMarginRatio, MaxPosition);
                 if (q > 0)
                 {
                     var filterInfo = MinAdx > 0 ? $" ADX={s.Adx:F0}" : "";
@@ -225,7 +232,9 @@ public class MaCrossStrategy : IStrategy
                 // 日线趋势过滤: 仅日线下降时做空
                 if (DailyTrendFilter && s.TrendSma > 0 && bar.CloseDouble > s.TrendSma) return;
 
-                var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
+                var q = PositionSizer.FromAtrStop(bar.CloseDouble, s.Atr, StopAtrMult,
+                    _ctx.GetFuture(bar.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
+                    RiskPerTrade, (double)MaxMarginRatio, MaxPosition);
                 if (q > 0)
                 {
                     var filterInfo = MinAdx > 0 ? $" ADX={s.Adx:F0}" : "";
@@ -246,36 +255,6 @@ public class MaCrossStrategy : IStrategy
 
     public void OnOrderEvent(OrderEvent evt) { }
     public void OnEndOfAlgorithm() { }
-
-    private int CalcLots(double price, InstrumentState s, string instId)
-    {
-        if (s.Atr <= 0) return 0;
-        var f = _ctx.GetFuture(instId);
-        var mult = (double)(f?.TradingUnit ?? 10m);
-        var marginRate = (double)(f?.MarginRate ?? 0.08m);
-        var equity = (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital);
-        var contractValue = price * mult;
-
-        if (s.Atr / price < 0.005) return 0;
-
-        var stopDist = StopAtrMult * s.Atr;
-        var riskPerLot = stopDist * mult;
-        if (riskPerLot < contractValue * 0.005) return 0;
-
-        var riskAmt = equity * RiskPerTrade;
-        int lots = Math.Max(1, (int)(riskAmt / riskPerLot));
-
-        var maxByNotional = (int)(equity / contractValue);
-        if (lots > maxByNotional) lots = maxByNotional;
-
-        var marginPerLot = contractValue * marginRate;
-        while (lots > 0 && marginPerLot * lots > equity * MaxMarginRatio) lots--;
-
-        if (lots > 20) lots = 20;
-        if (lots > MaxPosition) lots = MaxPosition;
-
-        return lots;
-    }
 
     /// <summary>品种状态 — ATR + ADX + 止损/止盈 + 退出追踪</summary>
     private class InstrumentState
