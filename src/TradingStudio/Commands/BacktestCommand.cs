@@ -88,6 +88,35 @@ public class BacktestCommand
         var startTime = string.IsNullOrEmpty(startStr) ? DateTime.Parse("2020-01-01") : DateTime.Parse(startStr);
         var endTime = string.IsNullOrEmpty(endStr) ? DateTime.Parse("2030-01-01") : DateTime.Parse(endStr);
 
+        // 应用 StrategyConfig 中的 IS/OOS 日期约束（覆盖 CLI --start/--end）
+        if (strategyConfig.DataStartDate.HasValue)
+            startTime = strategyConfig.DataStartDate.Value;
+        if (strategyConfig.DataEndDate.HasValue)
+            endTime = strategyConfig.DataEndDate.Value;
+
+        switch (strategyConfig.BacktestMode)
+        {
+            case BacktestMode.Optimization:
+                // 仅样本内：endTime 截断到 OptimizationEndDate
+                if (strategyConfig.OptimizationEndDate.HasValue)
+                    endTime = strategyConfig.OptimizationEndDate.Value;
+                Console.WriteLine($"  BacktestMode: Optimization (IS) — {startTime:yyyy-MM-dd} → {endTime:yyyy-MM-dd}");
+                break;
+            case BacktestMode.Validation:
+                // 仅样本外：startTime 从 OptimizationEndDate 开始
+                if (strategyConfig.OptimizationEndDate.HasValue)
+                    startTime = strategyConfig.OptimizationEndDate.Value;
+                Console.WriteLine($"  BacktestMode: Validation (OOS) — {startTime:yyyy-MM-dd} → {endTime:yyyy-MM-dd}");
+                Console.WriteLine("  ⚠️  OOS 验证模式：参数必须来自 Optimization 结果，禁止调参！");
+                break;
+            case BacktestMode.Full:
+            default:
+                Console.WriteLine($"  BacktestMode: Full — {startTime:yyyy-MM-dd} → {endTime:yyyy-MM-dd}");
+                if (strategyConfig.OptimizationEndDate.HasValue)
+                    Console.WriteLine($"  💡 IS/OOS 分界点已配置 ({strategyConfig.OptimizationEndDate:yyyy-MM-dd}) 但当前为 Full 模式，未启用分离。");
+                break;
+        }
+
         // 3.5 展开产品代码 → 具体合约代码
         // 注：纯字母代码（如 "SA"）作为产品级查询，不展开
         var expandedInstruments = ExpandInstruments(strategyConfig.Instruments, registry, startTime, endTime);

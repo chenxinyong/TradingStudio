@@ -8,11 +8,16 @@ namespace TradingStudio.Strategy;
 /// ATR通道突破趋势跟踪策略 — 多品种日内中频。
 ///
 /// 核心逻辑:
-///   多头: High突破N根Bar最高价 + MA趋势向上 → 入场 (Market at Close)
-///   空头: Low跌破N根Bar最低价 + MA趋势向下 → 入场
+///   多头: High突破N根Bar最高价(前值) + MA趋势向上 → 入场 (Market at Close)
+///   空头: Low跌破N根Bar最低价(前值) + MA趋势向下 → 入场
 ///   止损: 2×ATR 跟踪止损
 ///   止盈: 3×ATR 目标价止盈
 ///   出场: 反向突破M根Bar边界 或 跟踪止损触发 或 止盈触发
+///
+/// 关键设计:
+///   - 通道使用前值(不含本根Bar)避免"当前Bar包含自身"的数学不可行问题
+///   - 过滤零成交量Bar(连续合约展期缺口标记)
+///   - 支持重新入场冷却期，避免震荡市中反复止损
 ///
 /// 参考: Richard Donchian通道 + Ed Seykota趋势跟踪 + ATR动态仓位
 /// </summary>
@@ -26,7 +31,7 @@ public class DonchianTrendStrategy : IStrategy
     [StrategyParameter(Description = "出场通道周期(K线数)", DefaultValue = 10, Min = 5, Max = 30, Category = "Exit")]
     public int ExitPeriod { get; set; } = 10;
 
-    [StrategyParameter(Description = "趋势MA周期", DefaultValue = 50, Min = 20, Max = 200, Category = "Filter")]
+    [StrategyParameter(Description = "趋势MA周期 (0=关闭趋势过滤)", DefaultValue = 50, Min = 0, Max = 200, Category = "Filter")]
     public int TrendMAPeriod { get; set; } = 50;
 
     [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 10, Max = 40, Category = "Risk")]
@@ -106,26 +111,28 @@ public class DonchianTrendStrategy : IStrategy
         // 预热：历史和实时 feed 共享 Feed 方法
         if (_ctx.IsWarmup) { s.Feed(bar); return; }
 
+        // ── 快照当前 Bar 之前的指标值（用于信号判断，避免"当前 Bar 包含自身"问题） ──
+        var prevChHi = s.ChannelHigh;
+        var prevChLo = s.ChannelLow;
+        var prevExitHi = s.ExitHigh;
+        var prevExitLo = s.ExitLow;
+        var prevMA = s.CurrentMA;
+        var prevPrevMA = s.PrevMA;
+        var prevAtr = s.CurrentAtr;
+
+        // 更新指标（包含本根 Bar）
         s.Feed(bar);
         _barCount++;
 
-        // ── 指标就绪检查 ──
-        if (!s.IsReady)
-        {
-            if (s._notReadyLog++ < 3)
-                _ctx.Log($"{s.InstrumentId}: 指标未就绪 (MA={s._maReady}/{TrendMAPeriod} ATR={s._atrReady}/{AtrPeriod} CH={s._chReady}/{ChannelPeriod})");
-            return;
-        }
+        // ── 指标就绪检查（TrendMAPeriod=0 时跳过 MA 检查） ──
+        var maReady = TrendMAPeriod == 0 || s._maReady >= TrendMAPeriod;
+        var atrReady = s._atrReady >= AtrPeriod;
+        var chReady = s._chReady >= ChannelPeriod;
+        if (!(maReady && atrReady && chReady)) return;
 
         // ── 波动率过滤 ──
-        var volatility = s.CurrentAtr / bar.CloseDouble;
-        if (volatility < MinVolatility)
-        {
-            if (s._diagBlocked++ < 10)
-                _ctx.Log($"VolFilter: {s.InstrumentId} ATR={s.CurrentAtr:F2} Close={bar.CloseDouble:F0} " +
-                         $"Vol={volatility*100:F2}% < Min={MinVolatility*100:F1}%");
-            return;
-        }
+        var volatility = prevAtr / bar.CloseDouble;
+        if (volatility < MinVolatility) return;
 
         var pos = _ctx.GetPosition(s.InstrumentId);
         var hasPosition = pos is not null && pos.Quantity != 0;
@@ -154,15 +161,15 @@ public class DonchianTrendStrategy : IStrategy
             }
 
             // ② 反向突破出场
-            if (!shouldExit && pos!.Quantity > 0 && bar.CloseDouble < s.ExitLow)
+            if (!shouldExit && pos!.Quantity > 0 && bar.CloseDouble < prevExitLo)
             {
                 shouldExit = true;
-                exitReason = $"反向突破出场(多头) {bar.CloseDouble:F0}<{s.ExitLow:F0}";
+                exitReason = $"反向突破出场(多头) {bar.CloseDouble:F0}<{prevExitLo:F0}";
             }
-            else if (!shouldExit && pos.Quantity < 0 && bar.CloseDouble > s.ExitHigh)
+            else if (!shouldExit && pos.Quantity < 0 && bar.CloseDouble > prevExitHi)
             {
                 shouldExit = true;
-                exitReason = $"反向突破出场(空头) {bar.CloseDouble:F0}>{s.ExitHigh:F0}";
+                exitReason = $"反向突破出场(空头) {bar.CloseDouble:F0}>{prevExitHi:F0}";
             }
             // ③ 跟踪止损
             else if (!shouldExit && pos.Quantity > 0 && bar.LowDouble <= s.TrailingStop)
@@ -193,7 +200,7 @@ public class DonchianTrendStrategy : IStrategy
                 return;
             }
 
-            // 更新跟踪止损
+            // 更新跟踪止损 (使用含本Bar的ATR)
             if (pos.Quantity > 0)
             {
                 var newStop = bar.CloseDouble - StopAtrMult * s.CurrentAtr;
@@ -218,54 +225,45 @@ public class DonchianTrendStrategy : IStrategy
         // ── 入场逻辑 ──
         if (!hasPosition)
         {
-            var trendUp = s.CurrentMA > s.PrevMA;
-            var trendDown = s.CurrentMA < s.PrevMA;
+            var trendUp = TrendMAPeriod == 0 || s.CurrentMA > s.PrevMA;
+            var trendDown = TrendMAPeriod == 0 || s.CurrentMA < s.PrevMA;
 
-            // 诊断（前15根非冷却 Bar）
-            if (s._diag++ < 15)
-                _ctx.Log($"Diag: {s.InstrumentId}@{bar.BarTime:HH:mm} Close={bar.CloseDouble:F0} " +
-                    $"ChHi={s.ChannelHigh:F0} ChLo={s.ChannelLow:F0} " +
-                    $"MA={s.CurrentMA:F0} Trend={(trendUp?"↑":trendDown?"↓":"→")} " +
-                    $"Vol={volatility*100:F2}% ATR={s.CurrentAtr:F2}");
-
-            // 多头: High突破通道高点 + MA趋势向上 (标准 Donchian/Turtle 入场)
-            if (bar.HighDouble > s.ChannelHigh && trendUp)
+            // 多头: High突破 + MA向上
+            if (bar.HighDouble > prevChHi && trendUp)
             {
                 var qty = CalculateLots(bar.CloseDouble, s);
                 if (qty > 0)
                 {
-                    _ctx.MarketBuy(s.InstrumentId, qty, $"突破入场: H{bar.HighDouble:F0}>{s.ChannelHigh:F0}");
+                    _ctx.MarketBuy(s.InstrumentId, qty, $"突破入场: H{bar.HighDouble:F0}>{prevChHi:F0}");
                     s.TrailingStop = bar.CloseDouble - StopAtrMult * s.CurrentAtr;
                     s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble + TakeProfitAtrMult * s.CurrentAtr : 0;
                     s.EntryPrice = bar.CloseDouble; s.Direction = "Long"; s.BarsInTrade = 0;
                     _ctx.Log($"多头入场: {s.InstrumentId} @{bar.CloseDouble:F0} " +
-                             $"SL={s.TrailingStop:F0} TP={(s.TakeProfit>0?s.TakeProfit.ToString("F0"):"∞")} " +
-                             $"Qty={qty} R:R={TakeProfitAtrMult/StopAtrMult:F1}:1");
+                             $"SL={s.TrailingStop:F0} Qty={qty}");
                 }
             }
-            // 空头: Low跌破通道低点 + MA趋势向下
-            else if (bar.LowDouble < s.ChannelLow && trendDown)
+            // 空头: Low跌破 + MA向下
+            else if (bar.LowDouble < prevChLo && trendDown)
             {
                 var qty = CalculateLots(bar.CloseDouble, s);
                 if (qty > 0)
                 {
-                    _ctx.MarketSell(s.InstrumentId, qty, $"突破入场: L{bar.LowDouble:F0}<{s.ChannelLow:F0}");
+                    _ctx.MarketSell(s.InstrumentId, qty, $"突破入场: L{bar.LowDouble:F0}<{prevChLo:F0}");
                     s.TrailingStop = bar.CloseDouble + StopAtrMult * s.CurrentAtr;
                     s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble - TakeProfitAtrMult * s.CurrentAtr : 0;
                     s.EntryPrice = bar.CloseDouble; s.Direction = "Short"; s.BarsInTrade = 0;
                     _ctx.Log($"空头入场: {s.InstrumentId} @{bar.CloseDouble:F0} " +
-                             $"SL={s.TrailingStop:F0} TP={(s.TakeProfit>0?s.TakeProfit.ToString("F0"):"∞")} " +
-                             $"Qty={qty} R:R={TakeProfitAtrMult/StopAtrMult:F1}:1");
+                             $"SL={s.TrailingStop:F0} Qty={qty}");
                 }
             }
         }
 
-        // ── 阶段性汇总日志（每500根Bar） ──
-        if (_barCount % 500 == 0)
+        // ── 阶段性汇总 ──
+        if (_barCount % 1000 == 0)
         {
-            var summary = string.Join(" | ", _state.Values.Select(st =>
-                $"{st.InstrumentId}: bars={st._totalFed} ready={st.IsReady}"));
-            _ctx.Log($"阶段汇总 [{_barCount}]: {summary}");
+            _ctx.Log($"阶段汇总 [{_barCount}]: " +
+                string.Join(" | ", _state.Values.Select(st =>
+                    $"{st.InstrumentId} ready={st.IsReady}")));
         }
     }
 
@@ -329,8 +327,11 @@ public class DonchianTrendStrategy : IStrategy
         public double CurrentAtr { get; private set; }
         public double ChannelHigh { get; private set; }
         public double ChannelLow { get; private set; }
+        public double PrevChannelHigh { get; private set; }
+        public double PrevChannelLow { get; private set; }
         public double ExitHigh { get; private set; }
         public double ExitLow { get; private set; }
+        public double AvgVolume;  // 简单成交量均线
 
         // 指标就绪状态
         public int _maReady, _atrReady, _chReady;
@@ -344,9 +345,6 @@ public class DonchianTrendStrategy : IStrategy
         public int BarsInTrade;
         public int CooldownRemaining;
 
-        // 诊断
-        public int _diag, _diagBlocked, _notReadyLog, _totalFed;
-
         private double _prevClose = double.NaN;
 
         public InstrumentState(string inst, int channelN, int exitN, int maN, int atrN)
@@ -359,15 +357,10 @@ public class DonchianTrendStrategy : IStrategy
             _atrTrueRanges = new Queue<double>(atrN + 1);
         }
 
-        /// <summary>历史数据预热</summary>
         public void Warmup(Bar bar) => Feed(bar);
 
-        /// <summary>喂一根 Bar，更新所有指标</summary>
         public void Feed(Bar bar)
         {
-            _totalFed++;
-
-            // 保存 MA 前值
             PrevMA = CurrentMA;
 
             // ── ATR ──
@@ -396,6 +389,10 @@ public class DonchianTrendStrategy : IStrategy
                 CurrentMA = _maSum / _maN;
 
             // ── Donchian 通道 ──
+            // 保存前值（用于波动率收缩判断）
+            PrevChannelHigh = ChannelHigh;
+            PrevChannelLow = ChannelLow;
+
             _highWindow.Enqueue(bar.HighDouble);
             _lowWindow.Enqueue(bar.LowDouble);
             if (_highWindow.Count > _channelN) { _highWindow.Dequeue(); _lowWindow.Dequeue(); }
@@ -405,6 +402,12 @@ public class DonchianTrendStrategy : IStrategy
                 ChannelHigh = _highWindow.Max();
                 ChannelLow = _lowWindow.Min();
             }
+
+            // ── 成交量均线 (EMA风格简化) ──
+            if (AvgVolume <= 0)
+                AvgVolume = bar.Volume;
+            else
+                AvgVolume = AvgVolume * 0.95 + bar.Volume * 0.05;
 
             // ── 出场通道 ──
             if (_chReady >= _exitN)

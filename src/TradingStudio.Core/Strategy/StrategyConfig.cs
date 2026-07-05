@@ -21,6 +21,22 @@ public class StrategyConfig
     public decimal MaxDrawdownPct { get; init; } = 0.20m;
     public int MaxPositionPerInstrument { get; init; } = 5;
 
+    // ═══ 回测数据范围与验证模式 ═══
+    /// <summary>数据起始日期 (默认: 库中最早)</summary>
+    public DateTime? DataStartDate { get; init; }
+
+    /// <summary>数据结束日期 (默认: 库中最晚)</summary>
+    public DateTime? DataEndDate { get; init; }
+
+    /// <summary>
+    /// 样本内/外分界日期。此日期之前为 IS (开发+参数优化)，之后为 OOS (仅验证一次)。
+    /// null 表示不区分 IS/OOS，全量数据参与回测。
+    /// </summary>
+    public DateTime? OptimizationEndDate { get; init; }
+
+    /// <summary>回测模式: Full(全量), Optimization(仅IS), Validation(仅OOS)</summary>
+    public BacktestMode BacktestMode { get; init; } = BacktestMode.Full;
+
     // ═══ 执行优先级（同品种多策略争抢流动性时） ═══
     public int Priority { get; init; } = 0;
 
@@ -112,4 +128,19 @@ public class RiskRuleConfig
 {
     public string Type { get; init; } = "";
     public Dictionary<string, object>? Parameters { get; init; }
+}
+
+/// <summary>
+/// 回测模式 — 控制数据范围以强制执行 IS/OOS 分离，防止过度拟合。
+/// </summary>
+public enum BacktestMode
+{
+    /// <summary>全量数据，不区分 IS/OOS（仅限初步探索，正式评估禁止使用）</summary>
+    Full,
+
+    /// <summary>仅样本内 (In-Sample)，用于策略开发和参数优化</summary>
+    Optimization,
+
+    /// <summary>仅样本外 (Out-of-Sample)，用于最终验证。参数必须来自 Optimization 结果，禁止调参。</summary>
+    Validation
 }
