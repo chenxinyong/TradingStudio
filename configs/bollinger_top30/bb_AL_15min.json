@@ -1,0 +1,27 @@
+{
+  "StrategyType": "BollingerReversion",
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 15,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.3,
+  "MaxPositionPerInstrument": 2,
+  "Parameters": {
+    "Period": 20,
+    "StdDevMult": 2.0,
+    "StopLossPct": 0.015,
+    "TakeProfitBand": 1.0,
+    "AtrPeriod": 14,
+    "TrailAtrMult": 1.5,
+    "RiskPerTrade": 0.015,
+    "MaxPosition": 2,
+    "MaxAdx": 0,
+    "AdxPeriod": 14,
+    "MinBandWidth": 0.01,
+    "EntryCooldown": 5,
+    "EntryZoneRatio": 0.25
+  },
+  "StrategyId": "BB-AL-15min",
+  "Instruments": [
+    "al000"
+  ]
+}

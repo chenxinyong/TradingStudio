@@ -52,7 +52,7 @@ def generate():
 def run_one(path):
     cmd = ["dotnet","run","--project",str(PROJECT),"--no-build","--",
            "backtest","--config",str(path),"--db",str(DB),"--start",START,"--end",END]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=600)
     out = r.stdout + r.stderr
     m = re.search(r"Net Profit[:\s]+([-\d,.]+)", out)
     pnl = float(m.group(1).replace(",","")) if m else 0
