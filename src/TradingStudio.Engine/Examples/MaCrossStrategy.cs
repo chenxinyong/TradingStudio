@@ -259,6 +259,7 @@ public class MaCrossStrategy : IStrategy
     /// <summary>品种状态 — ATR + ADX + 止损/止盈 + 退出追踪</summary>
     private class InstrumentState
     {
+        private readonly AtrIndicator _atrIndicator;
         private readonly int _an, _adxn;
         private readonly Queue<double> _trq;
         private double _ts, _prev = double.NaN;
@@ -279,6 +280,7 @@ public class MaCrossStrategy : IStrategy
 
         public InstrumentState(int atrPeriod, int adxPeriod = 0, int trendPeriod = 0)
         {
+            _atrIndicator = new AtrIndicator(atrPeriod);
             _an = atrPeriod; _trq = new(atrPeriod + 1);
             _adxn = adxPeriod;
             _dmP = new(adxPeriod); _dmM = new(adxPeriod); _trAdx = new(adxPeriod);
@@ -288,15 +290,8 @@ public class MaCrossStrategy : IStrategy
 
         public void UpdateAtr(Bar bar)
         {
-            if (!double.IsNaN(_prev))
-            {
-                var tr = Math.Max(bar.HighDouble - bar.LowDouble,
-                    Math.Max(Math.Abs(bar.HighDouble - _prev), Math.Abs(bar.LowDouble - _prev)));
-                _trq.Enqueue(tr); _ts += tr;
-                if (_trq.Count > _an) _ts -= _trq.Dequeue();
-                if (_trq.Count >= _an) Atr = _ts / _an;
-            }
-            _prev = bar.CloseDouble;
+            _atrIndicator.Update(bar);
+            if (_atrIndicator.IsReady) Atr = _atrIndicator.CurrentValue;
         }
 
         public void UpdateAdx(Bar bar)
