@@ -318,6 +318,7 @@
                         <Button Style="{StaticResource NavButton}" Content="📋" ToolTip="策略管理 (Ctrl+3)" Click="NavStrategies_Click" />
                         <Button Style="{StaticResource NavButton}" Content="📜" ToolTip="订单监控 (Ctrl+4)" Click="NavOrders_Click" />
                         <Button Style="{StaticResource NavButton}" Content="🔬" ToolTip="回测 (Ctrl+5)" Click="NavBacktest_Click" />
+                        <Button Style="{StaticResource NavButton}" Content="⏯" ToolTip="回放 (Ctrl+6)" Click="NavReplay_Click" />
                         <Separator Background="{StaticResource VsBorderLight}" Height="1" Margin="8,4" />
                         <Button Style="{StaticResource NavButton}" Content="⚙" ToolTip="日志 (Ctrl+6)" Click="NavLogs_Click" />
                     </StackPanel>

@@ -60,6 +60,7 @@ public static class Bootstrapper
         services.AddTransient<DashboardViewModel>();
         services.AddTransient<ChartViewModel>();
         services.AddTransient<BacktestViewModel>();
+        services.AddTransient<ReplayViewModel>();
 
         // ── Panel System ──
         services.AddSingleton<PanelManager>();
@@ -165,6 +166,8 @@ public static class Bootstrapper
             () => sp.GetRequiredService<ChartViewModel>(), order: 1);
         pm.Register("backtest",   "回测",   PanelLocation.Sidebar,
             () => sp.GetRequiredService<BacktestViewModel>(), order: 2);
+        pm.Register("replay",     "回放",   PanelLocation.Sidebar,
+            () => sp.GetRequiredService<ReplayViewModel>(), order: 3);
 
         pm.Show("dashboard");
     }
