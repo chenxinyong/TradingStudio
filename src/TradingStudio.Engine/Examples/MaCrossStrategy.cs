@@ -26,6 +26,9 @@ public class MaCrossStrategy : IStrategy
     [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2.0, Min = 1.0, Max = 5.0, Category = "Risk")]
     public double StopAtrMult { get; set; } = 2.0;
 
+    [StrategyParameter(Description = "止盈ATR倍数 (0=关闭止盈, 建议2.5)", DefaultValue = 2.5, Min = 0, Max = 10.0, Category = "Risk")]
+    public double TakeProfitAtrMult { get; set; } = 2.5;
+
     [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.05, Category = "Position")]
     public double RiskPerTrade { get; set; } = 0.02;
 
@@ -120,43 +123,57 @@ public class MaCrossStrategy : IStrategy
         // ── 出场 + 反手 ──
         if (hasLong)
         {
-            var exit = false; var reverse = false;
-            if (curFast < curSlow && prevFast >= prevSlow)
-                { exit = true; reverse = true; }                                  // 死叉 → 平多反手做空
+            var exit = false; var reverse = false; string reason = "";
+            if (TakeProfitAtrMult > 0 && bar.HighDouble >= s.TakeProfit)
+                { exit = true; reverse = false; reason = $"止盈 TP@{s.TakeProfit:F0} (+{bar.CloseDouble-s.EntryPrice:F0}pts, {s.BarsHeld}bars)"; }
+            else if (curFast < curSlow && prevFast >= prevSlow)
+                { exit = true; reverse = true; reason = "死叉反手"; }
             else if (bar.LowDouble <= s.Trail)
-                { exit = true; reverse = curFast < curSlow; }                     // 止损 → MA已转空才反手
+                { exit = true; reverse = curFast < curSlow; reason = $"止损 SL@{s.Trail:F0} (-{s.EntryPrice-bar.LowDouble:F0}pts, {s.BarsHeld}bars)"; }
             else
                 { var t = bar.CloseDouble - StopAtrMult * s.Atr; if (t > s.Trail) s.Trail = t; }
 
             if (exit)
             {
-                _ctx.ClosePosition(bar.InstrumentId); s.Trail = 0;
+                _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"多头出场: {bar.InstrumentId} {reason}");
+                s.ResetTrade();
                 if (reverse)
                 {
                     var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
-                    if (q > 0) { _ctx.MarketSell(bar.InstrumentId, q, "反手"); s.Trail = bar.CloseDouble + StopAtrMult * s.Atr; }
+                    if (q > 0) { _ctx.MarketSell(bar.InstrumentId, q, "反手");
+                        s.Trail = bar.CloseDouble + StopAtrMult * s.Atr;
+                        s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble - TakeProfitAtrMult * s.Atr : 0;
+                        s.EntryPrice = bar.CloseDouble; s.Direction = "Short"; s.BarsHeld = 0; }
                 }
             }
+            else s.BarsHeld++;
         }
         else if (hasShort)
         {
-            var exit = false; var reverse = false;
-            if (curFast > curSlow && prevFast <= prevSlow)
-                { exit = true; reverse = true; }                                  // 金叉 → 平空反手做多
+            var exit = false; var reverse = false; string reason = "";
+            if (TakeProfitAtrMult > 0 && bar.LowDouble <= s.TakeProfit)
+                { exit = true; reverse = false; reason = $"止盈 TP@{s.TakeProfit:F0} (+{s.EntryPrice-bar.CloseDouble:F0}pts, {s.BarsHeld}bars)"; }
+            else if (curFast > curSlow && prevFast <= prevSlow)
+                { exit = true; reverse = true; reason = "金叉反手"; }
             else if (bar.HighDouble >= s.Trail)
-                { exit = true; reverse = curFast > curSlow; }                     // 止损 → MA已转多才反手
+                { exit = true; reverse = curFast > curSlow; reason = $"止损 SL@{s.Trail:F0} (-{bar.HighDouble-s.EntryPrice:F0}pts, {s.BarsHeld}bars)"; }
             else
                 { var t = bar.CloseDouble + StopAtrMult * s.Atr; if (t < s.Trail) s.Trail = t; }
 
             if (exit)
             {
-                _ctx.ClosePosition(bar.InstrumentId); s.Trail = 0;
+                _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"空头出场: {bar.InstrumentId} {reason}");
+                s.ResetTrade();
                 if (reverse)
                 {
                     var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
-                    if (q > 0) { _ctx.MarketBuy(bar.InstrumentId, q, "反手"); s.Trail = bar.CloseDouble - StopAtrMult * s.Atr; }
+                    if (q > 0) { _ctx.MarketBuy(bar.InstrumentId, q, "反手");
+                        s.Trail = bar.CloseDouble - StopAtrMult * s.Atr;
+                        s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble + TakeProfitAtrMult * s.Atr : 0;
+                        s.EntryPrice = bar.CloseDouble; s.Direction = "Long"; s.BarsHeld = 0; }
                 }
             }
+            else s.BarsHeld++;
         }
 
         // ── 入场（仅首次开仓，反手已在出场段处理）──
@@ -167,12 +184,28 @@ public class MaCrossStrategy : IStrategy
             if (prevFast <= prevSlow && curFast > curSlow)
             {
                 var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
-                if (q > 0) { _ctx.MarketBuy(bar.InstrumentId, q, "金叉"); s.Trail = bar.CloseDouble - StopAtrMult * s.Atr; }
+                if (q > 0)
+                {
+                    _ctx.MarketBuy(bar.InstrumentId, q, "金叉");
+                    s.Trail = bar.CloseDouble - StopAtrMult * s.Atr;
+                    s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble + TakeProfitAtrMult * s.Atr : 0;
+                    s.EntryPrice = bar.CloseDouble; s.Direction = "Long"; s.BarsHeld = 0;
+                    if (TakeProfitAtrMult > 0)
+                        _ctx.Log($"多头入场: {bar.InstrumentId} @{bar.CloseDouble:F0} SL={s.Trail:F0} TP={s.TakeProfit:F0} (R={TakeProfitAtrMult/StopAtrMult:F1}:1)");
+                }
             }
             else if (prevFast >= prevSlow && curFast < curSlow)
             {
                 var q = CalcLots(bar.CloseDouble, s, bar.InstrumentId);
-                if (q > 0) { _ctx.MarketSell(bar.InstrumentId, q, "死叉"); s.Trail = bar.CloseDouble + StopAtrMult * s.Atr; }
+                if (q > 0)
+                {
+                    _ctx.MarketSell(bar.InstrumentId, q, "死叉");
+                    s.Trail = bar.CloseDouble + StopAtrMult * s.Atr;
+                    s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble - TakeProfitAtrMult * s.Atr : 0;
+                    s.EntryPrice = bar.CloseDouble; s.Direction = "Short"; s.BarsHeld = 0;
+                    if (TakeProfitAtrMult > 0)
+                        _ctx.Log($"空头入场: {bar.InstrumentId} @{bar.CloseDouble:F0} SL={s.Trail:F0} TP={s.TakeProfit:F0} (R={TakeProfitAtrMult/StopAtrMult:F1}:1)");
+                }
             }
         }
 
@@ -214,14 +247,18 @@ public class MaCrossStrategy : IStrategy
         return lots;
     }
 
-    /// <summary>品种状态 — ATR自算 + 追踪止损位 + 前值快照</summary>
+    /// <summary>品种状态 — ATR + 止损/止盈位 + 退出原因追踪</summary>
     private class InstrumentState
     {
         private readonly int _an;
         private readonly Queue<double> _trq;
         private double _ts, _prev = double.NaN;
         public double Atr, Trail;
-        public double PrevFast = double.NaN, PrevSlow = double.NaN;  // 上一根 Bar 的 SMA 值（穿越检测用）
+        public double TakeProfit;                     // 止盈目标价
+        public double EntryPrice;                     // 入场价（用于退出原因日志）
+        public string? Direction;                     // "Long" / "Short"
+        public int BarsHeld;                          // 已持仓K线数
+        public double PrevFast = double.NaN, PrevSlow = double.NaN;
 
         public InstrumentState(int atrPeriod)
         { _an = atrPeriod; _trq = new(atrPeriod + 1); }
@@ -237,6 +274,12 @@ public class MaCrossStrategy : IStrategy
                 if (_trq.Count >= _an) Atr = _ts / _an;
             }
             _prev = bar.CloseDouble;
+        }
+
+        public void ResetTrade()
+        {
+            Trail = 0; TakeProfit = 0; EntryPrice = 0;
+            Direction = null; BarsHeld = 0;
         }
     }
 }

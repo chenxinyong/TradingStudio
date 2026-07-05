@@ -34,8 +34,11 @@ public class DonchianTrendStrategy : IStrategy
     [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2.0, Min = 1.0, Max = 4.0, Category = "Risk")]
     public double StopAtrMult { get; set; } = 2.0;
 
-    [StrategyParameter(Description = "最低波动率(ATR/Close) — 15min建议0.001-0.005", DefaultValue = 0.002, Min = 0.001, Max = 0.03, Category = "Filter")]
-    public double MinVolatility { get; set; } = 0.002;
+    [StrategyParameter(Description = "止盈ATR倍数 (0=关闭止盈, 建议3.0)", DefaultValue = 3.0, Min = 0, Max = 10.0, Category = "Risk")]
+    public double TakeProfitAtrMult { get; set; } = 3.0;
+
+    [StrategyParameter(Description = "最低波动率(ATR/Close) — 15min建议0.001-0.005", DefaultValue = 0.003, Min = 0.001, Max = 0.03, Category = "Filter")]
+    public double MinVolatility { get; set; } = 0.003;
 
     [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.05, Category = "Position")]
     public double RiskPerTrade { get; set; } = 0.02;
@@ -109,33 +112,52 @@ public class DonchianTrendStrategy : IStrategy
             var shouldExit = false;
             var exitReason = "";
 
+            // 止盈 (优先检查)
+            if (TakeProfitAtrMult > 0 && s.TakeProfit > 0)
+            {
+                if (pos!.Quantity > 0 && bar.HighDouble >= s.TakeProfit)
+                {
+                    shouldExit = true;
+                    var profit = bar.CloseDouble - s.EntryPrice;
+                    exitReason = $"止盈 TP@{s.TakeProfit:F0} (+{profit:F0}pts, {s.BarsInTrade}bars)";
+                }
+                else if (pos.Quantity < 0 && bar.LowDouble <= s.TakeProfit)
+                {
+                    shouldExit = true;
+                    var profit = s.EntryPrice - bar.CloseDouble;
+                    exitReason = $"止盈 TP@{s.TakeProfit:F0} (+{profit:F0}pts, {s.BarsInTrade}bars)";
+                }
+            }
+
             // 反向突破出场
-            if (pos!.Quantity > 0 && bar.CloseDouble < s.ExitLow)
+            if (!shouldExit && pos!.Quantity > 0 && bar.CloseDouble < s.ExitLow)
             {
                 shouldExit = true;
                 exitReason = "反向突破出场(多头)";
             }
-            else if (pos.Quantity < 0 && bar.CloseDouble > s.ExitHigh)
+            else if (!shouldExit && pos.Quantity < 0 && bar.CloseDouble > s.ExitHigh)
             {
                 shouldExit = true;
                 exitReason = "反向突破出场(空头)";
             }
             // 跟踪止损
-            else if (pos.Quantity > 0 && bar.LowDouble <= s.TrailingStop)
+            else if (!shouldExit && pos.Quantity > 0 && bar.LowDouble <= s.TrailingStop)
             {
                 shouldExit = true;
-                exitReason = $"跟踪止损 @ {s.TrailingStop:F2}";
+                var loss = s.EntryPrice - s.TrailingStop;
+                exitReason = $"止损 SL@{s.TrailingStop:F0} (-{loss:F0}pts, {s.BarsInTrade}bars)";
             }
-            else if (pos.Quantity < 0 && bar.HighDouble >= s.TrailingStop)
+            else if (!shouldExit && pos.Quantity < 0 && bar.HighDouble >= s.TrailingStop)
             {
                 shouldExit = true;
-                exitReason = $"跟踪止损 @ {s.TrailingStop:F2}";
+                var loss = s.TrailingStop - s.EntryPrice;
+                exitReason = $"止损 SL@{s.TrailingStop:F0} (-{loss:F0}pts, {s.BarsInTrade}bars)";
             }
             // 时间出场
-            else if (MaxBarsInTrade > 0 && s.BarsInTrade >= MaxBarsInTrade)
+            else if (!shouldExit && MaxBarsInTrade > 0 && s.BarsInTrade >= MaxBarsInTrade)
             {
                 shouldExit = true;
-                exitReason = $"持仓超时 ({s.BarsInTrade}根K线)";
+                exitReason = $"持仓超时 ({s.BarsInTrade}bars)";
             }
 
             if (shouldExit)
@@ -181,7 +203,10 @@ public class DonchianTrendStrategy : IStrategy
                 {
                     _ctx.MarketBuy(s.InstrumentId, qty, $"突破入场: {bar.CloseDouble:F0}>{s.ChannelHigh:F0}");
                     s.TrailingStop = bar.CloseDouble - StopAtrMult * s.CurrentAtr;
-                    s.BarsInTrade = 0;
+                    s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble + TakeProfitAtrMult * s.CurrentAtr : 0;
+                    s.EntryPrice = bar.CloseDouble; s.Direction = "Long"; s.BarsInTrade = 0;
+                    if (TakeProfitAtrMult > 0)
+                        _ctx.Log($"多头入场: {s.InstrumentId} @{bar.CloseDouble:F0} SL={s.TrailingStop:F0} TP={s.TakeProfit:F0} (R={TakeProfitAtrMult/StopAtrMult:F1}:1)");
                 }
             }
             // 空头: 价格跌破通道低点 + MA趋势向下
@@ -192,7 +217,10 @@ public class DonchianTrendStrategy : IStrategy
                 {
                     _ctx.MarketSell(s.InstrumentId, qty, $"突破入场: <{s.ChannelLow:F0}");
                     s.TrailingStop = bar.CloseDouble + StopAtrMult * s.CurrentAtr;
-                    s.BarsInTrade = 0;
+                    s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble - TakeProfitAtrMult * s.CurrentAtr : 0;
+                    s.EntryPrice = bar.CloseDouble; s.Direction = "Short"; s.BarsInTrade = 0;
+                    if (TakeProfitAtrMult > 0)
+                        _ctx.Log($"空头入场: {s.InstrumentId} @{bar.CloseDouble:F0} SL={s.TrailingStop:F0} TP={s.TakeProfit:F0} (R={TakeProfitAtrMult/StopAtrMult:F1}:1)");
                 }
             }
         }
@@ -261,11 +289,14 @@ public class DonchianTrendStrategy : IStrategy
         public double ExitHigh { get; private set; }
         public double ExitLow { get; private set; }
 
-        // 跟踪止损 + 诊断
+        // 跟踪止损 + 止盈 + 诊断
         public double TrailingStop;
+        public double TakeProfit;      // 止盈目标价
+        public double EntryPrice;      // 入场价
+        public string? Direction;      // "Long" / "Short"
         public int BarsInTrade;
         public int _diag;
-        public int _diagBlocked;     // VolFilter 诊断计数
+        public int _diagBlocked;
 
         private double _prevClose = double.NaN;
 
@@ -335,6 +366,9 @@ public class DonchianTrendStrategy : IStrategy
         public void ResetTrade()
         {
             TrailingStop = 0;
+            TakeProfit = 0;
+            EntryPrice = 0;
+            Direction = null;
             BarsInTrade = 0;
         }
     }

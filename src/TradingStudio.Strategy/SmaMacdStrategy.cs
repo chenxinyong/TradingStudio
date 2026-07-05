@@ -42,6 +42,9 @@ public class SmaMacdStrategy : IStrategy
     [StrategyParameter(Description = "单笔止损比例", DefaultValue = 0.02, Min = 0.005, Max = 0.10, Category = "Risk")]
     public double StopLossPct { get; set; } = 0.02;
 
+    [StrategyParameter(Description = "单笔止盈比例 (0=关闭止盈, 建议0.04)", DefaultValue = 0.04, Min = 0, Max = 0.20, Category = "Risk")]
+    public double TakeProfitPct { get; set; } = 0.04;
+
     [StrategyParameter(Description = "最大开仓手数", DefaultValue = 20, Min = 1, Max = 100, Category = "Position")]
     public int MaxLots { get; set; } = 20;
 
@@ -115,7 +118,9 @@ public class SmaMacdStrategy : IStrategy
                         UseSmaTrail ? $"SMA{TrailSmaPeriod}({TrailActivationPct:P0})" : "仅SMA233止盈";
         _ctx.Log($"初始化: {Name} on [{string.Join(", ", context.SubscribedInstruments)}] " +
                  $"SMA={string.Join("/", _smaPeriods)} MACD({MacdFast},{MacdSlow},{MacdSignal}) " +
-                 $"MaxPos={MaxPositionRatio:P0} StopLoss={StopLossPct:P1} 移动止损={trailMode}");
+                 $"MaxPos={MaxPositionRatio:P0} SL={StopLossPct:P1} " +
+                 $"{(TakeProfitPct > 0 ? $"TP={TakeProfitPct:P1} (R={TakeProfitPct/StopLossPct:F1}:1)" : "TP=关闭")} " +
+                 $"移动止损={trailMode}");
     }
 
     public void OnTick(TickRecord tick, string instrumentId) { }
@@ -444,7 +449,13 @@ public class SmaMacdStrategy : IStrategy
             else
                 pnlPct = (s._entryPrice.Value - curClose) / s._entryPrice.Value;
 
-            if (pnlPct <= -StopLossPct)
+            // 止盈 (R倍数止盈, 优先于止损检查)
+            if (TakeProfitPct > 0 && pnlPct >= TakeProfitPct)
+            {
+                exit = true;
+                reason = $"止盈@{curClose:F2} (盈利={pnlPct:P1} R={(pnlPct/StopLossPct):F1}:1)";
+            }
+            else if (pnlPct <= -StopLossPct)
             {
                 exit = true;
                 reason = $"硬止损@{curClose:F2} (亏损={pnlPct:P1})";
