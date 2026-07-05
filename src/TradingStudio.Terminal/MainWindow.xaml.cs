@@ -76,6 +76,7 @@ public partial class MainWindow : Window
             case "chart":      NavChart_Click(this, new RoutedEventArgs());     break;
             case "strategies": NavStrategies_Click(this, new RoutedEventArgs()); break;
             case "orders":     NavOrders_Click(this, new RoutedEventArgs());    break;
+            case "backtest":  NavBacktest_Click(this, new RoutedEventArgs()); break;
         }
     }
 
@@ -229,6 +230,7 @@ public partial class MainWindow : Window
     void NavChart_Click(object s, RoutedEventArgs e)      => OpenTab("📈 行情",    () => new ChartView());
     void NavStrategies_Click(object s, RoutedEventArgs e) => OpenTab("📋 策略",    () => new PlaceholderView("📋","策略管理","Phase 2")) ;
     void NavOrders_Click(object s, RoutedEventArgs e)     => OpenTab("📜 订单",    () => new PlaceholderView("📜","订单监控","Phase 2"));
+    void NavBacktest_Click(object s, RoutedEventArgs e)   => OpenTab("🔬 回测",   () => new BacktestView());
     void NavLogs_Click(object s, RoutedEventArgs e)       => OpenTab("⚙ 日志",    () => new PlaceholderView("⚙","系统日志","Phase 2"));
     void NavAdmin_Click(object s, RoutedEventArgs e)      => OpenTab("⚡ 管理",    () => new PlaceholderView("⚡","管理","Phase 2"));
 }

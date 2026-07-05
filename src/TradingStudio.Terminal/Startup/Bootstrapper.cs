@@ -59,6 +59,7 @@ public static class Bootstrapper
         // ── ViewModels ──
         services.AddTransient<DashboardViewModel>();
         services.AddTransient<ChartViewModel>();
+        services.AddTransient<BacktestViewModel>();
 
         // ── Panel System ──
         services.AddSingleton<PanelManager>();
@@ -125,6 +126,16 @@ public static class Bootstrapper
             cmd.DefaultGesture = new KeyGesture(Key.O, ModifierKeys.Control);
         });
 
+        registry.Register("view.backtest", () =>
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+                GetMainWindow(sp).SwitchToPanel("backtest"));
+        }, cmd =>
+        {
+            cmd.Title = "回测"; cmd.Category = "视图";
+            cmd.DefaultGesture = new KeyGesture(Key.B, ModifierKeys.Control);
+        });
+
         // ── Connection Command ──
         registry.Register("engine.connect", async () =>
         {
@@ -152,6 +163,8 @@ public static class Bootstrapper
         pm.Register("dashboard",  "仪表盘", PanelLocation.Sidebar, () => dashboard, order: 0);
         pm.Register("chart",      "K线图",  PanelLocation.Sidebar,
             () => sp.GetRequiredService<ChartViewModel>(), order: 1);
+        pm.Register("backtest",   "回测",   PanelLocation.Sidebar,
+            () => sp.GetRequiredService<BacktestViewModel>(), order: 2);
 
         pm.Show("dashboard");
     }

@@ -9,6 +9,7 @@ using TradingStudio.Data.Storage;
 using TradingStudio.Live;
 using TradingStudio.Options;
 using TradingStudio.Services;
+using TradingStudio.Services;
 
 // ================================================================
 // TradingStudio — 量化交易工作室
@@ -166,6 +167,9 @@ static async Task RunLiveAsync(string[] args, IConfiguration config)
     builder.Services.AddSingleton(indicators);
     var strategies = new StrategyContainer();
     builder.Services.AddSingleton(strategies);
+
+    // ── 回测执行器 (live模式下由WPF触发) ──
+    builder.Services.AddSingleton<BacktestRunner>();
 
     // ── 数据持久化 ──
     var dataPath = config["Live:DataPath"] ?? "data";

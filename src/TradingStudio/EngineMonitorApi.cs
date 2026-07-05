@@ -1,6 +1,9 @@
 using DuckDB.NET.Data;
 using Microsoft.AspNetCore.Mvc;
+using TradingStudio.Core.Strategy;
 using TradingStudio.Engine;
+using TradingStudio.Services;
+using TradingStudio.Engine.Statistics;
 
 namespace TradingStudio;
 
@@ -106,6 +109,45 @@ public static class EngineMonitorApi
             var tbl = table ?? "bars_5min";
             var bars = BarQueryHelper.QueryBars(instrumentId, f, tbl);
             return bars.Count > 0 ? Results.Ok(bars) : Results.NotFound();
+        });
+
+        // ═══ 回测管理 ═══
+        api.MapPost("/backtest/start", ([FromBody] StrategyConfig config,
+            [FromServices] BacktestRunner runner) =>
+        {
+            var id = runner.Start(config);
+            return Results.Ok(new { TaskId = id, Status = "started" });
+        });
+
+        api.MapGet("/backtest/{id}/status", (string id,
+            [FromServices] BacktestRunner runner) =>
+        {
+            var task = runner.Get(id);
+            if (task == null) return Results.NotFound();
+            return Results.Ok(new { task.Id, task.Status, task.StartedAt, task.CompletedAt, task.Error });
+        });
+
+        api.MapGet("/backtest/{id}/report", (string id,
+            [FromServices] BacktestRunner runner) =>
+        {
+            var task = runner.Get(id);
+            if (task == null) return Results.NotFound();
+            if (task.Status != "completed") return Results.Ok(new { task.Status, Message = "Backtest still running" });
+            return Results.Content(task.ReportJson ?? "{}", "application/json");
+        });
+
+        api.MapGet("/backtest/{id}/summary", (string id,
+            [FromServices] BacktestRunner runner) =>
+        {
+            var task = runner.Get(id);
+            if (task?.Summary == null) return Results.NotFound();
+            return Results.Ok(task.Summary);
+        });
+
+        api.MapGet("/backtest/history", ([FromServices] BacktestRunner runner) =>
+        {
+            return Results.Ok(runner.All.Select(t => new { t.Id, t.Status, t.StartedAt, t.CompletedAt,
+                t.Summary?.StrategyId, t.Summary?.TotalTrades, t.Summary?.TotalNetProfit }));
         });
 
         // ═══ 控制命令 (POST) ═══

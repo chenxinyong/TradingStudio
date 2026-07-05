@@ -317,8 +317,9 @@
                         <Button Style="{StaticResource NavButton}" Content="📈" ToolTip="行情图表 (Ctrl+2)" Click="NavChart_Click" />
                         <Button Style="{StaticResource NavButton}" Content="📋" ToolTip="策略管理 (Ctrl+3)" Click="NavStrategies_Click" />
                         <Button Style="{StaticResource NavButton}" Content="📜" ToolTip="订单监控 (Ctrl+4)" Click="NavOrders_Click" />
+                        <Button Style="{StaticResource NavButton}" Content="🔬" ToolTip="回测 (Ctrl+5)" Click="NavBacktest_Click" />
                         <Separator Background="{StaticResource VsBorderLight}" Height="1" Margin="8,4" />
-                        <Button Style="{StaticResource NavButton}" Content="⚙" ToolTip="日志 (Ctrl+5)" Click="NavLogs_Click" />
+                        <Button Style="{StaticResource NavButton}" Content="⚙" ToolTip="日志 (Ctrl+6)" Click="NavLogs_Click" />
                     </StackPanel>
                     <Button Grid.Row="2" Style="{StaticResource NavButton}" Content="⚡"
                             ToolTip="管理" Margin="0,0,0,8" Click="NavAdmin_Click" />
