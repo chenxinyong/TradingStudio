@@ -239,7 +239,7 @@ public class SqliteBarStore : IBarStore
     {
         _cts.Cancel();
         _input.Writer.Complete();
-        try { _writerTask.Wait(TimeSpan.FromSeconds(3)); } catch { }
+        try { _writerTask.Wait(TimeSpan.FromSeconds(3)); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[BarStore] WriterTask cleanup: {ex.Message}"); }
         _conn.Dispose();
         _cts.Dispose();
     }
@@ -248,7 +248,7 @@ public class SqliteBarStore : IBarStore
     {
         _cts.Cancel();
         _input.Writer.Complete();
-        try { await _writerTask; } catch { }
+        try { await _writerTask; } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[BarStore] WriterTask drain: {ex.Message}"); }
         await _conn.DisposeAsync();
         _cts.Dispose();
     }

@@ -111,7 +111,7 @@ public class TickCsvWriter : IDisposable
         {
             _failed.TryAdd(key, 1);
             Interlocked.Increment(ref _errors);
-            try { _writers.TryRemove(key, out var old); SafeDispose(old.Writer); } catch { }
+            try { _writers.TryRemove(key, out var old); SafeDispose(old.Writer); } catch { /* cleanup best-effort */ }
         }
     }
 

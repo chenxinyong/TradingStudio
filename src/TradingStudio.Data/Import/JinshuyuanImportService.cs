@@ -325,7 +325,7 @@ public class JinshuyuanImportService
             File.WriteAllText(tmp, json);
             File.Move(tmp, filePath, overwrite: true);
         }
-        catch { /* 进度文件写入失败不应中断导入 */ }
+        catch (Exception ex) { Console.Error.WriteLine($"  ⚠ Progress file write failed (non-fatal): {ex.Message}"); }
     }
 
     // ═══════════ 辅助 ═══════════
@@ -365,7 +365,7 @@ public class JinshuyuanImportService
             meta = JinshuyuanEntryFilter.ParseEntryPath(entry.Replace('\\', '/'));
             return true;
         }
-        catch { meta = default; return false; }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Jinshuyuan] Entry parse: {ex.Message}"); meta = default; return false; }
     }
 
     private List<string> DiscoverRarFiles()

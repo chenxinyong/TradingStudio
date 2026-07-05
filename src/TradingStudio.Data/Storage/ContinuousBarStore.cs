@@ -134,7 +134,7 @@ public class ContinuousBarStore : IBarStore
             cmd.ExecuteNonQuery();
             return true;
         }
-        catch { return false; }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[ContinuousBarStore] Write failed: {ex.Message}"); return false; }
     }
 
     public void Dispose() { }

@@ -360,7 +360,7 @@ public class DuckDBStore : IBarStore, ITickStore
     private async Task PurgeLoop(CancellationToken ct)
     {
         // 启动时先清理一次
-        try { await PurgeOldTicksAsync(7, ct); } catch { /* 表可能为空 */ }
+        try { await PurgeOldTicksAsync(7, ct); } catch { /* 表可能为空，跳过初始清理 */ }
 
         while (!ct.IsCancellationRequested)
         {
@@ -464,7 +464,7 @@ public class DuckDBStore : IBarStore, ITickStore
         _barChannel.Writer.Complete();
         _tickChannel.Writer.Complete();
         try { Task.WaitAll([_barWriterTask, _tickWriterTask, _purgeLoopTask], TimeSpan.FromSeconds(5)); }
-        catch { /* 进程退出时 channel 可能还有未处理数据 */ }
+        catch (AggregateException) { /* 进程退出时 channel 未处理数据属正常 */ }
         _cts.Dispose();
     }
 
@@ -474,7 +474,7 @@ public class DuckDBStore : IBarStore, ITickStore
         _barChannel.Writer.Complete();
         _tickChannel.Writer.Complete();
         try { await Task.WhenAll(_barWriterTask, _tickWriterTask, _purgeLoopTask); }
-        catch { /* channel 关闭后正常 */ }
+        catch (OperationCanceledException) { /* Channel关闭后正常 */ }
         _cts.Dispose();
     }
 }

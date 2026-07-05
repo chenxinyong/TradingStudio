@@ -218,7 +218,7 @@ internal static class BarQueryHelper
                     reader.GetInt64(2), reader.GetString(3), reader.GetString(4)));
             return list;
         }
-        catch { return new List<ProductInfo>(); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"QueryProducts failed: {ex.Message}"); return new List<ProductInfo>(); }
     }
 
     public static List<BarDto> QueryBars(string instrumentId, string freq, string table)

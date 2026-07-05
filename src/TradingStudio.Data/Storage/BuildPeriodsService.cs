@@ -355,7 +355,7 @@ public class BuildPeriodsService
             }
             return null;
         }
-        catch { return null; }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[BuildPeriods] GetEarliestBarTime failed: {ex.Message}"); return null; }
     }
 }
 

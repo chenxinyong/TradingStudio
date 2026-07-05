@@ -59,7 +59,7 @@ public class HistoricalTickFeed : IDataFeed, IDisposable
                     instrumentFiles[symbol].Add(file);
                 }
             }
-            catch { /* skip unparseable filenames */ }
+            catch { /* skip unparseable filenames — 非标准格式文件属于正常情况 */ }
         }
 
         // 2. 为每个 instrument 打开第一个 CSV 的枚举器
@@ -201,7 +201,7 @@ public class HistoricalTickFeed : IDataFeed, IDisposable
                     _disposables.Add(_currentStream);
                     _currentEnumerator = CsvTickImporter.Parse(_currentStream, symbol, tradingDay).GetEnumerator();
                 }
-                catch { /* skip corrupted files */ }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[HistoricalTickFeed] Corrupted file skipped: {ex.Message}"); }
             }
         }
 

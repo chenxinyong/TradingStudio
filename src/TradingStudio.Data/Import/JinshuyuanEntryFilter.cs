@@ -134,7 +134,7 @@ public static class JinshuyuanEntryFilter
     private static bool TryParseEntryPath(string entryPath, out EntryMeta meta)
     {
         try { meta = ParseEntryPath(entryPath); return true; }
-        catch { meta = default; return false; }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[EntryFilter] Parse failed: {ex.Message}"); meta = default; return false; }
     }
 
     /// <summary>从扁平文件名推断交易所目录代码</summary>

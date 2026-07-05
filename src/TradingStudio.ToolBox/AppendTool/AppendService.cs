@@ -128,14 +128,14 @@ public class AppendService
             finally
             {
                 try { using var c = target.CreateCommand(); c.CommandText = $"DROP TABLE IF EXISTS \"{tmpTable}\""; c.ExecuteNonQuery(); }
-                catch { }
+                catch { /* cleanup best-effort */ }
             }
         }
         finally
         {
             // DETACH source
             try { using var c = target.CreateCommand(); c.CommandText = $"DETACH {srcAlias}"; c.ExecuteNonQuery(); }
-            catch { }
+            catch { /* DETACH best-effort, DB conn closing anyway */ }
         }
 
         return r;

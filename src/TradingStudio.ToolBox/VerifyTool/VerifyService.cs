@@ -502,7 +502,7 @@ public class VerifyService
                 issues++;
             }
         }
-        catch { details.Add("Trading day alignment check skipped"); }
+        catch (Exception ex) { details.Add($"Trading day alignment check skipped: {ex.Message}"); }
 
         // Per-year trading day counts
         var yearExpr = isDuckDB ? "extract(year FROM CAST(bar_time AS TIMESTAMP))" : "substr(bar_time,1,4)";

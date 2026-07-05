@@ -31,7 +31,7 @@ public class StringToColorConverter : IValueConverter
                 byte b = System.Convert.ToByte(hex.Substring(5, 2), 16);
                 return new SolidColorBrush(Color.FromRgb(r, g, b));
             }
-            catch { }
+            catch { /* hex parse failed, return default brush */ }
         }
         return FallbackBrush;
     }
