@@ -34,8 +34,8 @@ public class DonchianTrendStrategy : IStrategy
     [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2.0, Min = 1.0, Max = 4.0, Category = "Risk")]
     public double StopAtrMult { get; set; } = 2.0;
 
-    [StrategyParameter(Description = "最低波动率(ATR/Close)", DefaultValue = 0.015, Min = 0.005, Max = 0.05, Category = "Filter")]
-    public double MinVolatility { get; set; } = 0.015;
+    [StrategyParameter(Description = "最低波动率(ATR/Close) — 15min建议0.001-0.005", DefaultValue = 0.002, Min = 0.001, Max = 0.03, Category = "Filter")]
+    public double MinVolatility { get; set; } = 0.002;
 
     [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.05, Category = "Position")]
     public double RiskPerTrade { get; set; } = 0.02;
@@ -88,9 +88,17 @@ public class DonchianTrendStrategy : IStrategy
 
         s.Feed(bar);
 
-        // 波动率太低，不交易
+        // 波动率过滤 — ATR 未初始化时跳过
+        if (s.CurrentAtr <= 0) return;
         var volatility = s.CurrentAtr / bar.CloseDouble;
-        if (volatility < MinVolatility) return;
+        if (volatility < MinVolatility)
+        {
+            // 仅在前 10 次被过滤时记录诊断日志
+            if (s._diagBlocked++ < 10)
+                _ctx.Log($"VolFilter: {s.InstrumentId} ATR={s.CurrentAtr:F2} Close={bar.CloseDouble:F0} " +
+                         $"Vol={volatility*100:F2}% < Min={MinVolatility*100:F1}%");
+            return;
+        }
 
         var pos = _ctx.GetPosition(s.InstrumentId);
         var hasPosition = pos is not null && pos.Quantity != 0;
@@ -253,10 +261,11 @@ public class DonchianTrendStrategy : IStrategy
         public double ExitHigh { get; private set; }
         public double ExitLow { get; private set; }
 
-        // 跟踪止损
+        // 跟踪止损 + 诊断
         public double TrailingStop;
         public int BarsInTrade;
         public int _diag;
+        public int _diagBlocked;     // VolFilter 诊断计数
 
         private double _prevClose = double.NaN;
 
