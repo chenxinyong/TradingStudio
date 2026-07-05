@@ -8,7 +8,7 @@
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <SelfContained>true</SelfContained>
+    <SelfContained Condition="'$(PublishDir)' != ''">true</SelfContained>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <!-- NU1510: Hosting 是直接依赖 + Serilog传递依赖，保留显式引用 -->
@@ -31,12 +31,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- C++/CLI: VS构建用vcxproj，dotnet CLI用预编译DLL -->
-    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj" Condition="Exists('$(VCTargetsPath)\Microsoft.Cpp.Default.props')">
-      <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
-      <CopyLocal>true</CopyLocal>
-    </ProjectReference>
-    <Reference Include="CTPWrapper" Condition="!Exists('$(VCTargetsPath)\Microsoft.Cpp.Default.props')" HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
+    <!-- C++/CLI Wrapper — 始终用预编译 DLL (C++/CLI 不支持 SelfContained) -->
+    <!-- 修改 CTPWrapper 后需先运行 src\CTP\Wrapper\build.bat -->
+    <Reference Include="CTPWrapper" HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
     <ProjectReference Include="..\TradingStudio.Core\TradingStudio.Core.csproj" />
     <ProjectReference Include="..\TradingStudio.Data\TradingStudio.Data.csproj" />
     <ProjectReference Include="..\TradingStudio.Engine\TradingStudio.Engine.csproj" />

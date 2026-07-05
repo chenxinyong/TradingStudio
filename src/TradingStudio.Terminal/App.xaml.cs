@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using TradingStudio.Terminal.Startup;
@@ -12,22 +13,28 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        Services = Bootstrapper.ConfigureServices();
-
-        // ── 启动模式判断 ──
-        var args = e.Args;
-        bool chartOnly = args.Contains("--chart-only") || args.Contains("--chart");
-
-        if (chartOnly)
+        try
         {
-            // 轻量模式：仅 K 线图，无仪表盘/侧栏/命令栏
-            var chartWindow = Services.GetRequiredService<ChartWindow>();
-            chartWindow.Show();
+            Services = Bootstrapper.ConfigureServices();
+            var args = e.Args;
+
+            if (args.Contains("--replay"))
+            {
+                Services.GetRequiredService<ReplayWindow>().Show();
+            }
+            else if (args.Contains("--chart-only") || args.Contains("--chart") || args.Length == 0)
+            {
+                Services.GetRequiredService<ChartWindow>().Show();
+            }
+            else
+            {
+                Services.GetRequiredService<MainWindow>().Show();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            var mainWindow = Services.GetRequiredService<MainWindow>();
-            mainWindow.Show();
+            File.WriteAllText("wpf_crash.log", $"{ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}\n");
+            MessageBox.Show($"FATAL: {ex.Message}", "Crash", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

@@ -9,9 +9,9 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
   </ItemGroup>
-  <!-- CTPWrapper: VS 构建用 vcxproj（编译 C++/CLI），dotnet CLI / SelfContained 发布用预编译 DLL -->
+  <!-- C++/CLI Wrapper — 始终用预编译 DLL (C++/CLI 不支持 SelfContained) -->
+  <!-- 修改 CTPWrapper 后需先运行 src\CTP\Wrapper\build.bat -->
   <ItemGroup>
-    <ProjectReference Include="..\CTP\Wrapper\CTPWrapper.vcxproj" Condition="Exists('$(VCTargetsPath)\Microsoft.Cpp.Default.props')" />
-    <Reference Include="CTPWrapper" Condition="!Exists('$(VCTargetsPath)\Microsoft.Cpp.Default.props')" HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
+    <Reference Include="CTPWrapper" HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
   </ItemGroup>
 </Project>

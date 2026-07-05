@@ -31,7 +31,6 @@ public partial class MainWindow : Window
 
         // Default tabs on startup
         OpenTab("📊 仪表盘", () => new DashboardView());
-        OpenTab("📈 行情",    () => new ChartView());
 
         // Register keyboard shortcuts from the command system
         RegisterKeyBindings();

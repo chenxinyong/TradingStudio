@@ -21,62 +21,35 @@ public static class Bootstrapper
     public static IServiceProvider ConfigureServices()
     {
         var services = new ServiceCollection();
-
-        // ── Configuration ──
         var config = new ConfigurationBuilder()
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
             .Build();
         services.AddSingleton<IConfiguration>(config);
 
-        // ── Logging ──
-        Log.Logger = new LoggerConfiguration()
-            .ReadFrom.Configuration(config)
-            .CreateLogger();
+        Log.Logger = new LoggerConfiguration().ReadFrom.Configuration(config).CreateLogger();
         services.AddLogging(b => { b.ClearProviders(); b.AddSerilog(Log.Logger, dispose: true); });
 
-        // ── Core — EventBus + Command System ──
         services.AddSingleton<EventBus>();
         services.AddSingleton<CommandRegistry>();
         services.AddSingleton<KeybindingRegistry>();
-
-        // ── Engine Connection ──
-        var engineUrl = config["Engine:Url"] ?? "http://localhost:59661";
-        services.AddSingleton<EngineApiClient>(sp =>
-        {
-            var log = sp.GetRequiredService<ILogger<EngineApiClient>>();
-            return new EngineApiClient(engineUrl, log);
-        });
-        services.AddSingleton<EngineHubClient>(sp =>
-        {
-            var log = sp.GetRequiredService<ILogger<EngineHubClient>>();
-            var eventBus = sp.GetRequiredService<EventBus>();
-            return new EngineHubClient($"{engineUrl}/hubs/engine", log, eventBus);
-        });
-
-        // ── Navigation ──
+        services.AddSingleton<EngineApiClient>(sp => new EngineApiClient(config["Engine:Url"] ?? "http://localhost:59661", sp.GetRequiredService<ILogger<EngineApiClient>>()));
+        services.AddSingleton<EngineHubClient>(sp => new EngineHubClient($"{config["Engine:Url"] ?? "http://localhost:59661"}/hubs/engine", sp.GetRequiredService<ILogger<EngineHubClient>>(), sp.GetRequiredService<EventBus>()));
         services.AddSingleton<INavigationService, NavigationService>();
-
-        // ── ViewModels ──
         services.AddTransient<DashboardViewModel>();
         services.AddTransient<ChartViewModel>();
         services.AddTransient<BacktestViewModel>();
         services.AddTransient<ReplayViewModel>();
-
-        // ── Panel System ──
         services.AddSingleton<PanelManager>();
         services.AddSingleton<ActivityBarViewModel>();
-
-        // ── UI Windows ──
         services.AddSingleton<MainWindow>();
         services.AddSingleton<ChartWindow>();
+        services.AddSingleton<ReplayWindow>();
 
         var provider = services.BuildServiceProvider();
-
-        // ── Post-build initialization ──
         Log.Information("TradingStudio Terminal — DI ready");
         InitializeCommands(provider);
         InitializePanels(provider);
-
         return provider;
     }
 
