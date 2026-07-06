@@ -33,8 +33,10 @@ try
         .SetBasePath(Directory.GetCurrentDirectory())
         // 基础配置（必选）
         .AddJsonFile("appsettings.json", false, true)
-        // 环境差异化配置（可选，没有该文件不会抛异常）
+        // 环境差异化配置（可选）
         .AddJsonFile($"appsettings.{environment}.json", true, true)
+        // 本地敏感配置（凭据，不提交 Git）
+        .AddJsonFile("appsettings.local.json", true, true)
         .Build();
 
     switch (args[0])
