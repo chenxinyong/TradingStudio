@@ -112,8 +112,12 @@ public class CollectService : BackgroundService
                 if (!_scheduler.IsInSession() || ct.IsCancellationRequested) break;
 
                 Interlocked.Increment(ref _reconnectCount);
-                var delay = Math.Min(30, Math.Pow(2, Math.Min(_reconnectCount, 5)));
-                _log.Warning("Reconnect #{Count} in {Delay:F0}s", _reconnectCount, delay);
+                // 快速重试：5s→10s→20s→30s，不在交易时段内浪费
+                var delay = Math.Min(30, 5 * Math.Pow(2, Math.Min(_reconnectCount - 1, 3)));
+                _log.Warning("Reconnect #{Count} in {Delay:F0}s (session={Session})",
+                    _reconnectCount, delay, _scheduler.SessionName());
+                _health.Update("Reconnecting", _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped,
+                    _reconnectCount, _scheduler.SessionName(), _lastConnect, _lastQuote, _lastHealth);
                 try { await Task.Delay(TimeSpan.FromSeconds(delay), ct); } catch { break; }
             }
 
@@ -159,9 +163,10 @@ public class CollectService : BackgroundService
         };
         md.OnError += (err, req) =>
         { if (err.ErrorID != 0) _log.Error("[{Session}] [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg); };
+        var lastQuoteTime = DateTime.Now;
         md.OnQuote += q =>
         {
-            try { _pipeline.Feed(q); _lastQuote = DateTime.Now; }
+            try { _pipeline.Feed(q); var now = DateTime.Now; _lastQuote = now; lastQuoteTime = now; }
             catch (Exception ex) { _log.Error(ex, "Quote handler error"); }
         };
 
@@ -176,13 +181,26 @@ public class CollectService : BackgroundService
             await Task.Delay(200, ct);
         }
 
-        // 事件驱动等待——用 TCS 替代每秒轮询，断连立即检测
+        // 事件驱动+心跳：30s无行情→强制重连
         while (_scheduler.IsInSession() && !ct.IsCancellationRequested)
         {
-            var winner = await Task.WhenAny(Task.Delay(60000, ct), discTcs.Task);
-            if (winner == discTcs.Task) { _log.Warning("[{Session}] 断连", session); break; }
-            lock (discLock) { if (disconnected) break; }
-            // 重置 TCS 以便下次断连检测
+            // 30秒超时检测：断开 OR 无行情 OR 断连信号
+            var timeout = Task.Delay(30000, ct);
+            var winner = await Task.WhenAny(timeout, discTcs.Task);
+
+            bool timedOut = winner == timeout;
+            bool discSignaled = winner == discTcs.Task;
+            bool noQuotes = (DateTime.Now - lastQuoteTime).TotalSeconds > 30;
+
+            lock (discLock) { if (disconnected) discSignaled = true; }
+
+            if (discSignaled || (timedOut && noQuotes))
+            {
+                var reason = discSignaled ? "CTP断连" : "30s无行情超时";
+                _log.Warning("[{Session}] 重连触发: {Reason}", session, reason);
+                break;
+            }
+            // 心跳正常，继续
             if (discTcs.Task.IsCompleted) discTcs = new TaskCompletionSource<bool>();
         }
     }
