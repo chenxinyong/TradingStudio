@@ -132,6 +132,7 @@ public class CollectService : BackgroundService
 
         var discLock = new object();
         var disconnected = false;
+        var discTcs = new TaskCompletionSource<bool>();
 
         md.OnFrontConnected += () =>
         {
@@ -143,6 +144,7 @@ public class CollectService : BackgroundService
         {
             _log.Warning("[{Session}] Disconnected (0x{Reason:X})", session, r);
             lock (discLock) { disconnected = true; }
+            discTcs.TrySetResult(true);
         };
         md.OnLogin += (err, info) =>
         {
@@ -168,12 +170,14 @@ public class CollectService : BackgroundService
             await Task.Delay(200, ct);
         }
 
+        // 事件驱动等待——用 TCS 替代每秒轮询，断连立即检测
         while (_scheduler.IsInSession() && !ct.IsCancellationRequested)
         {
-            await Task.Delay(1000, ct);
-            var disc = false;
-            lock (discLock) { disc = disconnected; }
-            if (disc) { _log.Warning("[{Session}] Session broken (disconnect detected)", session); break; }
+            var winner = await Task.WhenAny(Task.Delay(60000, ct), discTcs.Task);
+            if (winner == discTcs.Task) { _log.Warning("[{Session}] 断连", session); break; }
+            lock (discLock) { if (disconnected) break; }
+            // 重置 TCS 以便下次断连检测
+            if (discTcs.Task.IsCompleted) discTcs = new TaskCompletionSource<bool>();
         }
     }
 

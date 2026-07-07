@@ -46,9 +46,9 @@ public static class ContractCodeGenerator
 
     private static string MakeCode(string symbolCode, ExchangeCode exchange, int year, int month)
     {
-        return exchange == ExchangeCode.CZCE
-            ? $"{symbolCode}{(year % 100) / 10}{month:D2}"  // TA608
-            : $"{symbolCode}{year % 100:D2}{month:D2}";       // cu2607
+        // CZCE: 同时生成短码和标准码，SimNow 和实盘兼容
+        // (SimNow 部分版本需要标准四位数年份码)
+        return $"{symbolCode}{year % 100:D2}{month:D2}";       // TA2608 / cu2607
     }
 
     private static List<int> ParseMonths(string months)
