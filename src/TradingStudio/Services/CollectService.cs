@@ -65,6 +65,12 @@ public class CollectService : BackgroundService
 
         _log.Information("Loaded {Count} futures → {Total} contracts in {Batches} batches",
             filtered.Count, batches.Sum(b => b.Length), batches.Count);
+        // CZCE诊断: 检查郑商所合约是否在订阅列表中
+        var czceCodes = batches.SelectMany(b => b).Where(c => c.Length == 5 && char.IsUpper(c[0]) && char.IsUpper(c[1])).Take(10).ToList();
+        if (czceCodes.Count > 0)
+            _log.Information("CZCE samples: {Codes}...", string.Join(", ", czceCodes));
+        else
+            _log.Warning("NO CZCE contracts in subscription list!");
 
         // 确保数据目录存在
         var dbDir = Path.GetDirectoryName(Path.GetFullPath(_cfg.Database));

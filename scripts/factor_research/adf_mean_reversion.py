@@ -1,16 +1,12 @@
 """
-Ernie Chan《Algorithmic Trading》Ch4: Mean Reversion 实践
-========================================================
-对 Top30 期货品种做 ADF 检验 + 半衰期估算 + Hurst 指数。
-回答三个问题：
-  1. 哪些品种的价格是平稳的（适合均值回归策略）？
-  2. 均值回归的半衰期是多少（决定了持仓周期）？
-  3. 价格是趋势主导还是回归主导（Hurst 指数）？
-
-用法：
-  cd TradingStudio
-  python scripts/factor_research/adf_mean_reversion.py
+Ernie Chan Ch4: Mean Reversion — ADF + Half-Life + Hurst
+Usage: cd TradingStudio && python scripts/factor_research/adf_mean_reversion.py
 """
+
+import sys
+import io
+# Force UTF-8 for Windows GBK terminals
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 import duckdb
 import numpy as np
@@ -31,7 +27,7 @@ OUTPUT_DIR = "scripts/factor_research/output"
 # ── 连接 DuckDB ────────────────────────────────────
 
 if not os.path.exists(DB_PATH):
-    print(f"❌ 数据库不存在: {DB_PATH}")
+    print(f"[ERROR] Database not found: {DB_PATH}")
     print("   请确认路径或先运行: dotnet run -- collect")
     sys.exit(1)
 
@@ -210,9 +206,9 @@ for inst_id, bar_count, start, end in instruments:
     hl = stats.get('half_life', float('nan'))
 
     if adf_p < 0.05:
-        stationarity = "平稳 ✅"
+        stationarity = "平稳 [OK]"
     elif adf_p < 0.10:
-        stationarity = "弱平稳 ⚠️"
+        stationarity = "弱平稳 [!!]"
     else:
         stationarity = "非平稳"
 
@@ -229,18 +225,18 @@ for inst_id, bar_count, start, end in instruments:
     if not np.isnan(hl):
         hl_years = hl / 252
         if hl < 63:   # < 3 个月
-            hl_label = f"{hl:.0f}天 ({hl_years*12:.1f}月) — 快速回归 ⚡"
+            hl_label = f"{hl:.0f}天 ({hl_years*12:.1f}月) — 快速回归 <<<"
         elif hl < 252:  # < 1 年
             hl_label = f"{hl:.0f}天 ({hl_years*12:.1f}月) — 可交易"
         else:
-            hl_label = f"{hl:.0f}天 ({hl_years:.1f}年) — 回归太慢 ❌"
+            hl_label = f"{hl:.0f}天 ({hl_years:.1f}年) — 回归太慢 [X]"
     else:
         hl_label = "不收敛"
         hl = float('nan')
 
     # 推荐策略类型
     if adf_p < 0.10 and not np.isnan(hl) and hl < 126:
-        strategy_rec = "均值回归 ⭐"
+        strategy_rec = "均值回归 **"
     elif hurst > 0.55:
         strategy_rec = "趋势跟踪"
     else:
@@ -280,7 +276,7 @@ for r in results:
     print(f"{r['instrument']:<8s} {r['bars']:>6d} {adf_p_str:>8s} {r['stationarity']:<10s} "
           f"{hurst_str:>6s} {r['hurst_label']:<12s} {r['half_life_label']:<20s} {r['strategy_rec']:<14s}")
 
-    if r['strategy_rec'] == '均值回归 ⭐':
+    if r['strategy_rec'] == '均值回归 **':
         mean_reversion_candidates.append(r)
     elif r['strategy_rec'] == '趋势跟踪':
         trend_candidates.append(r)
@@ -291,9 +287,9 @@ print("\n" + "=" * 70)
 print("Chan Ch4 均值回归检验 — 总结")
 print("=" * 70)
 
-print(f"\n📊 总品种数: {len(results)}")
+print(f"\n[i] 总品种数: {len(results)}")
 
-print(f"\n🔄 均值回归候选 ({len(mean_reversion_candidates)} 个):")
+print(f"\n<> 均值回归候选 ({len(mean_reversion_candidates)} 个):")
 if mean_reversion_candidates:
     print(f"   {'品种':<8s} {'ADF p':>8s} {'半衰期(天)':>10s} {'Hurst':>6s}")
     print(f"   {'-'*40}")
@@ -304,7 +300,7 @@ if mean_reversion_candidates:
 else:
     print("   (无) — 期货价格通常是趋势主导，均值回归更适合价差/基差策略")
 
-print(f"\n📈 趋势跟踪候选 ({len(trend_candidates)} 个):")
+print(f"\n[>>] 趋势跟踪候选 ({len(trend_candidates)} 个):")
 if trend_candidates:
     print(f"   {', '.join(r['instrument'] for r in trend_candidates)}")
 
@@ -326,7 +322,7 @@ Hurst 指数解读 (Chan Ch4.5):
   63-126天 (3-6月) → 适合中长线
   > 252天 (1年)    → 回归太慢, 不适合均值回归策略
 
-⚠️  重要提醒 (Chan Ch4.6):
+[!!]  重要提醒 (Chan Ch4.6):
   1. ADF 检验对滞后阶数敏感 — 换一个 lag 可能结论完全不同
   2. 日线平稳 ≠ 分钟线平稳 — 用哪个周期交易就要在哪个周期检验
   3. 期货价格通常非平稳 — 均值回归策略更适合做价差/基差/跨期
@@ -352,7 +348,7 @@ with open(csv_path, 'w', encoding='utf-8-sig') as f:
                 f"{r['adf_stat']:.4f},{r['adf_pvalue']:.4f},{r['stationarity']},"
                 f"{hurst_str},{r['hurst_label']},{hl_str},{r['strategy_rec']}\n")
 
-print(f"📁 结果已保存: {csv_path}")
+print(f"[FILE] 结果已保存: {csv_path}")
 
 conn.close()
-print("✅ 完成")
+print("[OK] 完成")
