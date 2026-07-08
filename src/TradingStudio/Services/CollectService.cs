@@ -56,7 +56,7 @@ public class CollectService : BackgroundService
         }
         var filtered = futures.ToList();
 
-        var batches = ContractCodeGenerator.BatchSubscribe(filtered, 80)
+        var batches = ContractCodeGenerator.BatchSubscribe(filtered, 50)  // 50/batch减少CTP压力
             .Select(b => _cfg.SymbolFilter?.Any(char.IsDigit) == true
                 ? b.Where(c => c.Equals(_cfg.SymbolFilter, StringComparison.OrdinalIgnoreCase)).ToArray()
                 : b)
@@ -92,7 +92,7 @@ public class CollectService : BackgroundService
                     wait.TotalMinutes, SessionScheduler.BeijingNow.Add(wait).ToString("HH:mm"));
                 _health.Update("Idle", _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped,
                     _reconnectCount, "休市", _lastConnect, _lastQuote, _lastHealth);
-                try { await Task.Delay(wait, ct); } catch { break; }
+                try { await Task.Delay(wait, ct); } catch (OperationCanceledException) { break; } catch { /* retry */ }
                 if (ct.IsCancellationRequested) break;
             }
 
@@ -118,7 +118,7 @@ public class CollectService : BackgroundService
                     _reconnectCount, delay, _scheduler.SessionName());
                 _health.Update("Reconnecting", _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped,
                     _reconnectCount, _scheduler.SessionName(), _lastConnect, _lastQuote, _lastHealth);
-                try { await Task.Delay(TimeSpan.FromSeconds(delay), ct); } catch { break; }
+                try { await Task.Delay(TimeSpan.FromSeconds(delay), ct); } catch (OperationCanceledException) { break; } catch { /* retry */ }
             }
 
             _log.Information("{Session}收盘，flush 数据", session);
@@ -161,8 +161,22 @@ public class CollectService : BackgroundService
             if (err.IsOK()) { _log.Information("[{Session}] Login OK TradingDay={Day}", session, info?.TradingDay); loggedIn.TrySetResult(true); }
             else { _log.Error("[{Session}] Login FAIL [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg); loggedIn.TrySetResult(false); }
         };
+        // CTP错误回调 + 订阅错误 → 强制重连
+        var errorTcs = new TaskCompletionSource<bool>();
         md.OnError += (err, req) =>
-        { if (err.ErrorID != 0) _log.Error("[{Session}] [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg); };
+        {
+            if (err.ErrorID != 0)
+            {
+                _log.Error("[{Session}] CTP Error [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg);
+                if (err.ErrorID < 0) errorTcs.TrySetResult(true); // 严重错误→重连
+            }
+        };
+        md.OnRspSubscribe += (err, insts) =>
+        {
+            if (!err.IsOK())
+                _log.Warning("[{Session}] Subscribe error [{Code}] {Msg} for {Count} instruments",
+                    session, err.ErrorID, err.ErrorMsg, insts?.Length ?? 0);
+        };
         var lastQuoteTime = DateTime.Now;
         md.OnQuote += q =>
         {
@@ -175,33 +189,38 @@ public class CollectService : BackgroundService
         if (!await WaitFor(loggedIn, 15000, ct)) throw new Exception("Login timeout");
 
         _reconnectCount = 0;
+        _log.Information("[{Session}] Subscribing {Count} contracts in {Batches} batches (50/batch)...",
+            session, batches.Sum(b => b.Length), batches.Count);
         for (int i = 0; i < batches.Count && _scheduler.IsInSession(); i++)
         {
             md.Subscribe(batches[i]);
-            await Task.Delay(200, ct);
+            if (i % 5 == 4) await Task.Delay(500, ct); else await Task.Delay(150, ct); // 每5批多歇一下
         }
+        _log.Information("[{Session}] Subscription done", session);
 
-        // 事件驱动+心跳：30s无行情→强制重连
+        // 事件驱动+心跳：30s无行情→强制重连，每30min强制刷新
+        var sessionStart = DateTime.Now;
         while (_scheduler.IsInSession() && !ct.IsCancellationRequested)
         {
-            // 30秒超时检测：断开 OR 无行情 OR 断连信号
             var timeout = Task.Delay(30000, ct);
-            var winner = await Task.WhenAny(timeout, discTcs.Task);
+            var winner = await Task.WhenAny(timeout, discTcs.Task, errorTcs.Task);
 
+            bool discSignaled = winner == discTcs.Task || winner == errorTcs.Task;
             bool timedOut = winner == timeout;
-            bool discSignaled = winner == discTcs.Task;
             bool noQuotes = (DateTime.Now - lastQuoteTime).TotalSeconds > 30;
+            bool forceRefresh = (DateTime.Now - sessionStart).TotalMinutes > 30;
 
             lock (discLock) { if (disconnected) discSignaled = true; }
 
-            if (discSignaled || (timedOut && noQuotes))
+            if (discSignaled || (timedOut && noQuotes) || forceRefresh)
             {
-                var reason = discSignaled ? "CTP断连" : "30s无行情超时";
+                var reason = discSignaled ? "CTP断连/错误" :
+                             forceRefresh ? "30min定时刷新" : "30s无行情";
                 _log.Warning("[{Session}] 重连触发: {Reason}", session, reason);
                 break;
             }
-            // 心跳正常，继续
             if (discTcs.Task.IsCompleted) discTcs = new TaskCompletionSource<bool>();
+            if (errorTcs.Task.IsCompleted) errorTcs = new TaskCompletionSource<bool>();
         }
     }
 

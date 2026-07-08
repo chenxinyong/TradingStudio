@@ -19,6 +19,7 @@ public class ToolRegistry
         Register(new ContinuousTool.ContinuousTool());
         Register(new AppendTool.AppendTool());
         Register(new BuildPeriodsTool.BuildPeriodsTool());
+        Register(new MindTool.MindTool());
         // 未来扩展：只需加下面这类行
         // Register(new InfoTool.InfoTool());
         // Register(new ConvertTool.ConvertTool());
