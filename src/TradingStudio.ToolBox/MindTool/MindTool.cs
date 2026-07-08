@@ -24,9 +24,15 @@ public class MindTool : IToolCommand
 
     public void ConfigureServices(IServiceCollection services, IConfiguration config)
     {
-        // 1. 绑定 MindOptions
+        // 1. 绑定 MindOptions — 合并 host config + appsettings.local.json
+        var mindConfig = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddConfiguration(config)  // host 已加载的配置 (appsettings.json + env vars + CLI args)
+            .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false)
+            .Build();
+
         var mindOpts = new MindOptions();
-        config.GetSection("Mind").Bind(mindOpts);
+        mindConfig.GetSection("Mind").Bind(mindOpts);
 
         // 2. API Key 优先级: 环境变量 > appsettings.local.json > appsettings.json
         OverrideFromEnvironment(mindOpts);

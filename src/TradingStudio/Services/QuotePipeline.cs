@@ -34,7 +34,7 @@ public class QuotePipeline : IDisposable
     {
         if (string.IsNullOrEmpty(q.InstrumentID)) return;
 
-        var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
+        var instId = ContractCodeGenerator.Normalize(q.InstrumentID).ToLowerInvariant(); // CZCE大写→小写, 与其他交易所统一
         var record = QuoteConverter.FromCTPQuote(q);
         var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
 
