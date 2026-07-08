@@ -173,11 +173,11 @@ public class CollectService : BackgroundService
                 if (err.ErrorID < 0) errorTcs.TrySetResult(true); // 严重错误→重连
             }
         };
-        md.OnRspSubscribe += (err, insts) =>
+        md.OnSubscribeRsp += (instrumentId, err, isLast) =>
         {
             if (!err.IsOK())
-                _log.Warning("[{Session}] Subscribe error [{Code}] {Msg} for {Count} instruments",
-                    session, err.ErrorID, err.ErrorMsg, insts?.Length ?? 0);
+                _log.Warning("[{Session}] Subscribe error [{Code}] {Msg} for {Instrument}",
+                    session, err.ErrorID, err.ErrorMsg, instrumentId);
         };
         var lastQuoteTime = DateTime.Now;
         md.OnQuote += q =>
