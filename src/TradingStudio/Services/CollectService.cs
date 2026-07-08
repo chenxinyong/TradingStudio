@@ -111,6 +111,8 @@ public class CollectService : BackgroundService
 
                 if (!_scheduler.IsInSession() || ct.IsCancellationRequested) break;
 
+                // 重连前flush BarAggregator，避免状态残留导致Bar卡住
+                _pipeline.Flush();
                 Interlocked.Increment(ref _reconnectCount);
                 // 快速重试：5s→10s→20s→30s，不在交易时段内浪费
                 var delay = Math.Min(30, 5 * Math.Pow(2, Math.Min(_reconnectCount - 1, 3)));

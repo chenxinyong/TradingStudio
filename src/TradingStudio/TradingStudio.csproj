@@ -38,6 +38,7 @@
     <ProjectReference Include="..\TradingStudio.Data\TradingStudio.Data.csproj" />
     <ProjectReference Include="..\TradingStudio.Engine\TradingStudio.Engine.csproj" />
     <ProjectReference Include="..\TradingStudio.Strategy\TradingStudio.Strategy.csproj" />
+    <ProjectReference Include="..\TradingStudio.Mind\TradingStudio.Mind.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -180,7 +180,7 @@ public class CtpTraderBridge : IDisposable
                 ? CTP.OrderPriceType.AnyPrice : CTP.OrderPriceType.LimitPrice,
             Price = (double)(order.LimitPrice ?? 0m),
             Volume = order.Quantity,
-            Offset = CTP.OffsetFlag.Open,
+            Offset = order.IsCloseOrder ? CTP.OffsetFlag.Close : CTP.OffsetFlag.Open,
             OrderRef = order.OrderId.ToString(),
         };
 

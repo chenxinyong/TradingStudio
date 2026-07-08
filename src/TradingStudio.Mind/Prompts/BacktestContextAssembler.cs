@@ -173,14 +173,18 @@ public class BacktestContextAssembler : IContextAssembler<(PerformanceReport Rep
         if (maxDrawdown > 0)
         {
             // 找最大回撤的起止点：从峰值到谷底
-            var peak = r.EquityCurve[0];
-            var trough = r.EquityCurve[0];
+            // 跳过开头可能为 0 的权益点
+            var peak = r.EquityCurve.FirstOrDefault(p => p.Equity > 0);
+            if (peak.Equity <= 0) { sb.AppendLine("(权益数据为空)"); sb.AppendLine(); return; }
+
+            var trough = peak;
             decimal peakEquity = peak.Equity;
             decimal maxDD = 0;
             DateTimeOffset ddStart = peak.Time, ddEnd = trough.Time;
 
             foreach (var point in r.EquityCurve)
             {
+                if (point.Equity <= 0) continue;  // 跳过无效点
                 if (point.Equity > peakEquity)
                 {
                     peakEquity = point.Equity;

@@ -25,10 +25,13 @@ public class MindTool : IToolCommand
     public void ConfigureServices(IServiceCollection services, IConfiguration config)
     {
         // 1. 绑定 MindOptions — 合并 host config + appsettings.local.json
+        //    注意: dotnet run --project 时 CWD 是 repo 根目录，不是项目目录
+        var basePath = Directory.GetCurrentDirectory();
         var mindConfig = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddConfiguration(config)  // host 已加载的配置 (appsettings.json + env vars + CLI args)
-            .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false)
+            .SetBasePath(basePath)
+            .AddConfiguration(config)  // host 已加载的配置
+            .AddJsonFile("appsettings.local.json", optional: true)     // repo root
+            .AddJsonFile("src/TradingStudio.ToolBox/appsettings.local.json", optional: true)
             .Build();
 
         var mindOpts = new MindOptions();
@@ -168,7 +171,8 @@ public class MindTool : IToolCommand
             catch (Exception ex)
             {
                 log.LogError(ex, "{StrategyId} analysis failed", perfReport.StrategyId);
-                Console.Error.WriteLine($"  [{perfReport.StrategyId}] 分析失败: {ex.Message}");
+                Console.Error.WriteLine($"  [{perfReport.StrategyId}] 分析失败: {ex.GetType().Name}: {ex.Message}");
+                Console.Error.WriteLine($"  {ex.StackTrace}");
             }
         }
 

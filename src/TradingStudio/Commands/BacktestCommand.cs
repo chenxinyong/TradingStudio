@@ -1,4 +1,6 @@
-﻿using System.Text.Json;
+﻿using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Strategy;
@@ -25,6 +27,7 @@ public class BacktestCommand
         var startStr = "";
         var endStr = "";
         var continuousDir = "";
+        var enableAi = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -36,6 +39,7 @@ public class BacktestCommand
             else if (args[i] is "--symbols" && i + 1 < args.Length) symbolsPath = args[++i];
             else if (args[i] is "--start" && i + 1 < args.Length) startStr = args[++i];
             else if (args[i] is "--end" && i + 1 < args.Length) endStr = args[++i];
+            else if (args[i] is "--ai") enableAi = true;
         }
 
         if (string.IsNullOrEmpty(configPath))
@@ -209,6 +213,14 @@ public class BacktestCommand
             File.WriteAllText(reportPath, reportJson);
             Console.WriteLine($"  Report saved: {reportPath}");
 
+            // 8. AI 分析（可选）
+            if (enableAi)
+            {
+                Console.WriteLine();
+                Console.WriteLine("── AI Analysis ──");
+                await RunAiAnalysisAsync(report, strategyConfig, reportPath);
+            }
+
             return 0;
         }
         catch (OperationCanceledException)
@@ -281,5 +293,58 @@ public class BacktestCommand
         }
 
         return expanded;
+    }
+
+    /// <summary>
+    /// 使用 TradingStudio.Mind 对回测结果进行 AI 分析。
+    /// 从 appsettings.local.json 或环境变量加载 API Key。
+    /// </summary>
+    private static async Task RunAiAnalysisAsync(
+        EngineReport report, StrategyConfig config, string reportPath)
+    {
+        try
+        {
+            // 加载 Mind 配置（复用 MindTool 的配置加载逻辑）
+            var mindConfig = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
+                .AddJsonFile("appsettings.json", optional: true)
+                .AddJsonFile("appsettings.local.json", optional: true)
+                .AddJsonFile("src/TradingStudio.ToolBox/appsettings.local.json", optional: true)
+                .Build();
+
+            var mindOpts = new TradingStudio.Mind.MindOptions();
+            mindConfig.GetSection("Mind").Bind(mindOpts);
+
+            // 环境变量覆盖
+            var envKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+            if (!string.IsNullOrWhiteSpace(envKey)) mindOpts.AnthropicApiKey = envKey;
+            var envUrl = Environment.GetEnvironmentVariable("ANTHROPIC_BASE_URL");
+            if (!string.IsNullOrWhiteSpace(envUrl)) mindOpts.AnthropicBaseUrl = envUrl;
+
+            mindOpts.Validate();
+
+            var client = TradingStudio.Mind.Clients.MindClientFactory.Create(mindOpts);
+            var assembler = new TradingStudio.Mind.Prompts.BacktestContextAssembler();
+            var analyst = new TradingStudio.Mind.Analysts.BacktestAnalyst(client, assembler);
+
+            foreach (var perfReport in report.StrategyReports)
+            {
+                var result = await analyst.AnalyzeAsync(perfReport, config);
+                var mdPath = Path.ChangeExtension(reportPath,
+                    $".{SanitizeFileName(perfReport.StrategyId)}.analysis.md");
+                await File.WriteAllTextAsync(mdPath, result.MarkdownReport, Encoding.UTF8);
+                Console.WriteLine($"  AI Report: {mdPath}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  AI analysis skipped: {ex.Message}");
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return new string(name.Where(c => !invalid.Contains(c)).ToArray());
     }
 }

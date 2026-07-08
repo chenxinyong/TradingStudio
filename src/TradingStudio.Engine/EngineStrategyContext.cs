@@ -104,11 +104,17 @@ internal class EngineStrategyContext : StrategyContext
         var pos = _portfolio.GetPosition(instrumentId);
         if (pos == null || pos.Quantity == 0)
             throw new InvalidOperationException($"No position to close: {instrumentId}");
-        var ticket = pos.Quantity > 0
-            ? MarketSell(instrumentId, pos.Quantity, "平多")
-            : MarketBuy(instrumentId, -pos.Quantity, "平空");
+        var direction = pos.Quantity > 0 ? OrderDirection.Sell : OrderDirection.Buy;
+        var quantity = Math.Abs(pos.Quantity);
+        var ticket = _execution.Submit(new Order
+        {
+            InstrumentId = instrumentId, Direction = direction,
+            Type = OrderType.Market, Quantity = quantity,
+            Tag = pos.Quantity > 0 ? "平多" : "平空",
+            IsCloseOrder = true,
+        }, StrategyId, _portfolio);
         _log.LogInformation("[{Strategy}] ClosePosition {Inst} x{Qty} → {Status}",
-            StrategyId, instrumentId, Math.Abs(pos.Quantity), ticket.Status);
+            StrategyId, instrumentId, quantity, ticket.Status);
         return ticket;
     }
 

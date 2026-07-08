@@ -64,6 +64,7 @@ public class ExecutionHandler : IExecutionHandler
             StrategyId = strategyId,
             Status = OrderStatus.Submitted,
             CreatedTime = DateTimeOffset.UtcNow,
+            IsCloseOrder = order.IsCloseOrder,
         };
 
         // 风控检查

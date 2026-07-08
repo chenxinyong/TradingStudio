@@ -16,6 +16,8 @@ public class Order
     public OrderStatus Status { get; set; } = OrderStatus.Submitted;
     public int FilledQuantity { get; set; }
     public decimal AvgFillPrice { get; set; }
+    /// <summary>是否为平仓单。false=开仓(默认), true=平仓。</summary>
+    public bool IsCloseOrder { get; init; }
 }
 
 /// <summary>
