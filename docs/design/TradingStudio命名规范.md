@@ -467,7 +467,7 @@ src/
 │   ├── SimulatedExecution.cs ← 模拟成交
 │   └── RiskEngine.cs         ← 风控引擎
 │
-└── TradingStudio.UI/         ← 界面
+└── TradingStudio.Terminal/   ← 界面
 ```
 
 **命名决策：**

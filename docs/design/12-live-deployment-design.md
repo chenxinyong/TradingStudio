@@ -61,7 +61,7 @@
 │  │  └───────────────────────────────────────┘  │  │
 │  │                                            │  │
 │  │  ┌──────────────────────────────────────┐   │  │
-│  │  │  EngineMonitorApi (localhost:5199)   │   │  │
+│  │  │  EngineMonitorApi (localhost:5001)   │   │  │
 │  │  │  GET  /api/health                    │   │  │
 │  │  │  GET  /api/portfolio                 │   │  │
 │  │  │  GET  /api/strategies                │   │  │
@@ -87,9 +87,9 @@
 │  └──────────┘  └──────────┘  └──────────┘       │
 │                                                  │
 │  ┌──────────────────────────────────────────┐   │
-│  │     TradingStudio.UI.exe (UI进程)         │   │
+│  │     TradingStudio.Terminal.exe (UI进程)   │   │
 │  │     WPF 监控面板 · 按需启动 · 可远程      │   │
-│  │     通过 localhost:5199 与引擎通信        │   │
+│  │     通过 localhost:5001 与引擎通信        │   │
 │  └──────────────────────────────────────────┘   │
 │                                                  │
 │  ┌──────────────────────────────────────────┐   │
@@ -113,7 +113,7 @@
 
 ### 3.1 角色定义
 
-| | 引擎进程 (`TradingStudio.exe`) | UI进程 (`TradingStudio.UI.exe`) | 工具进程 (`TradingStudio.ToolBox.exe`) |
+| | 引擎进程 (`TradingStudio.exe`) | UI进程 (`TradingStudio.Terminal.exe`) | 工具进程 (`TradingStudio.ToolBox.exe`) |
 |---|---|---|---|
 | **角色** | 主人 | 临时访客 | 工具箱 |
 | **运行模式** | Windows Service，7×24 | 桌面应用，按需启停 | CLI 工具，一次性运行 |
@@ -163,7 +163,7 @@ host.Run();
 **引擎 ↔ UI 通信**：ASP.NET Core Minimal API，仅监听 localhost。
 
 ```
-引擎进程 (localhost:5199)
+引擎进程 (localhost:5001)
   │
   ├── GET  /api/health          → { status, session, quotes, bars, uptime, ... }
   ├── GET  /api/portfolio       → PortfolioSnapshot (权益/保证金/可用)
@@ -467,7 +467,7 @@ public interface IRiskController
 D:\TradingStudio\
 ├── app\                          ← 应用程序
 │   ├── TradingStudio.exe         ← 引擎进程
-│   ├── TradingStudio.UI.exe      ← UI 进程
+│   ├── TradingStudio.Terminal.exe ← UI 进程
 │   ├── CTPWrapper.dll            ← C++/CLI 封装
 │   ├── thostmduserapi_se.dll     ← CTP 行情 DLL
 │   ├── thosttraderapi_se.dll     ← CTP 交易 DLL

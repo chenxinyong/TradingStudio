@@ -40,7 +40,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  TradingStudio.exe (localhost:5199)  — 引擎进程              │
+│  TradingStudio.exe (localhost:5001)  — 引擎进程              │
 │  ┌────────────────────┐  ┌────────────────────────────────┐  │
 │  │ EngineHub (SignalR) │  │ EngineMonitorApi (REST)         │  │
 │  │  → TickSnapshot     │  │  → GET /api/health              │  │
@@ -52,7 +52,7 @@
 └──────────────────────┬───────────────────────────────────────┘
                        │ WebSocket / HTTP
 ┌──────────────────────▼───────────────────────────────────────┐
-│  TradingStudio.UI.exe  — WPF 监控客户端                      │
+│  TradingStudio.Terminal.exe  — WPF 监控客户端                │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │  EngineHubClient (SignalR → EventBus.Publish)           │  │
 │  └──────────┬─────────────────────────────────────────────┘  │
@@ -76,8 +76,8 @@
 ## 2. 项目结构
 
 ```
-src/TradingStudio.UI/
-├── TradingStudio.UI.csproj          ← WPF + net10.0-windows
+src/TradingStudio.Terminal/
+├── TradingStudio.Terminal.csproj    ← WPF + net10.0-windows
 │
 ├── App.xaml / App.xaml.cs           ← 入口：启动托盘 + Bootstrapper
 │
@@ -746,7 +746,7 @@ public class EngineHubClient : IDisposable
 
 | # | 任务 | 时间 | 参考 |
 |---|------|------|------|
-| 1.1 | 创建 `TradingStudio.UI.csproj` (WPF + net10.0) | 20min | Editor.App.csproj |
+| 1.1 | 创建 `TradingStudio.Terminal.csproj` (WPF + net10.0) | 20min | Editor.App.csproj |
 | 1.2 | 实现 `Core/` 下类型：TradingCommand, CommandRegistry, KeybindingRegistry, EventBus, Key/KeyGesture/ModifierKeys | 1h | 直接复制 Editor.Core 对应文件，改命名空间 |
 | 1.3 | 实现 `Core/Models/` 数据模型 | 30min | DashboardSnapshot, AlertRecord |
 | 1.4 | 实现 `App.xaml.cs` + `Bootstrapper.ConfigureServices()` | 40min | Editor.App 对应文件 |

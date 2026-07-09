@@ -61,7 +61,7 @@ TradingStudio/
 
 未实现 (推迟 Phase 4):
 ├── TradingStudio.Research/        — 量化研究 (Python + Jupyter 替代)
-└── TradingStudio.UI/              — WPF 桌面 (设计完备, 14-wpf-monitoring-client-design.md)
+└── TradingStudio.Terminal/        — WPF 桌面 (实际实现，见 15-monitoring-client-codeeditor-architecture.md / wpf-ui-design-final.md；doc 14 已归档)
 ```
 
 **与原始设计的差异：**

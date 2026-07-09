@@ -2,6 +2,13 @@
 
 > Phase 3a MVP：回测报告 LLM 分析。不做大而全的"AI Bloomberg Terminal"，从一个能跑通的分析场景开始。
 
+> 📌 **实现现状对账（2026-07-09）** — 代码已超出本 MVP 设计，以下几处与文档不符：
+> - **CLI 入口已迁移** — 设计中的 `Mind/Commands/AnalyzeCommand.cs`（`dotnet run -- analyze`）未按此建；实际入口在 [ToolBox/MindTool/MindTool.cs](../../src/TradingStudio.ToolBox/MindTool/MindTool.cs) 及 [BacktestCommand.cs](../../src/TradingStudio/Commands/BacktestCommand.cs) 内联触发。
+> - **`IMindAnalyst` 门面接口未实现** — 各 Analyst 未共享统一接口，`BacktestAnalysisResult` 独立成文件。若后续新增 Analyst 再考虑抽取。
+> - **依赖多引了 `TradingStudio.Strategy`** — 因 `ChanLunAnalyst` 需要 `ChanLunResult`（位于 Strategy 项目）。"不依赖 Data / 不引 AI SDK" 的约束仍成立。
+> - **已提前实现（设计标为"后续"）** — `OpenAiClient`、`MindClientFactory`、`ChanLunAnalyst` + `ChanLunContextAssembler` 均已落地。
+> - **Prompt 模板内联** — 未建 `Prompts/Templates/`，模板以 const 字符串内联（设计 §11 已认可首版可如此）。
+
 ---
 
 ## 1. 定位与边界

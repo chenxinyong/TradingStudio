@@ -1009,6 +1009,8 @@ Web 部署：Vue 静态文件 + ASP.NET Core API（同进程，不增加服务�
 
 对应 CLAUDE.md 的规划，按依赖关系分层：
 
+> 📌 **历史设想（未按此实现）** — 下列命名空间是早期第一性原理探索的大架构。实际落地为精简版：`Risk`/`Execution`/`Backtest` 合入 `TradingStudio.Engine`，`Api` 内嵌于主程序 `TradingStudio`，`UI.Web`(Vue) 未做，监控端为单一 WPF 项目 `TradingStudio.Terminal`。现行架构见 [TradingStudio架构设计-精简版.md](TradingStudio架构设计-精简版.md) 与 [TradingStudio命名规范.md](TradingStudio命名规范.md)。
+
 ```
 TradingStudio.Core           — 核心模型、枚举、接口（无外部依赖）
 TradingStudio.Data           — 数据存储与聚合实现

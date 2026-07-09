@@ -138,7 +138,7 @@ public interface IDataFeed
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  7. API 层     EngineMonitorApi (localhost:5199)    [Phase 3]│
+│  7. API 层     EngineMonitorApi (localhost:5001)    [Phase 3]│
 │                GET 快照查询 + POST 控制 + SignalR 实时推送    │
 ├─────────────────────────────────────────────────────────────┤
 │  6. 策略层     StrategyContainer                   [Phase 2a]│
@@ -243,8 +243,8 @@ src/
 │   └── Examples/
 │       └── MaCrossStrategy.cs             (✅ 已实现)
 │
-├── TradingStudio.UI/                        — (NEW) WPF 监控客户端
-│   ├── TradingStudio.UI.csproj              → net10.0-windows, UseWPF, SignalR.Client
+├── TradingStudio.Terminal/                  — (NEW) WPF 监控客户端
+│   ├── TradingStudio.Terminal.csproj        → net10.0-windows, UseWPF, SignalR.Client
 │   ├── App.xaml / App.xaml.cs               WPF 应用入口
 │   ├── MainWindow.xaml / MainWindow.xaml.cs  Dashboard 主窗口 (Phase 3 实现)
 │   │                                          Dashboard-first: 1 主面板 + 按需详情窗口
@@ -307,8 +307,8 @@ TradingStudio.Research (C# 研究环境)
   ├── TradingStudio.Engine (BarSeries 分析 + 指标计算)
   └── ScottPlot (图表) + Microsoft.Data.Sqlite (直读 Bar)
 
-TradingStudio.UI (WPF 监控客户端 — Phase 3)
-  └── SignalR.Client → TradingStudio (localhost:5199/hubs/engine)
+TradingStudio.Terminal (WPF 监控客户端 — Phase 3)
+  └── SignalR.Client → TradingStudio (localhost:5001/hubs/engine)
 ```
 
 ### 3.4 引擎内部结构（组件关系总图）
@@ -1632,7 +1632,7 @@ TradingStudio.exe import-jinshuyuan [args] → RAR 导入 (Phase 1)
 │  │  (Windows Service, 开机自启)                   │        │
 │  │                                               │        │
 │  │  ┌─────────────────────────────────────┐      │        │
-│  │  │  ASP.NET Core (localhost:5199)       │      │        │
+│  │  │  ASP.NET Core (localhost:5001)       │      │        │
 │  │  │  ├── REST API (EngineMonitorApi)     │      │        │
 │  │  │  └── SignalR Hub (EngineHub)         │      │        │
 │  │  └────────────┬────────────────────────┘      │        │
@@ -1653,8 +1653,8 @@ TradingStudio.exe import-jinshuyuan [args] → RAR 导入 (Phase 1)
 │  └──────────────────────────────────────────────┘        │
 │                                                           │
 │  ┌──────────────────────────────────────────────┐        │
-│  │  TradingStudio.UI.exe  (桌面快捷方式, 按需)    │        │
-│  │  SignalR Client → localhost:5199/hubs/engine │        │
+│  │  TradingStudio.Terminal.exe  (桌面快捷方式, 按需) │        │
+│  │  SignalR Client → localhost:5001/hubs/engine │        │
 │  │  面板: 总览 / 策略列表 / 订单 / 告警 / K线    │        │
 │  └──────────────────────────────────────────────┘        │
 └──────────────────────────────────────────────────────────┘
@@ -1774,7 +1774,7 @@ TradingStudio.exe import-jinshuyuan [args] → RAR 导入 (Phase 1)
 | `ResearchContext + BarReader` | Research/ | `TradingStudio.Research` | ✅ 完整 |
 | `BarSeries + ReturnsAnalyzer` | Research/ | `TradingStudio.Research.Stats` | ✅ 完整 |
 | `ChartHelper` | Research/Viz/ | `TradingStudio.Research.Viz` | ✅ 完整 (ScottPlot) |
-| `TradingStudio.UI` | src/TradingStudio.UI/ | `TradingStudio.UI` | ✅ 项目已建 (Phase 3) |
+| `TradingStudio.Terminal` | src/TradingStudio.Terminal/ | `TradingStudio.Terminal` | ✅ 项目已建 (Phase 3) |
 | `TradingStudio.Engine.Tests` | test/ | — | ✅ 项目已建 |
 
 ---
@@ -1855,7 +1855,7 @@ Day 3: 端到端验证
 ├── CtpLiveFeed (CtpMdAdapter → DataEvent 流)
 ├── ExecutionHandler 实盘模式 (CTP TraderApi)
 ├── TradingStudio 实盘模式 (Windows Service + localhost API + SignalR)
-├── TradingStudio.UI (WPF 监控面板，SignalR-only + OxyPlot)
+├── TradingStudio.Terminal (WPF 监控面板，SignalR-only + OxyPlot)
 ├── 策略配置热重载 (日终)
 ├── Simnow 模拟盘验证
 └── 小合约实盘

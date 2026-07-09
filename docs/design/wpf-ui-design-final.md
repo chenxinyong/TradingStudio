@@ -37,7 +37,7 @@
 ## 1. 整体架构
 
 ```
-TradingStudio.UI.exe (WPF)              TradingStudio.exe (localhost:5199)
+TradingStudio.Terminal.exe (WPF)       TradingStudio.exe (localhost:5001)
         │                                        │
         │  SignalR Client                         │  SignalR Hub
         │  REST API                               │  REST API
@@ -107,7 +107,7 @@ TradingStudio.UI.exe (WPF)              TradingStudio.exe (localhost:5199)
 │  │ 15:29:58 [INF] quotes=1,234,567 bars=98,765                    │ │
 │  └────────────────────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────────┤
-│ Ln 1, Col 1  UTF-8  ● 已连接 localhost:5199  策略:1  延迟:3ms      │
+│ Ln 1, Col 1  UTF-8  ● 已连接 localhost:5001  策略:1  延迟:3ms      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -704,7 +704,7 @@ public interface IPluginContext
 ## 16. MVVM 代码结构
 
 ```
-src/TradingStudio.UI/
+src/TradingStudio.Terminal/
 ├── App.xaml / App.xaml.cs
 ├── Bootstrapper.cs                    ← DI + Plugin 加载
 │

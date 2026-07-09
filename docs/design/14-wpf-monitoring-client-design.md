@@ -1,8 +1,13 @@
-# 14 — WPF 监控客户端设计
+# 14 — WPF 监控客户端设计（已归档）
 
+> ⚠️ **本文档已归档（2026-07-09）** — 描述的多窗口 + 系统托盘客户端未按此实现。
+> 实际交付的是 `TradingStudio.Terminal`（VS Code / Bloomberg 风格的面板 + 命令面板架构）。
+> **现行治理文档**：[15-monitoring-client-codeeditor-architecture.md](15-monitoring-client-codeeditor-architecture.md) 与 [wpf-ui-design-final.md](wpf-ui-design-final.md)。
+> 本文仅保留 SignalR 推送契约与 Dashboard-first 理念作为历史参考；本文中的 `TradingStudio.UI` 项目名、`DashboardWindow`/`StrategyDetailWindow`/`OrderHistoryWindow` 多窗口模型、`NotifyIcon` 系统托盘均**未实现**。
+>
 > 量化交易系统的 WPF 桌面监控客户端。Dashboard-first 架构，SignalR 实时推送 + 系统托盘告警。
 >
-> **版本**: v1.0 | **日期**: 2026-06-15 | **状态**: 设计中，Phase 1-3 待实施
+> **版本**: v1.0 | **日期**: 2026-06-15 | **状态**: 已归档（被 doc 15 / wpf-ui-design-final 取代）
 >
 > **设计原则** (第一性原理验证):
 > 1. Dashboard-first — 一个主面板看到全局，异常可钻入详情
@@ -113,7 +118,7 @@ TradingStudio.UI.exe
 ## 3. 通信架构
 
 ```
-TradingStudio.exe (localhost:5199)       TradingStudio.UI.exe
+TradingStudio.exe (localhost:5001)       TradingStudio.UI.exe
 ┌──────────────────────────────┐         ┌─────────────────────────┐
 │ EngineHubPushService (1s)    │──WS──→  │ EngineHubClient          │
 │  ├─ TickSnapshot             │         │  ├─ OnTickSnapshot()     │
