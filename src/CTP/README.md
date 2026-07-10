@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────┐
-│  TradingStudio.Ctp (C# 适配层)          │  ← CtpMdAdapter: Quote → Channel<TickRecord>
+│  TradingStudio/Live/ (C# 适配层)        │  ← CtpLiveFeed: Quote → Channel<TickRecord>
 ├─────────────────────────────────────────┤
 │  CTP.Wrapper (C++/CLI 托管封装)          │  ← managed ref class MdApi / TraderApi
 │  ├── MdApi.h/.cpp      行情接口          │
@@ -35,7 +35,7 @@ MdSpi::OnRtnDepthMarketData                TraderSpi::OnRtnOrder/Trade
 MdApi::OnQuote event (托管)                TraderApi::OnOrder/OnTrade event (托管)
   │                                                │
   ▼ (C# 订阅)                                      ▼ (C# 订阅)
-CtpMdAdapter.OnQuote                       CtpTraderBridge.OnOrder/OnTrade
+CtpLiveFeed.OnQuote                        CtpTraderBridge.OnOrder/OnTrade
   │                                                │
   ▼                                                ▼
 Channel<TickRecord>                        Channel<OrderEvent>
@@ -82,15 +82,17 @@ MdApi::OnQuote (托管 event)
 
 ## C# 适配层
 
-`TradingStudio.Ctp/CtpMdAdapter.cs` — 唯一的 C# 适配代码：
+行情适配在 `src/TradingStudio/Live/CtpLiveFeed.cs`（`CtpLiveFeed : IDataFeed`）：
 
 ```csharp
-var md = new CTP.MdApi();
-md.OnQuote += (instId, quote) => {
-    var tick = ConvertToTickRecord(quote);  // 42字段 → 80B
-    _channel.Writer.TryWrite(tick);         // → BarAggregator
+var mdApi = new CTP.MdApi();
+mdApi.OnQuote += q => {
+    var tick = ToTickRecord(q);                          // CTP.Quote(42字段) → 80B TickRecord
+    merged.Writer.TryWrite((instId, tick, tradingDay));  // → BarAggregator
+    PersistChannel.Writer.TryWrite((instId, q, tradingDay)); // → Tick CSV 落盘 (全量)
 };
-md.Connect(front, brokerId, userId, password);
+mdApi.Connect(_opts.MdFront);
+mdApi.Subscribe(batch);
 ```
 
-交易侧适配在 `TradingStudio.Live/CtpTraderBridge.cs`，直接使用 `CTP.TraderApi`。
+交易侧适配在 `src/TradingStudio/Live/CtpTraderBridge.cs`，直接使用 `CTP.TraderApi`（OnOrder/OnTrade → FillChannel）。

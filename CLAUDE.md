@@ -59,7 +59,7 @@ TradingStudio.Mind           — LLM 模块（研究助手、策略解释、异�
 TradingStudio.Terminal              — 监控与管理界面
 ```
 
-> **实际实现映射（与代码对齐）**：`Risk` / `Execution` / `Backtest` 三层目前统一在 `TradingStudio.Engine` 内，未拆为独立项目；另有 `TradingStudio.Research`（统计/可视化）与 `TradingStudio`（.NET Host 主程序）。`TradingStudio.Ctp` 为空占位项目（无 .cs、无引用），真实 CTP 适配在 `TradingStudio/Live/`（CtpLiveFeed / CtpTraderBridge）。
+> **实际实现映射（与代码对齐）**：`Risk` / `Execution` / `Backtest` 三层目前统一在 `TradingStudio.Engine` 内，未拆为独立项目；另有 `TradingStudio.Research`（统计/可视化）与 `TradingStudio`（.NET Host 主程序）。CTP 适配在 `TradingStudio/Live/`（CtpLiveFeed / CtpTraderBridge）——早期规划的独立 `TradingStudio.Ctp` 适配层未落地，已删除。
 
 ### 当前实现 (2026-07-10)
 
@@ -79,7 +79,6 @@ src/
 ├── TradingStudio.Mind/      LLM 模块 (Anthropic/OpenAI 客户端, BacktestAnalyst, ChanLunAnalyst)
 ├── TradingStudio.Research/  研究工具 (BarReader, ReturnsAnalyzer, DrawdownAnalyzer, ScottPlot 可视化)
 ├── TradingStudio.Terminal/  WPF 监控客户端 (MVVM + SignalR 实时, Dashboard/Chart/Replay)
-├── TradingStudio.Ctp/       ⚠️ 空占位项目 (0 .cs, 无引用) — 真实 CTP 适配见 TradingStudio/Live/
 ├── TradingStudio.ToolBox/   数据工具 CLI（独立项目，不依赖主程序）
 │   └── 命令: import / import-jinshuyuan / import-url / verify / merge / append / build-periods / analyze / continuous
 ├── TradingStudio/           引擎主程序 (.NET Host + DI + Serilog)

@@ -135,8 +135,7 @@ TradingStudio/
 │   ├── TradingStudio.Research/ 研究工具（统计指标 + ScottPlot 可视化）
 │   ├── TradingStudio.Terminal/ WPF 监控客户端（Dashboard + 实时图表 + 回放）
 │   ├── TradingStudio.ToolBox/ 数据工具 CLI（独立控制台，9 命令）
-│   ├── TradingStudio/         引擎主程序（.NET Host + DI + Serilog + Live/CtpLiveFeed）
-│   ├── TradingStudio.Ctp/     ⚠️ 空占位项目（真实 CTP 适配在 TradingStudio/Live/）
+│   ├── TradingStudio/         引擎主程序（.NET Host + DI + Serilog + Live/CtpLiveFeed/CtpTraderBridge）
 │   └── Scripts/               Python 脚本（品种生成、数据导入）
 │
 ├── test/
