@@ -48,7 +48,7 @@
 ## 命名空间结构
 
 ```
-TradingStudio.Core           — 核心抽象、消息总线、公共接口
+TradingStudio.Core           — 核心抽象、领域模型、公共接口
 TradingStudio.Data           — 行情接入、数据存储、K线合成
 TradingStudio.ToolBox        — 数据工具 CLI（导入/导出/验证/转换），独立控制台项目
 TradingStudio.Risk            — 风控引擎
@@ -59,24 +59,32 @@ TradingStudio.Mind           — LLM 模块（研究助手、策略解释、异�
 TradingStudio.Terminal              — 监控与管理界面
 ```
 
-### 当前实现 (2026-06-23)
+> **实际实现映射（与代码对齐）**：`Risk` / `Execution` / `Backtest` 三层目前统一在 `TradingStudio.Engine` 内，未拆为独立项目；另有 `TradingStudio.Research`（统计/可视化）与 `TradingStudio`（.NET Host 主程序）。`TradingStudio.Ctp` 为空占位项目（无 .cs、无引用），真实 CTP 适配在 `TradingStudio/Live/`（CtpLiveFeed / CtpTraderBridge）。
+
+### 当前实现 (2026-07-10)
 
 ```
 src/
 ├── CTP/
 │   ├── SDK/               CTP 6.7.13 原生库 (include/lib/dll)
 │   └── Wrapper/           C++/CLI 封装 (CTP.Quote, CTP.MdApi, CTP.TraderApi)
-├── TradingStudio.Core/    核心模型
+├── TradingStudio.Core/    核心模型 + 抽象 (Models, Strategy, Risk, Indicators, Position)
 │   └── Models/            Exchange, Future, FutureRegistry, TickRecord, Bar, ContractCodeGenerator
 ├── TradingStudio.Data/    数据聚合 + 存储
 │   ├── Aggregation/       BarAggregator, DailyBarAggregator, MultiBarAggregator
 │   ├── Import/            CsvTickImporter, TickImportService, JinshuyuanImportService
 │   └── Storage/           DuckDBStore, SqliteBarStore, TickCsvWriter, BuildPeriodsService
-├── TradingStudio.Ctp/       C# 适配层 (CtpMdAdapter: Quote→Channel<TickRecord>)
+├── TradingStudio.Engine/    回测/实盘引擎 (TradingEngine, ExecutionHandler, PortfolioManager, RiskController, StrategyContainer)
+├── TradingStudio.Strategy/  策略库 (ChanLun 缠论: 分型/笔/中枢, DonchianTrend, SmaMacd, MtfChanLun)
+├── TradingStudio.Mind/      LLM 模块 (Anthropic/OpenAI 客户端, BacktestAnalyst, ChanLunAnalyst)
+├── TradingStudio.Research/  研究工具 (BarReader, ReturnsAnalyzer, DrawdownAnalyzer, ScottPlot 可视化)
+├── TradingStudio.Terminal/  WPF 监控客户端 (MVVM + SignalR 实时, Dashboard/Chart/Replay)
+├── TradingStudio.Ctp/       ⚠️ 空占位项目 (0 .cs, 无引用) — 真实 CTP 适配见 TradingStudio/Live/
 ├── TradingStudio.ToolBox/   数据工具 CLI（独立项目，不依赖主程序）
 │   └── 命令: import / import-jinshuyuan / import-url / verify / merge / append / build-periods / analyze / continuous
 ├── TradingStudio/           引擎主程序 (.NET Host + DI + Serilog)
 │   ├── Program.cs           入口（live / collect / backtest）
+│   ├── Live/                CtpLiveFeed (MdApi→Tick), CtpTraderBridge (TraderApi), ContractActivityTracker
 │   ├── Services/            CollectService, LiveDataCollector, QuotePipeline, PeriodMaintainer, SessionScheduler
 │   ├── Commands/            BacktestCommand
 │   ├── Options/             CollectOptions
@@ -86,7 +94,9 @@ src/
 └── test/
     ├── TradingStudio.Core.Tests/   17 tests — TickRecord, Bar, CsvTickRecord
     ├── TradingStudio.Data.Tests/   16 tests — BarAggregator, MultiBarAggregator, CsvTickImporter
-    └── TradingStudio.Engine.Tests/ 116 tests — TradingEngine, Strategy, Execution
+    ├── TradingStudio.Engine.Tests/ 121 tests — TradingEngine, Strategy, Execution, Risk, Portfolio
+    ├── ChanLunTest/                手动 demo (Program.cs，非自动化，不计入 154)
+    └── TradingStudio.SignalRContractTest/  手动 demo (SignalR 连通性，非自动化)
 ```
 
 ### 三种运行模式
@@ -257,7 +267,7 @@ main ← feat/* ← fix/* ← chore/*
 **规则：**
 - 从 `main` 创建分支，完成后合并回 `main`
 - 不在 `main` 上直接开发大于单 commit 的功能
-- 合并前确保测试全绿（当前：149/149 — Core 17 + Data 16 + Engine 116）
+- 合并前确保测试全绿（当前：154/154 — Core 17 + Data 16 + Engine 121）
 - 小修复（<20行、单文件、编译器可验证）可直接在 `main` 提交
 - 实验性工作（网格搜索、策略探索）产出放在 gitignored 目录（`configs/grid/`、`configs/batch/`）
 
