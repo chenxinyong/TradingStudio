@@ -51,7 +51,7 @@
                         回测模式             实盘模式
                     ┌───────┴───────┐   ┌─────┴──────┐
                     │ HistoricalFeed│   │ CtpLiveFeed │
-                    │ (SQLite/CSV)  │   │ (CtpMdAdapter│
+                    │ (SQLite/CSV)  │   │ (TS/Live)   │
                     └───────────────┘   └────────────┘
                           │                   │
                     ┌─────┴─────┐      ┌─────┴──────┐
@@ -202,9 +202,9 @@ src/
 │       ├── IRiskRule.cs
 │       └── RiskCheckResult.cs
 │
-├── TradingStudio.Ctp/                      — (已有) C# 适配层
-│   ├── TradingStudio.Ctp.csproj
-│   └── CtpMdAdapter.cs                    namespace: TradingStudio.Ctp
+├── TradingStudio/Live/                     — (已有) C# CTP 适配层
+│   ├── CtpLiveFeed.cs                     行情: mdApi.OnQuote → Channel<TickRecord>
+│   └── CtpTraderBridge.cs                 交易: OnOrder/OnTrade → FillChannel  (namespace: TradingStudio.Live)
 │
 ├── TradingStudio.Data/                     — 数据聚合 + 存储 + 导入
 │   ├── TradingStudio.Data.csproj
@@ -1161,7 +1161,7 @@ SQLite → BarEvent 流。
 
 ### 9.3 CtpLiveFeed（Phase 3）
 
-包装 CtpMdAdapter → 统一 DataEvent 流。
+包装 CtpLiveFeed（TradingStudio/Live/）→ 统一 DataEvent 流。
 
 ---
 
@@ -1728,7 +1728,7 @@ TradingStudio.exe import-jinshuyuan [args] → RAR 导入 (Phase 1)
 | `CsvTickImporter` | Data/Import/ | ✅ HistoricalTickFeed 读 CSV |
 | `JinshuyuanImportService` | Data/Import/ | ⬜ 历史数据批量导入 |
 | `TickImportService` | Data/Import/ | ⬜ Phase 2b 导入管线 |
-| `CtpMdAdapter` | TradingStudio.Ctp/ | ⬜ Phase 3 CtpLiveFeed 包装 |
+| `CtpLiveFeed` | TradingStudio/Live/ | ✅ 已实现 (live 模式) |
 | `CollectService` | TradingStudio/Services/ | ⬜ Phase 3 实时采集集成 |
 | `SessionScheduler` | TradingStudio/Services/ | ✅ Phase 3 交易时段识别 |
 | `HealthMonitor` | TradingStudio/Services/ | ⬜ Phase 3 系统健康监控 |
@@ -1852,7 +1852,7 @@ Day 3: 端到端验证
 ### Phase 3: 实盘对接（2-3 周）
 
 ```
-├── CtpLiveFeed (CtpMdAdapter → DataEvent 流)
+├── CtpLiveFeed (TradingStudio/Live/ → DataEvent 流)
 ├── ExecutionHandler 实盘模式 (CTP TraderApi)
 ├── TradingStudio 实盘模式 (Windows Service + localhost API + SignalR)
 ├── TradingStudio.Terminal (WPF 监控面板，SignalR-only + OxyPlot)

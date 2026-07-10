@@ -241,7 +241,7 @@ app.MapGet("/health", () => new
       "Default": "Information",
       "Override": {
         "TradingStudio.Data": "Debug",       // 开发时更详细
-        "TradingStudio.Ctp": "Information"
+        "TradingStudio.Live": "Information"
       }
     },
     "WriteTo": [

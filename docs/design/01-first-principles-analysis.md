@@ -3,6 +3,8 @@
 > **项目**：TradingStudio — 覆盖股票与期货的个人量化交易工作室
 > **方法论**：不参考任何现有系统。从最基本真理出发，逐层推导每一个设计决策。
 > **推导记号**：`→` 表示推导步骤。`∨` 表示分支选项。`✅/❌/⚠️` 表示判定。
+>
+> ⚠️ **历史文档**：这是最初的第一性原理推导，含 P/Invoke（`CtpMdProvider`）等早期设想。CTP 后改为 C++/CLI + `TradingStudio/Live/CtpLiveFeed`，占位项目 `TradingStudio.Ctp` 已删除。保留原文作设计溯源，当前架构以 [CLAUDE.md](../../CLAUDE.md) 为准。
 
 ---
 

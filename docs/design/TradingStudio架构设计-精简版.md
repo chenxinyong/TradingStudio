@@ -41,19 +41,19 @@
 
 ---
 
-## 2. 精简架构：6 个项目（实际实现，2026-06-23）
+## 2. 精简架构：5 个核心项目（实际实现，2026-07-10）
 
 ```
 TradingStudio/
 ├── TradingStudio.Core/           — 核心抽象 (接口+共享类型+技术指标+CsvTickRecord)
-├── TradingStudio.Ctp/             — C# 适配层 (CTP C++ bridge → Channel<Tick>)
 ├── TradingStudio.Data/            — 行情接入+数据存储+K线合成+BuildPeriodsService
 ├── TradingStudio.Engine/          — 策略引擎+回测引擎+执行+风控+策略日志
 ├── TradingStudio/                 — 控制台主机 (live/collect/backtest + REST API)
+│   ├── Live/                     CtpLiveFeed (行情) + CtpTraderBridge (交易) — C# 适配层
 │   ├── Services/                 PeriodMaintainer, QuotePipeline, LiveDataCollector
 │   └── Commands/                 BacktestCommand
 ├── TradingStudio.ToolBox/         — 数据工具 CLI (import/verify/append/build-periods/...)
-└── test/                          — 测试 (Core 17 + Data 16 + Engine 116 = 149 tests)
+└── test/                          — 测试 (Core 17 + Data 16 + Engine 121 = 154 tests)
 
 外部依赖:
 ├── CTP/Wrapper/                   — C++/CLI 封装 (CTPWrapper.dll)
