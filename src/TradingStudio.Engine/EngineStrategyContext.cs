@@ -125,7 +125,7 @@ internal class EngineStrategyContext : StrategyContext
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Buy,
             Type = OrderType.Limit, Quantity = quantity, LimitPrice = limitPrice,
-        }, StrategyId);
+        }, StrategyId, _portfolio);
     }
 
     public override OrderTicket LimitSell(string instrumentId, int quantity, decimal limitPrice)
@@ -145,7 +145,7 @@ internal class EngineStrategyContext : StrategyContext
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Buy,
             Type = OrderType.Stop, Quantity = quantity, StopPrice = stopPrice,
-        }, StrategyId);
+        }, StrategyId, _portfolio);
     }
 
     public override OrderTicket StopSell(string instrumentId, int quantity, decimal stopPrice)
