@@ -17,8 +17,17 @@ public class ExecutionHandler : IExecutionHandler
     private readonly ILogger _log;
     private readonly Dictionary<string, int> _lastCumulativeVolume = new();
     private readonly Dictionary<string, int> _strategyPriority = new();
+    private readonly Dictionary<string, LimitRef> _limitRef = new();
     private readonly object _sync = new();
     private long _nextOrderId = 1;
+
+    /// <summary>逐合约跟踪"上一交易日收盘价"，用作当日涨跌停基准（近似前结算价）。</summary>
+    private sealed class LimitRef
+    {
+        public DateOnly Day;
+        public double LastClose;
+        public double? PrevDayClose;
+    }
 
     public bool IsLive { get; set; }
     public Action<Order>? SendToExchange { get; set; }
@@ -191,6 +200,10 @@ public class ExecutionHandler : IExecutionHandler
         // 实盘模式：市价单已在 CTP 成交，本地不撮合
         if (IsLive && order.Type == OrderType.Market) return null;
 
+        // 涨跌停锁定：涨停无法买入、跌停无法卖出（CTP 采集时按 UpperLimit/LowerLimitPrice 标记 Flags）
+        if (tick.IsUpperLimit && order.Direction == OrderDirection.Buy) return null;
+        if (tick.IsLowerLimit && order.Direction == OrderDirection.Sell) return null;
+
         var fillQty = Math.Min(order.Quantity - order.FilledQuantity, remainingVolume);
         if (fillQty <= 0) return null;
 
@@ -257,18 +270,22 @@ public class ExecutionHandler : IExecutionHandler
     {
         var fills = new List<OrderEvent>();
 
-        // 锁内获取快照
+        // 锁内获取快照 + 更新/取得当日涨跌停基准价
+        double limitRefPrice;
         List<Order> pending;
-        lock (_sync) { pending = _activeOrders
-            .Where(o => o.InstrumentId == bar.InstrumentId)
-            .OrderBy(o => _strategyPriority.GetValueOrDefault(o.StrategyId, int.MaxValue))
-            .ThenBy(o => o.OrderId)
-            .ToList();
+        lock (_sync)
+        {
+            limitRefPrice = UpdateAndGetLimitRef(bar);
+            pending = _activeOrders
+                .Where(o => o.InstrumentId == bar.InstrumentId)
+                .OrderBy(o => _strategyPriority.GetValueOrDefault(o.StrategyId, int.MaxValue))
+                .ThenBy(o => o.OrderId)
+                .ToList();
         }
 
         foreach (var order in pending)
         {
-            var fill = MatchBar(order, bar, future);
+            var fill = MatchBar(order, bar, future, limitRefPrice);
             if (fill != null)
             {
                 fills.Add(fill);
@@ -284,11 +301,32 @@ public class ExecutionHandler : IExecutionHandler
         return fills;
     }
 
+    /// <summary>
+    /// 更新并返回该合约当日涨跌停基准价（= 上一交易日收盘价，近似前结算价）。
+    /// 首见该合约或尚无前一交易日数据时返回 0，调用方退回本 Bar 开盘价。
+    /// 必须在 _sync 锁内调用。
+    /// </summary>
+    private double UpdateAndGetLimitRef(Bar bar)
+    {
+        if (!_limitRef.TryGetValue(bar.InstrumentId, out var r))
+        {
+            _limitRef[bar.InstrumentId] = new LimitRef { Day = bar.TradingDay, LastClose = bar.CloseDouble };
+            return 0; // 首见，无前日基准
+        }
+        if (bar.TradingDay > r.Day)
+        {
+            r.PrevDayClose = r.LastClose; // 上一交易日最后收盘 → 当日基准，日内保持不变
+            r.Day = bar.TradingDay;
+        }
+        r.LastClose = bar.CloseDouble;
+        return r.PrevDayClose ?? 0;
+    }
+
     /// <summary>单笔订单最大成交量占 Bar 成交量的比例（防止吃光整根 Bar）</summary>
     private const double MaxVolumeParticipation = 0.10;
 
     /// <summary>用 Bar 撮合一个订单。前进偏差防护：用本 Bar Open 成交市价单。</summary>
-    private OrderEvent? MatchBar(Order order, Bar bar, Future future)
+    private OrderEvent? MatchBar(Order order, Bar bar, Future future, double limitRefPrice)
     {
         // 实盘模式：市价单已在 CTP 成交，本地不撮合
         if (IsLive && order.Type == OrderType.Market) return null;
@@ -301,20 +339,23 @@ public class ExecutionHandler : IExecutionHandler
         var maxFillByVolume = Math.Max(1, (int)(bar.Volume * MaxVolumeParticipation));
         var fillQty = Math.Min(requestedQty, maxFillByVolume);
 
-        // 涨跌停模拟：涨停买入/跌停卖出无法成交（无对手方）
+        // 涨跌停模拟：涨停无法买入、跌停无法卖出（无对手方）。
+        // 基准价优先用"上一交易日收盘价"（近似前结算价）；首日/无历史时退回本 Bar 开盘价。
         var limitPct = (double)(future.PriceLimitPct > 0 ? future.PriceLimitPct : 0.10m);
-        var prevClose = bar.OpenDouble; // 近似：用开盘价替代前结算价
-        var upperLimit = prevClose * (1 + limitPct);
-        var lowerLimit = prevClose * (1 - limitPct);
+        var refPrice = limitRefPrice > 0 ? limitRefPrice : bar.OpenDouble;
+        var tickSize = (double)(future.TickSize > 0 ? future.TickSize : 1m);
+        // 交易所涨跌停价对齐到最小变动价位（四舍五入到 tick），并消除浮点边界误差
+        var upperLimit = Math.Round(refPrice * (1 + limitPct) / tickSize) * tickSize;
+        var lowerLimit = Math.Round(refPrice * (1 - limitPct) / tickSize) * tickSize;
         var atUpperLimit = bar.HighDouble >= upperLimit;
         var atLowerLimit = bar.LowDouble <= lowerLimit;
+        // 涨停买不进 / 跌停卖不出（任何订单类型：市价、限价、止损）
+        if (order.Direction == OrderDirection.Buy && atUpperLimit) return null;
+        if (order.Direction == OrderDirection.Sell && atLowerLimit) return null;
 
         switch (order.Type)
         {
             case OrderType.Market:
-                // 涨停买不进 / 跌停卖不出
-                if (order.Direction == OrderDirection.Buy && atUpperLimit) return null;
-                if (order.Direction == OrderDirection.Sell && atLowerLimit) return null;
                 // 市价单滑点: 买吃Ask(+1跳), 卖砸Bid(-1跳), 最小成本穿越价差
                 var tick = future.TickSize > 0 ? future.TickSize : 1m;
                 fillPrice = order.Direction == OrderDirection.Buy
