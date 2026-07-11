@@ -48,7 +48,7 @@ public class TradeStatistics
     // ── 费用 ──
     public decimal TotalFees { get; init; }
     public decimal TotalSlippage { get; init; }
-    public decimal NetProfitAfterCosts { get; init; }  // TotalNetProfit - Fees - Slippage
+    public decimal NetProfitAfterCosts { get; init; }  // = TotalNetProfit（Trade.PnL 已扣费用、滑点已含在成交价，不重复扣）
 
     // ── 时间分布 ──
     public int ActiveDays { get; init; }               // 有交易的天数
@@ -143,7 +143,8 @@ public class TradeStatistics
 
             TotalFees = decimal.Round(totalFees, 2),
             TotalSlippage = decimal.Round(totalSlippage, 2),
-            NetProfitAfterCosts = decimal.Round(totalNet - totalFees - totalSlippage, 2),
+            // Trade.PnL 已扣手续费，滑点已含在成交价里 → 不再重复扣（修复原双重扣减）
+            NetProfitAfterCosts = decimal.Round(totalNet, 2),
 
             ActiveDays = activeDays,
             TradesPerDay = activeDays > 0 ? Math.Round((double)trades.Count / activeDays, 2) : 0,
