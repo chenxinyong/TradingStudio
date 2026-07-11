@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using TradingStudio.Core.Engine;
+using TradingStudio.Core.Indicators;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Risk;
 
@@ -18,6 +19,7 @@ public class ExecutionHandler : IExecutionHandler
     private readonly Dictionary<string, int> _lastCumulativeVolume = new();
     private readonly Dictionary<string, int> _strategyPriority = new();
     private readonly Dictionary<string, LimitRef> _limitRef = new();
+    private readonly Dictionary<string, AtrIndicator> _atr = new(); // 逐合约 ATR，用于滑点按波动缩放
     private readonly object _sync = new();
     private long _nextOrderId = 1;
 
@@ -31,6 +33,9 @@ public class ExecutionHandler : IExecutionHandler
 
     public bool IsLive { get; set; }
     public Action<Order>? SendToExchange { get; set; }
+
+    /// <summary>Bar 模式滑点因子：市价单滑点 = max(1 跳, 因子 × ATR)。默认 0.5；设 0 退回固定 1 跳。</summary>
+    public decimal SlippageAtrFactor { get; set; } = 0.5m;
 
     public System.Threading.Channels.Channel<OrderEvent> FillChannel { get; }
         = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
@@ -271,11 +276,14 @@ public class ExecutionHandler : IExecutionHandler
         var fills = new List<OrderEvent>();
 
         // 锁内获取快照 + 更新/取得当日涨跌停基准价
-        double limitRefPrice;
+        double limitRefPrice, atrForSlippage;
         List<Order> pending;
         lock (_sync)
         {
             limitRefPrice = UpdateAndGetLimitRef(bar);
+            // 读取 ATR（基于此前的 Bar，无未来函数）；本 Bar 撮合后再更新
+            atrForSlippage = _atr.TryGetValue(bar.InstrumentId, out var a) && a.IsReady
+                ? a.CurrentValue : double.NaN;
             pending = _activeOrders
                 .Where(o => o.InstrumentId == bar.InstrumentId)
                 .OrderBy(o => _strategyPriority.GetValueOrDefault(o.StrategyId, int.MaxValue))
@@ -285,7 +293,7 @@ public class ExecutionHandler : IExecutionHandler
 
         foreach (var order in pending)
         {
-            var fill = MatchBar(order, bar, future, limitRefPrice);
+            var fill = MatchBar(order, bar, future, limitRefPrice, atrForSlippage);
             if (fill != null)
             {
                 fills.Add(fill);
@@ -296,6 +304,14 @@ public class ExecutionHandler : IExecutionHandler
                 if (order.FilledQuantity >= order.Quantity)
                     lock (_sync) { _activeOrders.Remove(order); }
             }
+        }
+
+        // 撮合后用本 Bar 更新 ATR（供下一根 Bar 的滑点使用，避免未来函数）
+        lock (_sync)
+        {
+            if (!_atr.TryGetValue(bar.InstrumentId, out var atr))
+                _atr[bar.InstrumentId] = atr = new AtrIndicator(14);
+            atr.Update(bar);
         }
 
         return fills;
@@ -325,8 +341,16 @@ public class ExecutionHandler : IExecutionHandler
     /// <summary>单笔订单最大成交量占 Bar 成交量的比例（防止吃光整根 Bar）</summary>
     private const double MaxVolumeParticipation = 0.10;
 
+    /// <summary>Bar 模式市价单滑点：max(1 跳, SlippageAtrFactor × ATR)。ATR 未就绪 → 1 跳。</summary>
+    private decimal MarketSlippage(Future future, double atr)
+    {
+        var tick = future.TickSize > 0 ? future.TickSize : 1m;
+        if (SlippageAtrFactor <= 0 || double.IsNaN(atr) || atr <= 0) return tick;
+        return Math.Max(tick, SlippageAtrFactor * (decimal)atr);
+    }
+
     /// <summary>用 Bar 撮合一个订单。前进偏差防护：用本 Bar Open 成交市价单。</summary>
-    private OrderEvent? MatchBar(Order order, Bar bar, Future future, double limitRefPrice)
+    private OrderEvent? MatchBar(Order order, Bar bar, Future future, double limitRefPrice, double atrForSlippage)
     {
         // 实盘模式：市价单已在 CTP 成交，本地不撮合
         if (IsLive && order.Type == OrderType.Market) return null;
@@ -356,11 +380,12 @@ public class ExecutionHandler : IExecutionHandler
         switch (order.Type)
         {
             case OrderType.Market:
-                // 市价单滑点: 买吃Ask(+1跳), 卖砸Bid(-1跳), 最小成本穿越价差
-                var tick = future.TickSize > 0 ? future.TickSize : 1m;
+                // 市价单滑点随波动缩放：max(1 跳, 因子 × ATR)；ATR 未就绪退回固定 1 跳。
+                // 买在 Open 上方成交、卖在 Open 下方成交（穿越价差的不利方向）。
+                var slip = MarketSlippage(future, atrForSlippage);
                 fillPrice = order.Direction == OrderDirection.Buy
-                    ? (decimal)bar.OpenDouble + tick   // 市价买: Open + 1跳
-                    : (decimal)bar.OpenDouble - tick;  // 市价卖: Open - 1跳
+                    ? (decimal)bar.OpenDouble + slip   // 市价买: Open + 滑点
+                    : (decimal)bar.OpenDouble - slip;  // 市价卖: Open - 滑点
                 break;
 
             case OrderType.Limit:
