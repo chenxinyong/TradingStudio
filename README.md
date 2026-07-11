@@ -3,7 +3,7 @@
 > 个人量化交易工作室 — 从零构建期货量化交易系统，20 年 C# 工程师的 AI 时代手艺活。
 
 [![.NET](https://img.shields.io/badge/.NET-10-blueviolet)](https://dotnet.microsoft.com/)
-[![Tests](https://img.shields.io/badge/tests-154%20passed-brightgreen)](test/)
+[![Tests](https://img.shields.io/badge/tests-204%20passed-brightgreen)](test/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64-lightgrey)](https://github.com/cxbug/TradingStudio)
 [![Phase](https://img.shields.io/badge/phase-2%20回测引擎-orange)](#路线图)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -91,6 +91,7 @@ dotnet build src/TradingStudio/TradingStudio.csproj
 dotnet test test/TradingStudio.Core.Tests/TradingStudio.Core.Tests.csproj
 dotnet test test/TradingStudio.Data.Tests/TradingStudio.Data.Tests.csproj
 dotnet test test/TradingStudio.Engine.Tests/TradingStudio.Engine.Tests.csproj
+dotnet test test/TradingStudio.Strategy.Tests/TradingStudio.Strategy.Tests.csproj
 ```
 
 ### 发布
@@ -139,9 +140,10 @@ TradingStudio/
 │   └── Scripts/               Python 脚本（品种生成、数据导入）
 │
 ├── test/
-│   ├── TradingStudio.Core.Tests/    核心模型（17 通过）
+│   ├── TradingStudio.Core.Tests/    核心模型 + 技术指标数学（36 通过）
 │   ├── TradingStudio.Data.Tests/    数据聚合（16 通过）
-│   ├── TradingStudio.Engine.Tests/  引擎单元测试（121 通过）
+│   ├── TradingStudio.Engine.Tests/  引擎/风控/撮合/爆仓（138 通过）
+│   ├── TradingStudio.Strategy.Tests/ 缠论 分型/笔/中枢（14 通过）
 │   ├── ChanLunTest/                 缠论算法手动 demo（非自动化）
 │   └── TradingStudio.SignalRContractTest/ SignalR 连通性 demo（非自动化）
 │
