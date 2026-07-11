@@ -78,27 +78,53 @@ public class DuckDBStore : IBarStore, ITickStore
         foreach (var g in groups)
         {
             var table = g.Key;
-            // 去重：1min 午夜 Bar 会被 TableName 路由到 bars_day，与日线 Bar 主键冲突
-            var deduped = g.DistinctBy(b => (b.InstrumentId, b.BarTime));
+            // 批内去重：1min 午夜 Bar 会被 TableName 路由到 bars_day，与日线 Bar 主键冲突
+            var deduped = g.DistinctBy(b => (b.InstrumentId, b.BarTime)).ToList();
+            if (deduped.Count == 0) continue;
+
             using var conn = OpenConnection();
-            using var appender = conn.CreateAppender(table);
-            foreach (var bar in deduped)
+
+            // 经连接级临时表中转 + INSERT OR REPLACE 合并，获得跨批次幂等性。
+            // 月末夜盘 Bar 会同时出现在相邻月度归档里；直接用 Appender 写目标表会撞
+            // 主键并整批回滚（丢失整月）。临时表无主键约束，Appender 高速写入后再合并去重。
+            var stage = $"_stage_{table}_{Guid.NewGuid():N}";
+            using (var create = conn.CreateCommand())
             {
-                if (ct.IsCancellationRequested) break;
-                appender.CreateRow()
-                    .AppendValue(bar.InstrumentId)
-                    .AppendValue(bar.TradingDay.ToDateTime(TimeOnly.MinValue))  // DateOnly→DateTime for DuckDB DATE
-                    .AppendValue(bar.BarTime)
-                    .AppendValue(bar.Open)
-                    .AppendValue(bar.High)
-                    .AppendValue(bar.Low)
-                    .AppendValue(bar.Close)
-                    .AppendValue(bar.Volume)
-                    .AppendValue(bar.Turnover)
-                    .AppendValue(bar.OpenInterest)
-                    .AppendValue(bar.TickCount)
-                    .EndRow();
-                Interlocked.Increment(ref _barWritten);
+                create.CommandText = $"CREATE TEMP TABLE {stage} AS SELECT * FROM {table} WHERE 1=0";
+                create.ExecuteNonQuery();
+            }
+
+            using (var appender = conn.CreateAppender(stage))
+            {
+                foreach (var bar in deduped)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    appender.CreateRow()
+                        .AppendValue(bar.InstrumentId)
+                        .AppendValue(bar.TradingDay.ToDateTime(TimeOnly.MinValue))  // DateOnly→DateTime for DuckDB DATE
+                        .AppendValue(bar.BarTime)
+                        .AppendValue(bar.Open)
+                        .AppendValue(bar.High)
+                        .AppendValue(bar.Low)
+                        .AppendValue(bar.Close)
+                        .AppendValue(bar.Volume)
+                        .AppendValue(bar.Turnover)
+                        .AppendValue(bar.OpenInterest)
+                        .AppendValue(bar.TickCount)
+                        .EndRow();
+                    Interlocked.Increment(ref _barWritten);
+                }
+            } // appender 在 Dispose 时 flush 到临时表
+
+            using (var merge = conn.CreateCommand())
+            {
+                merge.CommandText = $"INSERT OR REPLACE INTO {table} SELECT * FROM {stage}";
+                merge.ExecuteNonQuery();
+            }
+            using (var drop = conn.CreateCommand())
+            {
+                drop.CommandText = $"DROP TABLE {stage}";
+                drop.ExecuteNonQuery();
             }
         }
     }
