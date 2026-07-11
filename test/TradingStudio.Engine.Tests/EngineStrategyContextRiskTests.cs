@@ -20,11 +20,11 @@ public class EngineStrategyContextRiskTests
     private const string Sid = "s";
 
     // maxPosition = 5：任何 > 5 手的开仓单都应被 MaxPositionPerInstrumentRule 拦截。
-    private static EngineStrategyContext MakeContext(int maxPosition = 5)
+    private static EngineStrategyContext MakeContext(int maxPosition = 5, decimal capital = 100_000)
     {
         var risk = new RiskController(maxPosition: maxPosition);
         var execution = new ExecutionHandler(risk);
-        var portfolio = new PortfolioManager(100_000);   // 空仓起步
+        var portfolio = new PortfolioManager(capital);   // 空仓起步
 
         var registry = FutureRegistry.LoadFromJson(
             """
@@ -86,5 +86,34 @@ public class EngineStrategyContextRiskTests
         var ctx = MakeContext(maxPosition: 5);
         var ticket = ctx.LimitBuy("rb", quantity: 2, limitPrice: 3000m);
         Assert.Equal(OrderStatus.Submitted, ticket.Status); // 2 ≤ 5 → 放行
+    }
+
+    // ─── 购买力硬闸门：下单前资金不足即拒（风控放开，隔离出闸门效果）───
+
+    [Fact]
+    public void BuyingPower_InsufficientCash_OpenRejected()
+    {
+        // 风控放宽(1000手)，但 10,000 现金开 100 手需保证金 280,000 → 闸门拒单
+        var ctx = MakeContext(maxPosition: 1000, capital: 10_000);
+        var ticket = ctx.LimitBuy("rb", quantity: 100, limitPrice: 3500m);
+        Assert.Equal(OrderStatus.Rejected, ticket.Status);
+    }
+
+    [Fact]
+    public void BuyingPower_SellToOpenShort_AlsoGated()
+    {
+        // 卖开空同样受闸门约束
+        var ctx = MakeContext(maxPosition: 1000, capital: 10_000);
+        var ticket = ctx.StopSell("rb", quantity: 100, stopPrice: 3500m);
+        Assert.Equal(OrderStatus.Rejected, ticket.Status);
+    }
+
+    [Fact]
+    public void BuyingPower_SufficientCash_OpenAllowed()
+    {
+        // 50 万现金开 1 手(保证金 2,800) → 放行
+        var ctx = MakeContext(maxPosition: 1000, capital: 500_000);
+        var ticket = ctx.LimitBuy("rb", quantity: 1, limitPrice: 3500m);
+        Assert.Equal(OrderStatus.Submitted, ticket.Status);
     }
 }
