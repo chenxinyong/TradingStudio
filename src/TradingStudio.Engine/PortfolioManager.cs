@@ -144,6 +144,51 @@ public class PortfolioManager : IPortfolioState
     }
 
     /// <summary>
+    /// 保证金强平（爆仓）检查：权益跌破占用保证金 × maintenanceRatio（默认 1.0，即风险度≥100%）
+    /// 时，生成"全部持仓按当前价平仓"的成交单返回给引擎处理。不在此处理成交——由调用方
+    /// ProcessFill，使强平亏损进入 Trade 记录并通知策略。触发合约用本 Bar 收盘价，其余合约
+    /// 用上次盯市价。线程安全。
+    /// </summary>
+    public List<OrderEvent> CheckMarginCall(Bar bar, decimal maintenanceRatio = 1.0m)
+    {
+        lock (_sync)
+        {
+            if (_marginUsed <= 0 || _equity >= _marginUsed * maintenanceRatio)
+                return new List<OrderEvent>();
+
+            var fills = new List<OrderEvent>();
+            foreach (var (instId, pos) in _positions
+                .Where(kv => kv.Value.Quantity != 0)
+                .Select(kv => (kv.Key, kv.Value))
+                .ToList())
+            {
+                var px = instId == bar.InstrumentId && bar.CloseDouble > 0
+                    ? (decimal)bar.CloseDouble
+                    : (decimal)pos.MarketPrice;
+                if (px <= 0) px = pos.AvgPrice;
+
+                fills.Add(new OrderEvent
+                {
+                    OrderId = -2, // 系统强平（爆仓）
+                    InstrumentId = instId,
+                    StrategyId = pos.StrategyId,
+                    Direction = pos.Quantity > 0 ? OrderDirection.Sell : OrderDirection.Buy,
+                    Quantity = Math.Abs(pos.Quantity),
+                    OrderQty = Math.Abs(pos.Quantity),
+                    FilledQty = Math.Abs(pos.Quantity),
+                    Type = OrderEventType.Filled,
+                    FillPrice = px,
+                    Fee = 0,      // 强平不另收手续费（简化）
+                    Slippage = 0,
+                    Message = $"Margin call liquidation (equity {_equity:F0} < margin {_marginUsed:F0})",
+                    Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero),
+                });
+            }
+            return fills;
+        }
+    }
+
+    /// <summary>
     /// 处理成交。更新持仓/资金/分账，产生 Trade 记录。（线程安全）
     /// 实盘中从 FillChannel 线程和事件循环线程并发调用，lock(_sync) 保护。
     /// </summary>

@@ -227,6 +227,19 @@ public class TradingEngine
                     // 按市价更新持仓未实现盈亏
                     if (inst != null) _portfolio.UpdateMarketPrice(bar, inst);
 
+                    // 保证金强平（爆仓）：权益跌破占用保证金 → 全部持仓按当前价强制平仓
+                    if (inst != null && !_options.IsLive)
+                    {
+                        foreach (var fill in _portfolio.CheckMarginCall(bar))
+                        {
+                            var liqTrade = _portfolio.ProcessFill(fill, _registry);
+                            lock (tradesLock) { if (liqTrade != null) globalTrades.Add(liqTrade); }
+                            _feedback.RecordFill(fill, fill.StrategyId);
+                            if (liqTrade != null) _feedback.RecordTrade(liqTrade, fill.StrategyId);
+                            _strategies.DispatchOrderEvent(fill);
+                        }
+                    }
+
                     // 交割月检查：到期前强制平仓（防止进入交割月）
                     if (inst != null && !_options.IsLive)
                         _portfolio.ForceCloseNearDelivery(bar, inst, _registry);
