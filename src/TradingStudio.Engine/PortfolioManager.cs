@@ -119,6 +119,9 @@ public class PortfolioManager : IPortfolioState
             {
                 var closeDir = pos.Quantity > 0 ? OrderDirection.Sell : OrderDirection.Buy;
                 var closeQty = Math.Abs(pos.Quantity);
+                var closePrice = bar.CloseDouble > 0 ? (decimal)bar.CloseDouble : (decimal)bar.OpenDouble;
+                // 交割强平照常收平仓手续费（此前误记为 0，低估成本）
+                var f = registry.Resolve(instId);
                 var fill = new OrderEvent
                 {
                     OrderId = -1, // 系统强平
@@ -129,8 +132,8 @@ public class PortfolioManager : IPortfolioState
                     OrderQty = closeQty,
                     FilledQty = closeQty,
                     Type = OrderEventType.Filled,
-                    FillPrice = bar.CloseDouble > 0 ? (decimal)bar.CloseDouble : (decimal)bar.OpenDouble,
-                    Fee = 0, // 强平不扣手续费
+                    FillPrice = closePrice,
+                    Fee = f?.OpenFee(closePrice, closeQty) ?? 0,
                     Slippage = 0,
                     Message = $"Delivery forced close ({monthsToDelivery}mo to delivery)",
                     Time = new DateTimeOffset(bar.BarTime, TimeSpan.Zero),
@@ -252,16 +255,10 @@ public class PortfolioManager : IPortfolioState
                     // 完全平仓
                     var mult = future.TradingUnit;
 
-                    // 平今手续费：当天开当天平 → 使用 CloseTodayFeeRate
+                    // 平今手续费：当天开当天平且设置了区别平今费 → 用平今费（支持固定元/手）
                     var closeFee = fill.Fee;
-                    var isCloseToday = pos.CreatedTime.Date == fill.Time.Date
-                        && future.CloseTodayFeeRate > 0
-                        && Math.Abs(future.CloseTodayFeeRate - future.FeeRate) > 0.0000001;
-                    if (isCloseToday)
-                    {
-                        var closeContractValue = fill.FillPrice * mult * Math.Abs(pos.Quantity);
-                        closeFee = Math.Max(1m, closeContractValue * (decimal)future.CloseTodayFeeRate);
-                    }
+                    if (pos.CreatedTime.Date == fill.Time.Date && future.HasDistinctCloseTodayFee)
+                        closeFee = future.CloseTodayFee(fill.FillPrice, Math.Abs(pos.Quantity));
 
                     var pnl = (fill.FillPrice - pos.AvgPrice) * Math.Abs(pos.Quantity) * mult
                         * (pos.Quantity > 0 ? 1 : -1);
@@ -305,16 +302,10 @@ public class PortfolioManager : IPortfolioState
                 var closeQty = Math.Abs(pos.Quantity);
                 var mult = future.TradingUnit;
 
-                // 平今手续费检测
+                // 平今手续费检测（支持固定元/手）
                 var exitFee = fill.Fee;
-                var isCloseToday = pos.CreatedTime.Date == fill.Time.Date
-                    && future.CloseTodayFeeRate > 0
-                    && Math.Abs(future.CloseTodayFeeRate - future.FeeRate) > 0.0000001;
-                if (isCloseToday)
-                {
-                    var closeContractValue = fill.FillPrice * mult * closeQty;
-                    exitFee = Math.Max(1m, closeContractValue * (decimal)future.CloseTodayFeeRate);
-                }
+                if (pos.CreatedTime.Date == fill.Time.Date && future.HasDistinctCloseTodayFee)
+                    exitFee = future.CloseTodayFee(fill.FillPrice, closeQty);
 
                 var pnl = (fill.FillPrice - pos.AvgPrice) * closeQty * mult
                     * (pos.Quantity > 0 ? 1 : -1);
@@ -341,8 +332,8 @@ public class PortfolioManager : IPortfolioState
                 // 开新仓
                 var remainingQty = fill.Quantity - closeQty;
                 var newMargin = future.TradingUnit * fill.FillPrice * remainingQty * marginRate;
-                // 新仓开仓费使用标准费率（不是平今费率）
-                var openFee = Math.Max(1m, future.TradingUnit * fill.FillPrice * remainingQty * (decimal)future.FeeRate);
+                // 新仓开仓费（标准开仓费，支持固定元/手）
+                var openFee = future.OpenFee(fill.FillPrice, remainingQty);
                 var releasedMargin = pos.Margin;  // 保存旧仓保证金（pos 即将被新仓覆盖）
                 pos = new Position
                 {

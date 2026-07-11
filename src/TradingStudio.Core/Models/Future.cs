@@ -24,7 +24,9 @@ public sealed record Future
     public decimal PriceLimitPct { get; init; }      // 涨跌停板 % (0.10 = ±10%)
     public decimal MarginRate { get; init; }         // 交易所基准保证金率
     public double FeeRate { get; init; }              // 开仓/平昨手续费率 (合约价值百分比, 默认 0.0001 = 万1)
-    public double CloseTodayFeeRate { get; init; }    // 平今手续费率 (0=平今免, =FeeRate=正常, >FeeRate=平今加倍)
+    public double CloseTodayFeeRate { get; init; }    // 平今手续费率 (0=同开仓, =FeeRate=正常, >FeeRate=平今加倍)
+    public double FeePerLot { get; init; }            // 开仓/平昨固定手续费 (元/手); >0 时优先于 FeeRate (螺纹/股指等)
+    public double CloseTodayFeePerLot { get; init; }  // 平今固定手续费 (元/手); >0 时优先于 CloseTodayFeeRate
     public string Months { get; init; } = "";        // "1～12月" | "1,3,5,7,9,11" | "季月(3,6,9,12)"
     public string TradingHours { get; init; } = "";  // 交易时间描述
 
@@ -35,6 +37,29 @@ public sealed record Future
     // === 计算 ===
     public decimal ContractValue(decimal price) => price * TradingUnit;
     public decimal RoundToTick(decimal price) => Math.Round(price / TickSize) * TickSize;
+
+    /// <summary>开仓/平昨手续费：优先固定元/手，否则按合约价值百分比(默认万1)，最低 1 元。</summary>
+    public decimal OpenFee(decimal price, int qty)
+    {
+        if (qty <= 0) return 0;
+        if (FeePerLot > 0) return Math.Max(1m, (decimal)FeePerLot * qty);
+        var rate = (decimal)(FeeRate > 0 ? FeeRate : 0.0001);
+        return Math.Max(1m, price * TradingUnit * qty * rate);
+    }
+
+    /// <summary>平今手续费：优先固定元/手，否则平今百分比；未单独设置平今费则回退开仓费。</summary>
+    public decimal CloseTodayFee(decimal price, int qty)
+    {
+        if (qty <= 0) return 0;
+        if (CloseTodayFeePerLot > 0) return Math.Max(1m, (decimal)CloseTodayFeePerLot * qty);
+        if (CloseTodayFeeRate > 0) return Math.Max(1m, price * TradingUnit * qty * (decimal)CloseTodayFeeRate);
+        return OpenFee(price, qty);
+    }
+
+    /// <summary>是否设置了区别于开仓费的平今费（固定或百分比）。</summary>
+    public bool HasDistinctCloseTodayFee =>
+        CloseTodayFeePerLot > 0 ||
+        (CloseTodayFeeRate > 0 && Math.Abs(CloseTodayFeeRate - FeeRate) > 1e-9);
 
     public override string ToString() => $"{Exchange.ShortName()}/{Code} {Name}";
 }

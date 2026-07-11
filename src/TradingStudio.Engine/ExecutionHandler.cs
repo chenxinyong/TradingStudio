@@ -240,9 +240,7 @@ public class ExecutionHandler : IExecutionHandler
 
         remainingVolume -= fillQty;
 
-        var contractValue = fillPrice.Value * future.TradingUnit * fillQty;
-        var rate = (decimal)(future.FeeRate > 0 ? future.FeeRate : 0.0001);
-        var fee = Math.Max(1m, contractValue * rate);
+        var fee = future.OpenFee(fillPrice.Value, fillQty);
 
         // 滑点：市价单与理论中间价的偏差
         var midPrice = (tick.BidPrice1 + tick.AskPrice1) / 2m / TickRecord.PriceScale;
@@ -422,10 +420,8 @@ public class ExecutionHandler : IExecutionHandler
                 return null;
         }
 
-        // 手续费：从品种配置读取费率（默认万1）
-        var contractValue = fillPrice * future.TradingUnit * fillQty;
-        var rate = (decimal)(future.FeeRate > 0 ? future.FeeRate : 0.0001);
-        var fee = Math.Max(1m, contractValue * rate);
+        // 手续费：优先固定元/手，否则合约价值百分比（默认万1）
+        var fee = future.OpenFee(fillPrice, fillQty);
 
         // 滑点 = |成交价 - Open| × 手数（市价单跨价差，限价/止损单执行偏差）
         var slipPerLot = Math.Abs(fillPrice - (decimal)bar.OpenDouble);

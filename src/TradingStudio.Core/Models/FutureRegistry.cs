@@ -48,6 +48,8 @@ public sealed class FutureRegistry
                 MarginRate     = s.GetProperty("marginRate").GetDecimal(),
                 FeeRate        = TryGetDouble(s, "feeRate"),
                 CloseTodayFeeRate = TryGetDouble(s, "closeTodayFeeRate"),
+                FeePerLot      = TryGetDouble(s, "feePerLot"),
+                CloseTodayFeePerLot = TryGetDouble(s, "closeTodayFeePerLot"),
                 Months         = s.GetProperty("months").GetString()!,
                 TradingHours   = TryGet(s, "tradingHours", ""),
                 IsTop30        = TryGetBool(s, "isTop30"),
