@@ -8,8 +8,8 @@ namespace TradingStudio.Core.Tests;
 /// 预热 off-by-one、平滑系数错、TR 漏算跳空，都会静默扭曲信号且回测/实盘一起错。
 /// 这里用手工可验证的小序列钉死每个指标的数学。
 ///
-/// 注：AtrIndicator 注释写"Wilder 平滑"，但实现是"TR 的简单移动平均"（滚动窗口和÷周期）。
-/// 本测试按实际实现（SMA of TR）断言；若要改成真 Wilder，这些期望值需同步更新。
+/// 注：AtrIndicator 使用 Wilder 平滑（前 N 根 TR 简单平均作种子，其后 Wilder 递推），
+/// 与文华/TradingView 一致。
 /// </summary>
 public class IndicatorMathTests
 {
@@ -88,15 +88,18 @@ public class IndicatorMathTests
     }
 
     [Fact]
-    public void Atr_IsSimpleMovingAverageOfTrueRange()
+    public void Atr_WilderSmoothing()
     {
-        // TR: bar1=2(H-L), bar2=max(4,|15-11|,0)=4, bar3=max(3,|16-14|,|13-14|)=3 → ATR=(2+4+3)/3=3
+        // 种子 = 前 3 根 TR 的简单平均：TR=[2,4,3] → ATR=3
         var atr = new AtrIndicator(3);
-        atr.Update(HLC(12, 10, 11));
-        atr.Update(HLC(15, 11, 14));
-        atr.Update(HLC(16, 13, 13));
+        atr.Update(HLC(12, 10, 11));   // TR=2 (首根 H-L)
+        atr.Update(HLC(15, 11, 14));   // TR=max(4,|15-11|,0)=4
+        atr.Update(HLC(16, 13, 13));   // TR=max(3,|16-14|,|13-14|)=3 → 种子 ATR=(2+4+3)/3=3
         Assert.True(atr.IsReady);
         Assert.Equal(3.0, atr.CurrentValue, 9);
+        // 第 4 根 TR=7（跳空）→ Wilder: (3×2+7)/3 = 13/3 ≈ 4.3333（≠ SMA 的 14/3≈4.6667）
+        atr.Update(HLC(20, 18, 19));   // prevClose=13 → TR=max(2,|20-13|=7,|18-13|=5)=7
+        Assert.Equal(4.3333, atr.CurrentValue, 4);
     }
 
     [Fact]
