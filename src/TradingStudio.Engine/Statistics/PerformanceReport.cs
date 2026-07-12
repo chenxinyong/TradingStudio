@@ -69,10 +69,14 @@ public class PerformanceReport
         decimal startCapital, decimal finalEquity)
     {
         if (equityCurve.Count < 2 || startCapital <= 0) return 0;
-        var years = (equityCurve[^1].Time - equityCurve[0].Time).TotalDays / 365.25;
-        if (years <= 0) return 0;
         var totalReturn = (double)(finalEquity / startCapital);
-        return (decimal)(Math.Pow(totalReturn, 1.0 / years) - 1.0);
+        if (totalReturn <= 0) return -1m;   // 穿仓/归零
+        var years = (equityCurve[^1].Time - equityCurve[0].Time).TotalDays / 365.25;
+        // 回测不足 1 天：年化无意义且 1/years 会让 Pow 数值爆炸(decimal 溢出) → 退回区间收益率
+        if (years < 1.0 / 365.25) return (decimal)(totalReturn - 1.0);
+        var cagr = Math.Pow(totalReturn, 1.0 / years) - 1.0;
+        if (double.IsNaN(cagr) || double.IsInfinity(cagr)) return 0;
+        return (decimal)Math.Clamp(cagr, -1.0, 1e6);   // 兜底防 decimal 溢出
     }
 
     /// <summary>从权益曲线计算年化 Sharpe 和 Sortino 比率</summary>
