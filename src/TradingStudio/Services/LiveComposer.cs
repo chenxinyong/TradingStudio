@@ -49,7 +49,7 @@ public static class LiveComposer
             maxOrderQty: config.GetValue("Risk:MaxOrderQuantity", 100),
             maxDrawdown: config.GetValue<decimal>("Risk:MaxDrawdownPct", 0.25m));
         services.AddSingleton(risk);
-        var execution = new ExecutionHandler(risk);
+        var execution = new ExecutionHandler(risk, registry);
         services.AddSingleton<IExecutionHandler>(execution);
         services.AddSingleton(execution);
 

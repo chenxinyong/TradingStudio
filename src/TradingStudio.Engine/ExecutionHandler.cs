@@ -15,6 +15,7 @@ public class ExecutionHandler : IExecutionHandler
     private readonly List<Order> _activeOrders = new();
     private readonly List<OrderEvent> _orderHistory = new();
     private readonly RiskController _risk;
+    private readonly FutureRegistry? _registry;   // 购买力闸门用：估算开仓保证金/手续费；null 时跳过闸门
     private readonly ILogger _log;
     private readonly Dictionary<string, int> _lastCumulativeVolume = new();
     private readonly Dictionary<string, int> _strategyPriority = new();
@@ -50,9 +51,10 @@ public class ExecutionHandler : IExecutionHandler
     }
     public IReadOnlyList<OrderEvent> OrderHistory { get { lock (_sync) return _orderHistory.ToList(); } }
 
-    public ExecutionHandler(RiskController risk, ILogger<ExecutionHandler>? logger = null)
+    public ExecutionHandler(RiskController risk, FutureRegistry? registry = null, ILogger<ExecutionHandler>? logger = null)
     {
         _risk = risk;
+        _registry = registry;
         _log = logger ?? NullLogger<ExecutionHandler>.Instance;
     }
 
@@ -100,6 +102,24 @@ public class ExecutionHandler : IExecutionHandler
                     id, order.Direction, order.InstrumentId, order.Quantity, riskResult.Reason);
                 return new OrderTicket { OrderId = id, Status = OrderStatus.Rejected };
             }
+
+            // 购买力硬闸门（与风控同层，任何经 Submit 的开仓单都无法绕过）：
+            // 估算开仓所需保证金+手续费，可用现金不足即拒。
+            if (!PassesBuyingPower(order, portfolio, out var bpReason))
+            {
+                order.Status = OrderStatus.Rejected;
+                lock (_sync) { _orderHistory.Add(new OrderEvent
+                {
+                    OrderId = id, InstrumentId = order.InstrumentId,
+                    StrategyId = strategyId, Direction = order.Direction,
+                    Quantity = order.Quantity, OrderQty = order.Quantity,
+                    FilledQty = 0, Type = OrderEventType.Rejected,
+                    Message = bpReason, Time = DateTimeOffset.UtcNow,
+                }); }
+                _log.LogWarning("[Order] #{Id} {Dir} {Inst} x{Qty} → REJECTED: {Reason}",
+                    id, order.Direction, order.InstrumentId, order.Quantity, bpReason);
+                return new OrderTicket { OrderId = id, Status = OrderStatus.Rejected };
+            }
         }
 
         lock (_sync) { _activeOrders.Add(order); }
@@ -126,6 +146,47 @@ public class ExecutionHandler : IExecutionHandler
             id, order.Direction, order.InstrumentId, order.Quantity, order.Type, strategyId);
 
         return new OrderTicket { OrderId = id, Status = OrderStatus.Submitted };
+    }
+
+    /// <summary>
+    /// 购买力检查：估算该订单"新增开仓"所需保证金+手续费，可用现金不足则拒。
+    /// 减仓/平仓（净手数不增）一律放行。无 registry 或无法估价时放行（纯撮合单测/首笔无参考价）。
+    /// 估价：限价单用委托价，止损单用触发价，市价单用最后收盘价（_limitRef）。
+    /// </summary>
+    private bool PassesBuyingPower(Order order, Core.Risk.IPortfolioState portfolio, out string reason)
+    {
+        reason = "";
+        if (_registry == null) return true;
+        var future = _registry.Resolve(order.InstrumentId);
+        if (future == null) return true;
+
+        decimal estPrice = order.Type switch
+        {
+            OrderType.Limit => order.LimitPrice ?? 0,
+            OrderType.Stop => order.StopPrice ?? 0,
+            _ => (decimal)LastKnownPrice(order.InstrumentId),
+        };
+        if (estPrice <= 0) return true;   // 无法估价 → 放行
+
+        var cur = portfolio.GetPosition(order.InstrumentId)?.Quantity ?? 0;
+        var next = order.Direction == OrderDirection.Buy ? cur + order.Quantity : cur - order.Quantity;
+        var addedLots = Math.Abs(next) - Math.Abs(cur);
+        if (addedLots <= 0) return true;  // 减仓/平仓 → 放行
+
+        var marginRate = future.MarginRate > 0 ? future.MarginRate : 0.08m;
+        var margin = estPrice * future.TradingUnit * addedLots * marginRate;
+        var fee = future.OpenFee(estPrice, addedLots);
+        if (portfolio.Cash >= margin + fee) return true;
+
+        reason = $"购买力不足: 需保证金 {margin:F0}+手续费 {fee:F0}, 可用现金 {portfolio.Cash:F0}";
+        return false;
+    }
+
+    /// <summary>最后已知收盘价（涨跌停基准，逐 Bar 更新）；无则返回 0。</summary>
+    private double LastKnownPrice(string instrumentId)
+    {
+        lock (_sync)
+            return _limitRef.TryGetValue(instrumentId, out var r) ? r.LastClose : 0;
     }
 
     public bool Cancel(long orderId)

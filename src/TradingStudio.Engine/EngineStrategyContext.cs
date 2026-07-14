@@ -71,7 +71,6 @@ internal class EngineStrategyContext : StrategyContext
     public override OrderTicket MarketBuy(string instrumentId, int quantity, string? tag = null)
     {
         var warmup = IsWarmup;
-        if (!warmup && GateOpen(instrumentId, OrderDirection.Buy, quantity, LastClose(instrumentId)) is { } g) return g;
         var ticket = warmup ? new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected }
             : _execution.Submit(new Order
             {
@@ -87,7 +86,6 @@ internal class EngineStrategyContext : StrategyContext
     public override OrderTicket MarketSell(string instrumentId, int quantity, string? tag = null)
     {
         var warmup = IsWarmup;
-        if (!warmup && GateOpen(instrumentId, OrderDirection.Sell, quantity, LastClose(instrumentId)) is { } g) return g;
         var ticket = warmup ? new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected }
             : _execution.Submit(new Order
             {
@@ -123,7 +121,6 @@ internal class EngineStrategyContext : StrategyContext
     public override OrderTicket LimitBuy(string instrumentId, int quantity, decimal limitPrice)
     {
         if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
-        if (GateOpen(instrumentId, OrderDirection.Buy, quantity, limitPrice) is { } g) return g;
         return _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Buy,
@@ -134,7 +131,6 @@ internal class EngineStrategyContext : StrategyContext
     public override OrderTicket LimitSell(string instrumentId, int quantity, decimal limitPrice)
     {
         if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
-        if (GateOpen(instrumentId, OrderDirection.Sell, quantity, limitPrice) is { } g) return g;
         return _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Sell,
@@ -145,7 +141,6 @@ internal class EngineStrategyContext : StrategyContext
     public override OrderTicket StopBuy(string instrumentId, int quantity, decimal stopPrice)
     {
         if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
-        if (GateOpen(instrumentId, OrderDirection.Buy, quantity, stopPrice) is { } g) return g;
         return _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Buy,
@@ -156,7 +151,6 @@ internal class EngineStrategyContext : StrategyContext
     public override OrderTicket StopSell(string instrumentId, int quantity, decimal stopPrice)
     {
         if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
-        if (GateOpen(instrumentId, OrderDirection.Sell, quantity, stopPrice) is { } g) return g;
         return _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = OrderDirection.Sell,
@@ -164,38 +158,7 @@ internal class EngineStrategyContext : StrategyContext
         }, StrategyId, _portfolio);
     }
 
-    // ═══ 购买力硬闸门 ═══
-    // 下单前估算开仓所需保证金，可用现金不足则拒单（不改风控签名，策略同步拿到拒单）。
-    private OrderTicket? GateOpen(string instrumentId, OrderDirection dir, int quantity, decimal estPrice)
-    {
-        if (CanAffordOpen(instrumentId, dir, quantity, estPrice)) return null;
-        _log.LogWarning("[{Strategy}] {Dir} {Inst} x{Qty} 资金不足 → 购买力闸门拒单",
-            StrategyId, dir, instrumentId, quantity);
-        return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
-    }
-
-    private bool CanAffordOpen(string instrumentId, OrderDirection dir, int quantity, decimal estPrice)
-    {
-        if (estPrice <= 0) return true;                       // 无法估价 → 放行
-        var future = _registry.Resolve(instrumentId);
-        if (future == null) return true;
-        var cur = _portfolio.GetPosition(instrumentId)?.Quantity ?? 0;
-        var next = dir == OrderDirection.Buy ? cur + quantity : cur - quantity;
-        var addedLots = Math.Abs(next) - Math.Abs(cur);
-        if (addedLots <= 0) return true;                      // 平仓/减仓 → 放行
-        var marginRate = future.MarginRate > 0 ? future.MarginRate : 0.08m;
-        var margin = estPrice * future.TradingUnit * addedLots * marginRate;
-        var fee = future.OpenFee(estPrice, addedLots);
-        return _portfolio.Cash >= margin + fee;
-    }
-
-    private decimal LastClose(string instrumentId)
-    {
-        for (int i = _barHistory.Count - 1; i >= 0; i--)
-            if (_barHistory[i].InstrumentId == instrumentId)
-                return (decimal)_barHistory[i].CloseDouble;
-        return 0;
-    }
+    // ═══ 购买力硬闸门已下沉至 ExecutionHandler.Submit（与 CheckPreOrder 同层，杜绝绕过）═══
 
     // ═══ 仓位 ═══
     public override Position? GetPosition(string instrumentId) =>

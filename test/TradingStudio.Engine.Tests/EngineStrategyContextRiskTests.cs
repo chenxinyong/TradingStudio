@@ -23,8 +23,6 @@ public class EngineStrategyContextRiskTests
     private static EngineStrategyContext MakeContext(int maxPosition = 5, decimal capital = 100_000)
     {
         var risk = new RiskController(maxPosition: maxPosition);
-        var execution = new ExecutionHandler(risk);
-        var portfolio = new PortfolioManager(capital);   // 空仓起步
 
         var registry = FutureRegistry.LoadFromJson(
             """
@@ -33,6 +31,9 @@ public class EngineStrategyContextRiskTests
             "unitName":"吨","tickSize":1,"tickValue":10,"priceLimitPct":0.10,
             "marginRate":0.08,"months":"1~12月"}]}
             """);
+
+        var execution = new ExecutionHandler(risk, registry);   // 购买力闸门需 registry 估算保证金
+        var portfolio = new PortfolioManager(capital);   // 空仓起步
 
         return new EngineStrategyContext(
             Sid, execution, portfolio, new IndicatorManager(), registry,

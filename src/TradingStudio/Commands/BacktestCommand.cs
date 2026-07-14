@@ -82,7 +82,7 @@ public class BacktestCommand
             maxStrategyDrawdown: strategyConfig.MaxDrawdownPct > 0 ? strategyConfig.MaxDrawdownPct : 0.25m);
         var feedback = new FeedbackMonitor();
         var tickSnapshot = new TickSnapshot();
-        var execution = new ExecutionHandler(risk);
+        var execution = new ExecutionHandler(risk, registry);
         var indicators = new IndicatorManager();
         var strategies = new StrategyContainer();
 

@@ -80,7 +80,7 @@ public class BacktestRunner
             maxPosition: 5, maxDrawdown: 0.25m, maxStrategyDrawdown: 0.25m);
         var feedback = new FeedbackMonitor();
         var tickSnapshot = new TickSnapshot();
-        var execution = new ExecutionHandler(risk);
+        var execution = new ExecutionHandler(risk, registry);
         var indicators = new IndicatorManager();
         var strategies = new StrategyContainer();
 

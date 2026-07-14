@@ -957,6 +957,12 @@ public enum AlertType { HighSlippage, HighRejectRate, ConsecutiveLosses, Abnorma
 
 ## 8. 引擎主循环
 
+> ⚠️ **本节 §8.1 为目标态设计**。当前 `TradingEngine` 实际实现与此有出入，以代码为准：
+> - **Bar 中心而非 Tick 中心**：`UpdateMarketPrice / CheckMarginCall / SamplePortfolio / CheckPeriodic` 均在 **BarEvent** 路径；Tick 路径只做撮合+派发。
+> - **三级风控**：Pre-Order（`ExecutionHandler.Submit`）+ Periodic（Bar 循环调 `_risk.CheckPeriodic`，仅告警）**已落地**；Post-Fill 层规则已定义但引擎暂未接线（留桩）。
+> - **购买力硬闸门**：位于 `ExecutionHandler.Submit`，与 `CheckPreOrder` 同层，任何经 Submit 的开仓单都无法绕过。
+> - **每日无负债结算**：`TradingEngine` 在交易日切换时调 `PortfolioManager.SettleDaily`，按上一交易日最后收盘价（结算价代理）对持仓盯市，日盈亏落袋进现金、成本基重置。跨日持仓的 `Trade.PnL` 仅反映"最后一次结算后"的区段，全程盈亏 = 各日结算段之和（见 `DailySettlementGoldenTests`）。
+
 > v2.1 完整版：集成 BarAggregator、IndicatorManager、StrategyContainer、RiskController、FeedbackMonitor。
 
 ```csharp

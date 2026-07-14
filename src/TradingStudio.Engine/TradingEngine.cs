@@ -151,6 +151,7 @@ public class TradingEngine
         // 2. 主循环
         Bar? prevBar = null;
         var firstBar = true;
+        DateOnly? lastTradingDay = null;   // 每日盯市结算：跟踪交易日切换
 
         // 实盘模式：启动 CTP 成交回报消费
         var fillChannel = (_execution is ExecutionHandler exec2) ? exec2.FillChannel : null;
@@ -224,6 +225,12 @@ public class TradingEngine
                     var bar = barEvt.Bar;
                     var inst = _registry.Resolve(bar.InstrumentId);
 
+                    // 每日无负债结算：交易日切换时，用上一交易日最后收盘价对全部持仓盯市结算。
+                    // 必须在 UpdateMarketPrice 之前——此刻 pos.MarketPrice 仍是上一交易日的最后收盘价。
+                    if (!_options.IsLive && lastTradingDay != null && bar.TradingDay != lastTradingDay)
+                        _portfolio.SettleDaily(_registry);
+                    lastTradingDay = bar.TradingDay;
+
                     // 按市价更新持仓未实现盈亏
                     if (inst != null) _portfolio.UpdateMarketPrice(bar, inst);
 
@@ -275,6 +282,11 @@ public class TradingEngine
 
                     // 反馈采样 + 告警
                     _feedback.SamplePortfolio(_portfolio);
+
+                    // 周期性风控（三级风控之 Periodic 层）：回撤/敞口等趋势性检查，只告警不阻断
+                    foreach (var w in _risk.CheckPeriodic(_portfolio))
+                        _log.LogWarning("[Risk/Periodic] {Rule}: {Reason}", w.RuleName, w.Reason);
+
                     var alerts = _feedback.CheckAlerts();
                     if (alerts.Count > 0) _strategies.DispatchAlert(alerts);
 

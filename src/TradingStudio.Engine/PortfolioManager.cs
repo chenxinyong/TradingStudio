@@ -22,9 +22,10 @@ public class PortfolioManager : IPortfolioState
     public decimal MarginUsed { get { lock (_sync) return _marginUsed; } private set { lock (_sync) _marginUsed = value; } }
     public decimal StartingCapital { get; }
     public decimal PeakEquity { get { lock (_sync) return _peakEquity; } private set { lock (_sync) _peakEquity = value; } }
-    public decimal TodayPnL { get { lock (_sync) return _todayPnL; } private set { lock (_sync) _todayPnL = value; } }
+    /// <summary>当日盈亏 = 当前权益 − 上一次每日结算后的权益基准（含持仓浮动 + 当日已实现）。</summary>
+    public decimal TodayPnL { get { lock (_sync) return _equity - _equityAtDayStart; } }
     public decimal TotalPnL => Equity - StartingCapital;
-    private decimal _cash, _equity, _marginUsed, _peakEquity, _todayPnL;
+    private decimal _cash, _equity, _marginUsed, _peakEquity, _equityAtDayStart;
 
     public Position? GetPosition(string instrumentId)
     {
@@ -61,6 +62,7 @@ public class PortfolioManager : IPortfolioState
         _cash = totalCapital;
         _equity = totalCapital;
         _peakEquity = totalCapital;
+        _equityAtDayStart = totalCapital;
     }
 
     public SubPortfolio GetSubPortfolio(string strategyId) =>
@@ -93,6 +95,66 @@ public class PortfolioManager : IPortfolioState
                 pos.UnrealizedPnl = 0;
             _positions[bar.InstrumentId] = pos;
             Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
+        }
+    }
+
+    /// <summary>
+    /// 每日无负债结算（盯市）。交易日切换时由引擎调用：按结算价对全部持仓盯市，
+    /// 日盈亏计入现金（"losers pay winners every day"），持仓成本基重置为结算价，
+    /// 并按结算价重估占用保证金。权益值不变，但现金/浮盈的构成被"落袋"，从而
+    /// 让购买力闸门与强平判断使用的是已结算现金——符合国内期货每日无负债结算机制。
+    ///
+    /// 回测无真实结算价，用各持仓最后一次盯市价（= 上一交易日最后一根 Bar 收盘价，
+    /// 引擎在日切换前已通过 UpdateMarketPrice 写入 pos.MarketPrice）作代理。线程安全。
+    /// </summary>
+    public void SettleDaily(FutureRegistry registry)
+    {
+        lock (_sync)
+        {
+            foreach (var (instId, pos) in _positions
+                .Where(kv => kv.Value.Quantity != 0)
+                .Select(kv => (kv.Key, kv.Value))
+                .ToList())
+            {
+                var future = registry.Resolve(instId);
+                if (future == null) continue;
+
+                var settle = (decimal)pos.MarketPrice;
+                if (settle <= 0) settle = pos.AvgPrice;   // 无行情 → 用成本价（当日无盈亏）
+                var mult = future.TradingUnit;
+
+                // 日盈亏 = (结算价 − 成本价) × 带符号手数 × 乘数（多空由符号自动处理）
+                var dailyPnl = (settle - pos.AvgPrice) * pos.Quantity * mult;
+                Cash += dailyPnl;
+
+                // 按结算价重估占用保证金
+                var marginRate = future.MarginRate > 0 ? future.MarginRate : 0.08m;
+                var newMargin = settle * mult * Math.Abs(pos.Quantity) * marginRate;
+                var marginDelta = newMargin - pos.Margin;
+                Cash -= marginDelta;
+                MarginUsed += marginDelta;
+
+                // 分账同步
+                if (_subPortfolios.TryGetValue(pos.StrategyId, out var sub))
+                {
+                    sub.Cash += dailyPnl - marginDelta;
+                    sub.MarginUsed += marginDelta;
+                }
+
+                // 成本基重置为结算价，浮盈归零（次日从结算价起算）
+                pos.AvgPrice = settle;
+                pos.Margin = newMargin;
+                pos.MarketPrice = (double)settle;
+                pos.UnrealizedPnl = 0;
+                _positions[instId] = pos;
+            }
+
+            Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
+            if (Equity > PeakEquity) PeakEquity = Equity;
+            _equityAtDayStart = Equity;   // 新交易日的 TodayPnL 基准
+
+            foreach (var sub in _subPortfolios.Values)
+                sub.ResetDayStart();
         }
     }
 
@@ -391,9 +453,11 @@ public class SubPortfolio
     public decimal Cash { get; internal set; }
     public decimal MarginUsed { get; internal set; }
     public decimal PeakEquity { get; internal set; }
-    public decimal TodayPnL { get; internal set; }
+    /// <summary>当日盈亏 = 当前权益 − 上一次每日结算后的权益基准。</summary>
+    public decimal TodayPnL => Equity - _equityAtDayStart;
     public decimal Equity => Cash + MarginUsed + Positions.Sum(p => (decimal)p.UnrealizedPnl);
     public IReadOnlyList<Position> Positions { get; internal set; } = [];
+    private decimal _equityAtDayStart;
 
     public SubPortfolio(string strategyId, decimal allocatedCapital)
     {
@@ -401,5 +465,9 @@ public class SubPortfolio
         AllocatedCapital = allocatedCapital;
         Cash = allocatedCapital;
         PeakEquity = allocatedCapital;
+        _equityAtDayStart = allocatedCapital;
     }
+
+    /// <summary>每日结算后，将当日盈亏基准重置为当前权益。</summary>
+    internal void ResetDayStart() => _equityAtDayStart = Equity;
 }
