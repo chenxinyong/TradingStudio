@@ -1,6 +1,6 @@
 @echo off
 REM Build CTPWrapper (C++/CLI, .NET 10, x64)
-set DOTNET_ROOT=%USERPROFILE%\.dotnet
+set DOTNET_ROOT=C:\Program Files\dotnet
 set PATH=%DOTNET_ROOT%;%PATH%
 set MSBuildSDKsPath=%DOTNET_ROOT%\sdk\10.0.301\Sdks
 call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat" >nul 2>&1

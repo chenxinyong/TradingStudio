@@ -65,7 +65,7 @@
   <!-- 拷贝 CTP 原生 DLL 到输出目录 -->
   <Target Name="CopyCtpNative" AfterTargets="Build">
     <ItemGroup>
-      <_CtpDlls Include="..\CTP\Wrapper\bin\$(Configuration)\CTPWrapper.dll" />
+      <_CtpDlls Include="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
       <_CtpDlls Include="..\CTP\SDK\dll\thostmduserapi_se.dll" />
       <_CtpDlls Include="..\CTP\SDK\dll\thosttraderapi_se.dll" />
       <_CtpDlls Include="C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\10.0.9\runtimes\win-x64\native\ijwhost.dll" />
