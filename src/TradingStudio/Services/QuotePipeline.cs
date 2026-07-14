@@ -52,7 +52,7 @@ public class QuotePipeline : IDisposable
         }
 
         var row = CsvTickRecord.FromCtpQuote(q, instId,
-            string.IsNullOrEmpty(q.ExchangeID) ? TickCsvWriter.GuessExchange(instId) : q.ExchangeID,
+            string.IsNullOrEmpty(q.ExchangeID) ? TickCsvWriter.GuessExchange(q.InstrumentID) : q.ExchangeID,
             q.TradingDay);
         _tickWriter.Write(in row);
     }
