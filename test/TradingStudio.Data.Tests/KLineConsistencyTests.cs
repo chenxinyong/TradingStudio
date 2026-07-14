@@ -138,6 +138,68 @@ public class KLineConsistencyTests
     // ═══════════════════════════════════════════
 
     [Fact]
+    public void Scan_AllInstruments_ReportToFile()
+    {
+        var outPath = Path.Combine(RepoRoot(), "scripts", "_instrument_scan.txt");
+        using var db = new DuckDBConnection($"Data Source={DbPath}");
+        db.Open();
+
+        // 1. 查找所有连续合约
+        var contracts = new List<string>();
+        using (var cmd = db.CreateCommand())
+        {
+            cmd.CommandText = "SELECT DISTINCT instrument_id FROM bars_day WHERE instrument_id ILIKE '%000' ORDER BY instrument_id";
+            using var r = (DuckDBDataReader)cmd.ExecuteReader();
+            while (r.Read()) contracts.Add(r.GetString(0));
+        }
+
+        // 2. 逐品种统计
+        var lines = new List<string>();
+        lines.Add($"Full Instrument Scan — {DateTime.Now:yyyy-MM-dd HH:mm} — {contracts.Count} contracts found");
+        lines.Add("");
+        lines.Add(string.Format("{0,-6} {1,6} {2,-12} {3,-12} {4,10} {5,8} {6,6} {7,4} {8,4} {9,-9}", "Code", "Days", "From", "To", "AvgVol", "AvgPx", "ATR%", "Liq", "Vol", "Status"));
+        lines.Add(new string('-', 90));
+
+        foreach (var inst in contracts)
+        {
+            var code = inst.Replace("000", "");
+            try
+            {
+                using var cmd = db.CreateCommand();
+                cmd.CommandText = $"""
+                    SELECT COUNT(*) AS days, MIN(bar_time), MAX(bar_time),
+                           AVG(volume) AS avg_vol, AVG(close::DOUBLE)/{S} AS avg_px
+                    FROM bars_day WHERE instrument_id='{inst}' AND volume>0
+                    """;
+                using var r = (DuckDBDataReader)cmd.ExecuteReader();
+                if (!r.Read() || r.IsDBNull(0)) continue;
+                var days = r.GetInt64(0);
+                if (days < 100) continue; // 过滤数据太少的品种
+                var from = (r.GetFieldType(1) == typeof(string) ? r.GetString(1)[..10] : r.GetDateTime(1).ToString("yyyy-MM-dd"));
+                var to = (r.GetFieldType(2) == typeof(string) ? r.GetString(2)[..10] : r.GetDateTime(2).ToString("yyyy-MM-dd"));
+                var avgVol = r.GetDouble(3);
+                var avgPx = r.GetDouble(4);
+
+                // 波动率: 直接用 DuckDB 的日振幅(VOL)
+                using var vCmd = db.CreateCommand();
+                vCmd.CommandText = $"SELECT AVG(ABS(high-low)::DOUBLE/{S}/{avgPx}*100) FROM bars_day WHERE instrument_id='{inst}' AND volume>0";
+                using var vR = (DuckDBDataReader)vCmd.ExecuteReader();
+                var atrPct = vR.Read() && !vR.IsDBNull(0) ? vR.GetDouble(0) : 0;
+
+                int liq = avgVol > 500000 ? 5 : avgVol > 200000 ? 4 : avgVol > 100000 ? 3 : avgVol > 50000 ? 2 : 1;
+                int vol = atrPct > 3 ? 5 : atrPct > 2 ? 4 : atrPct > 1.5 ? 3 : atrPct > 1 ? 2 : 1;
+                var status = (liq >= 3 && vol >= 3) ? "TRADE" : (liq >= 2 && vol >= 2) ? "candidate" : "skip";
+
+                lines.Add($"{code,-6} {days,6:N0} {from,-12} {to,-12} {avgVol,10:N0} {avgPx,8:F1} {atrPct,6:F2} {liq,4} {vol,4} {status}");
+            }
+            catch (Exception ex) { lines.Add($"{code,-6}  ERROR: {ex.Message[..50]}"); }
+        }
+
+        File.WriteAllLines(outPath, lines);
+        Console.WriteLine($"Scan done: {lines.Count - 4} instruments → {outPath}");
+    }
+
+    [Fact]
     public void CrossCheck_DumpForWenHua()
     {
         var outPath = Path.Combine(RepoRoot(), "scripts", "_kline_ref.txt");
