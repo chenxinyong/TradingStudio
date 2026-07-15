@@ -1,24 +1,24 @@
-═══ 策略对比矩阵 (15min K线) — 2026-07-15 20:57 ═══
+═══ 策略对比矩阵 (15min K线) — 2026-07-15 22:18 ═══
 Top5 品种: rb000, MA000, TA000, FG000, SA000, 100k本金, 固定5元/手
 
 rb: loaded 43560 15min bars, 2020-01-02 ~ 2026-06-30
   BuyAndHold  : FinalEq=     94975  uPnL=   -5025  Trades=  0  MaxDD=25.91%  Fees=      0
-  MaCross     : FinalEq=       -97  uPnL= -100286  Trades=173  MaxDD=100.29%  Fees=   3890
+  DonchianTrend: FinalEq=      -719  uPnL= -101831  Trades=136  MaxDD=101.83%  Fees=   3160
 
 MA: loaded 38062 15min bars, 2020-01-02 ~ 2026-06-30
   BuyAndHold  : FinalEq=    102485  uPnL=    2485  Trades=  0  MaxDD=18.86%  Fees=      0
-  MaCross     : FinalEq=      -605  uPnL= -100763  Trades=212  MaxDD=100.76%  Fees=   4480
+  DonchianTrend: FinalEq=       -88  uPnL= -100202  Trades=185  MaxDD=100.20%  Fees=   3885
 
 TA: loaded 37919 15min bars, 2020-01-02 ~ 2026-06-30
   BuyAndHold  : FinalEq=    106045  uPnL=    6045  Trades=  0  MaxDD=28.82%  Fees=      0
-  MaCross     : FinalEq=       -99  uPnL= -100393  Trades=181  MaxDD=100.39%  Fees=   3005
+  DonchianTrend: FinalEq=       -59  uPnL= -100150  Trades=165  MaxDD=100.15%  Fees=   3160
 
 FG: loaded 38278 15min bars, 2020-01-02 ~ 2026-06-30
   BuyAndHold  : FinalEq=     94795  uPnL=   -5205  Trades=  0  MaxDD=18.97%  Fees=      0
-  MaCross     : FinalEq=      -291  uPnL= -100301  Trades=248  MaxDD=100.30%  Fees=   6100
+  DonchianTrend: FinalEq=       -79  uPnL= -100156  Trades=153  MaxDD=100.31%  Fees=   7900
 
 SA: loaded 38198 15min bars, 2020-01-02 ~ 2026-06-30
   BuyAndHold  : FinalEq=     94445  uPnL=   -5555  Trades=  0  MaxDD=21.26%  Fees=      0
-  MaCross     : FinalEq=       -84  uPnL= -100190  Trades=225  MaxDD=100.73%  Fees=   5720
+  DonchianTrend: FinalEq=      -103  uPnL= -100261  Trades=165  MaxDD=100.26%  Fees=   6915
 
 Done.

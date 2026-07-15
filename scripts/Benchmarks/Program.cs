@@ -4,6 +4,7 @@ using TradingStudio.Core.Models;
 using TradingStudio.Core.Strategy;
 using TradingStudio.Engine;
 using TradingStudio.Engine.Examples;
+using TradingStudio.Strategy;
 
 const string DbPath = @"C:\Works\ClaudeCode\TradingStudio\data\bars_history.duckdb";
 string[] insts = ["rb000", "MA000", "TA000", "FG000", "SA000"];
@@ -11,7 +12,7 @@ const string Period = "15min";
 string Table = $"bars_{Period}";
 
 // Register strategies
-StrategyFactory.Register<MaCrossStrategy>("MaCross");
+StrategyFactory.Register<DonchianTrendStrategy>("DonchianTrend");
 StrategyFactory.Register<BuyAndHold>("BuyAndHold");
 
 var outPath = @$"C:\Works\ClaudeCode\TradingStudio\scripts\_strategy_matrix.txt";
@@ -42,7 +43,7 @@ foreach (var inst in insts)
     foreach (var (sType, sParams) in new (string, Action<StrategyParameters>)[]
     {
         ("BuyAndHold", p => { }),
-        ("MaCross", p => { p.Add("FastPeriod","10"); p.Add("SlowPeriod","30"); p.Add("AdxPeriod","0"); p.Add("MinAdx","0"); p.Add("DailyTrendFilter","false"); p.Add("MaxPosition","4"); p.Add("MaxMarginRatio","0.50"); p.Add("RiskPerTrade","0.02"); }),
+        ("DonchianTrend", p => { p.Add("ChannelPeriod","20"); p.Add("ExitPeriod","10"); p.Add("TrendMAPeriod","0"); p.Add("AtrPeriod","20"); }),
     })
     {
         var feed = new MockBarFeed(bars); feed.Initialize(bars[0].BarTime, bars[^1].BarTime, [inst]);

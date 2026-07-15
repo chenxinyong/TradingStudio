@@ -9,5 +9,6 @@
     <ProjectReference Include="..\..\src\TradingStudio.Engine\TradingStudio.Engine.csproj" />
     <ProjectReference Include="..\..\src\TradingStudio.Data\TradingStudio.Data.csproj" />
     <ProjectReference Include="..\..\src\TradingStudio.Core\TradingStudio.Core.csproj" />
+    <ProjectReference Include="..\..\src\TradingStudio.Strategy\TradingStudio.Strategy.csproj" />
   </ItemGroup>
 </Project>
