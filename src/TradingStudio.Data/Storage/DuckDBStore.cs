@@ -446,8 +446,8 @@ public class DuckDBStore : IBarStore, ITickStore
                     .AppendValue(e.StrategyId).AppendValue(e.Direction.ToString())
                     .AppendValue(e.Quantity).AppendValue(e.OrderQty)
                     .AppendValue(e.FilledQty).AppendValue(e.Type.ToString())
-                    .AppendValue(e.FillPrice).AppendValue(e.Fee)
-                    .AppendValue(e.Slippage).AppendValue(e.Message ?? "")
+                    .AppendValue((double?)e.FillPrice ?? 0).AppendValue((double)e.Fee)
+                    .AppendValue((double)e.Slippage).AppendValue(e.Message ?? "")
                     .AppendValue(e.Time.DateTime).EndRow();
             }
         }
@@ -467,9 +467,9 @@ public class DuckDBStore : IBarStore, ITickStore
                 appender.CreateRow()
                     .AppendValue(t.InstrumentId).AppendValue(t.StrategyId)
                     .AppendValue(t.Quantity)
-                    .AppendValue(t.EntryPrice).AppendValue(t.ExitPrice)
-                    .AppendValue(t.PnL).AppendValue(t.Fee)
-                    .AppendValue(t.Slippage)
+                    .AppendValue((double)t.EntryPrice).AppendValue((double)t.ExitPrice)
+                    .AppendValue((double)t.PnL).AppendValue((double)t.Fee)
+                    .AppendValue((double)t.Slippage)
                     .AppendValue(t.EntryTime).AppendValue(t.ExitTime).EndRow();
             }
         }

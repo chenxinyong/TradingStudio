@@ -1,3 +1,4 @@
+using DuckDB.NET.Data;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Strategy;
@@ -42,11 +43,31 @@ public class EventPersistenceTests
     }
 
     [Fact]
-    public void DuckDBStore_WriteMethods_Exist()
+    public async Task DuckDBStore_WriteAndQuery_RoundTrip()
     {
-        // 验证持久化 API 存在且可调用（DuckDB 原生库在此环境不可用，不测实际写入）
-        Assert.NotNull(typeof(DuckDBStore).GetMethod("WriteOrderEvents"));
-        Assert.NotNull(typeof(DuckDBStore).GetMethod("WriteTrades"));
+        var dbPath = Path.Combine(Path.GetTempPath(), $"evt_rw_{Guid.NewGuid():N}.duckdb");
+        try
+        {
+            var store = new DuckDBStore(dbPath);
+            // 写成交
+            store.WriteTrades(new List<Trade>
+            {
+                new() { InstrumentId="rb", StrategyId="s1", Quantity=1, EntryPrice=3500, ExitPrice=3600, PnL=1000, Fee=10, Slippage=5, EntryTime=new(2026,1,5,9,0,0), ExitTime=new(2026,1,5,14,0,0) },
+                new() { InstrumentId="rb", StrategyId="s1", Quantity=2, EntryPrice=3600, ExitPrice=3550, PnL=-1000, Fee=20, Slippage=8, EntryTime=new(2026,2,10,9,0,0), ExitTime=new(2026,2,20,14,0,0) },
+            });
+
+            // 查询验证
+            using var db = new DuckDBConnection($"Data Source={dbPath}");
+            db.Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*), SUM(pnl), COUNT(*) FILTER(WHERE pnl>0) FROM trades";
+            using var reader = (DuckDBDataReader)await cmd.ExecuteReaderAsync();
+            Assert.True(reader.Read());
+            Assert.Equal(2, reader.GetInt64(0));  // 2 trades written
+            Assert.Equal(0, reader.GetDouble(1), 9); // sum(pnl) = 1000 + (-1000)
+            Assert.Equal(1, reader.GetInt64(2));  // 1 winning trade
+        }
+        finally { try { File.Delete(dbPath); } catch { } }
     }
 
     private static Bar Bar(decimal o, decimal h, decimal l, decimal c) => new()
