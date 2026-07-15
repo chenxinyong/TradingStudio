@@ -321,13 +321,15 @@ public class VerifyService
             : "substr(prev_time,12,5)";
 
         long totalBars = 0;
+        var queryFailed = false;
         foreach (var inst in sampleInstruments)
         {
             try
             {
                 using var countCmd = conn.CreateCommand();
-                countCmd.CommandText = "SELECT COUNT(*) FROM bars_1min WHERE instrument_id = @inst";
-                AddParam(countCmd, "@inst", inst);
+                // $name: DuckDB 不支持 @ 前缀参数；Microsoft.Data.Sqlite 对 $ 原生支持，双引擎兼容
+                countCmd.CommandText = "SELECT COUNT(*) FROM bars_1min WHERE instrument_id = $inst";
+                AddParam(countCmd, "inst", inst);
                 var barCount = (long)(await countCmd.ExecuteScalarAsync())!;
                 totalBars += barCount;
 
@@ -336,7 +338,7 @@ public class VerifyService
                     SELECT COUNT(*) FROM (
                         SELECT bar_time,
                             LAG(bar_time) OVER (ORDER BY bar_time) prev_time
-                        FROM bars_1min WHERE instrument_id = @inst
+                        FROM bars_1min WHERE instrument_id = $inst
                     ) sub WHERE prev_time IS NOT NULL
                         AND {epochDiff} > 1800
                         AND {epochDiff} < 86400
@@ -344,7 +346,7 @@ public class VerifyService
                         AND NOT ({prevTimeExtract} = '15:00' AND {timeExtract} = '21:01')
                         AND NOT ({prevTimeExtract} = '02:30' AND {timeExtract} = '09:01')
                         AND NOT ({prevTimeExtract} = '01:00' AND {timeExtract} = '09:01')";
-                AddParam(cmd, "@inst", inst);
+                AddParam(cmd, "inst", inst);
                 var gaps = (long)(await cmd.ExecuteScalarAsync())!;
                 if (gaps > 0)
                 {
@@ -353,9 +355,10 @@ public class VerifyService
                     totalGaps += (int)gaps;
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                details.Add("Gap detection: skipped (window function not supported)");
+                details.Add($"Gap detection failed for {inst}: {ex.GetType().Name}: {ex.Message}");
+                queryFailed = true;
                 break;
             }
         }
@@ -369,6 +372,12 @@ public class VerifyService
         d.Summary = totalGaps == 0 ? "No gaps in sampled instruments"
             : $"{totalGaps} gaps / {totalBars:N0} bars ({gapPct:F2}%), {sampleInstruments.Count} instruments";
         if (gapPct > 0) details.Insert(0, $"Gap rate: {gapPct:F2}% across {sampleInstruments.Count} sampled instruments");
+        if (queryFailed)
+        {
+            // 查询异常时结果不完整，不能让维度落入"0 问题 → PASS"的假绿
+            d.Status = DimensionStatus.Warn;
+            d.Summary = "Gap detection query error — results incomplete";
+        }
         d.Details = details;
         return d;
     }
@@ -382,6 +391,7 @@ public class VerifyService
         var details = new List<string>();
         int mismatches = 0;
         var totalChecked = 0;
+        var queryFailed = false;
 
         var commonInsts = new List<string>();
         using (var cmd = conn.CreateCommand())
@@ -407,10 +417,10 @@ public class VerifyService
                         SUM(m1.volume)
                     FROM bars_day d
                     JOIN bars_1min m1 ON m1.instrument_id = d.instrument_id AND CAST(m1.bar_time AS DATE) = CAST(d.bar_time AS DATE)
-                    WHERE d.instrument_id = @inst
-                    GROUP BY d.trading_day, d.bar_time, d.open, d.high, d.low, d.close, d.volume
+                    WHERE d.instrument_id = $inst
+                    GROUP BY d.instrument_id, d.trading_day, d.bar_time, d.open, d.high, d.low, d.close, d.volume
                     LIMIT 30";
-                AddParam(cmd, "@inst", inst);
+                AddParam(cmd, "inst", inst);
 
                 using var r2 = await cmd.ExecuteReaderAsync();
                 while (await r2.ReadAsync())
@@ -440,6 +450,7 @@ public class VerifyService
             catch (Exception ex)
             {
                 details.Add($"Cross-check failed for {inst}: {ex.Message}");
+                queryFailed = true;
                 break;
             }
         }
@@ -452,6 +463,12 @@ public class VerifyService
         d.IssueCount = mismatches;
         d.Status = mismatches == 0 ? DimensionStatus.Pass : mismatches > 20 ? DimensionStatus.Fail : DimensionStatus.Warn;
         d.Summary = mismatches == 0 ? "1min→day aggregation matches" : $"{mismatches}/{totalChecked} days mismatch";
+        if (queryFailed)
+        {
+            // 查询异常时结果不完整，不能让维度落入"0 mismatch → PASS"的假绿
+            d.Status = DimensionStatus.Warn;
+            d.Summary = "Cross-check query error — results incomplete";
+        }
         d.Details = details;
         return d;
     }
