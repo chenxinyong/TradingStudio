@@ -40,12 +40,16 @@ public static class StrategyFactory
         // 实例化（策略类需要无参构造函数；初始化通过 Initialize 完成）
         var strategy = (IStrategy)Activator.CreateInstance(type)!;
 
-        // 应用配置覆盖
+        // 应用配置覆盖；未知键（多为属性名拼错）显式告警，避免参数静默失效
         var parameters = DiscoverParameters(type);
         foreach (var (key, value) in config.Parameters)
         {
             if (parameters.TryGetValue(key, out var prop))
                 prop.SetValue(strategy, Convert.ChangeType(value, prop.PropertyType));
+            else
+                Console.Error.WriteLine(
+                    $"[StrategyFactory] 警告: 策略 {config.StrategyType} 无参数 '{key}'，已忽略。" +
+                    $"可用参数: {string.Join(", ", parameters.Keys.OrderBy(k => k))}");
         }
 
         // 验证参数范围
