@@ -12,6 +12,7 @@ public class QuotePipeline : IDisposable
 {
     private readonly HashSet<string> _top30Codes;
     private readonly TickCsvWriter _tickWriter;
+    private readonly TickAggregationGate? _gate;
 
     public BarAggregator Agg1Min { get; }
     public DailyBarAggregator AggDay { get; }
@@ -19,12 +20,14 @@ public class QuotePipeline : IDisposable
     public long QuoteCount;
     public long BarCount;
     public long TickSkipped;
+    public long AggFiltered;
 
-    /// <summary>仅 Top30 品种写 CSV（空集合 = 全量写）</summary>
-    public QuotePipeline(TickCsvWriter tickWriter, HashSet<string> top30Codes)
+    /// <summary>仅 Top30 品种写 CSV（空集合 = 全量写）。registry 非空时启用聚合闸门（时段+陈旧快照过滤），null = 关闭过滤。</summary>
+    public QuotePipeline(TickCsvWriter tickWriter, HashSet<string> top30Codes, FutureRegistry? registry = null)
     {
         _tickWriter = tickWriter;
         _top30Codes = top30Codes;
+        _gate = registry != null ? new TickAggregationGate(registry) : null;
         Agg1Min = new BarAggregator();
         AggDay = new DailyBarAggregator();
     }
@@ -38,9 +41,19 @@ public class QuotePipeline : IDisposable
         var record = QuoteConverter.FromCTPQuote(q);
         var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
 
-        // Bar 聚合
-        Agg1Min.Feed(record, instId, tradingDay);
-        AggDay.Feed(record, instId, tradingDay);
+        // Bar 聚合（闸门只挡聚合路径：盘外/陈旧快照 tick 不进 Bar，CSV 照写）
+        // ExchangeTime 是"北京墙钟当UTC"编码 → TimeOfDay 即北京时间；LocalTime 是真实 UTC → +8h
+        var pass = _gate == null || _gate.ShouldAggregate(instId,
+            record.ExchangeTime.TimeOfDay, record.LocalTime.AddHours(8).TimeOfDay);
+        if (pass)
+        {
+            Agg1Min.Feed(record, instId, tradingDay);
+            AggDay.Feed(record, instId, tradingDay);
+        }
+        else
+        {
+            Interlocked.Increment(ref AggFiltered);
+        }
         Interlocked.Increment(ref QuoteCount);
 
         // Top 30 分层：空集合 = 全量写 CSV
@@ -57,7 +70,17 @@ public class QuotePipeline : IDisposable
         _tickWriter.Write(in row);
     }
 
-    /// <summary>收盘/会话结束时 flush 未完成的 Bar</summary>
+    /// <summary>
+    /// 重连前/收盘时的轻量 flush：1min 正常发射（其累计量状态本就跨 flush 保留），
+    /// 日线只发快照不清状态——交易日未结束（夜盘→次日日盘），清了会丢夜盘 OHLCV。
+    /// </summary>
+    public void FlushSnapshots()
+    {
+        Agg1Min.Flush();
+        AggDay.EmitSnapshots();
+    }
+
+    /// <summary>停机 flush：发射全部并清空状态。仅 Dispose 路径使用。</summary>
     public void Flush()
     {
         Agg1Min.Flush();

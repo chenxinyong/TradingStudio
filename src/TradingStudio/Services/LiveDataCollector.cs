@@ -59,7 +59,7 @@ public class LiveDataCollector : BackgroundService
 
             try
             {
-                var pipeline = new QuotePipeline(_tickWriter!, _top30Codes);
+                var pipeline = new QuotePipeline(_tickWriter!, _top30Codes, _registry);   // registry 启用聚合闸门
                 barChannel = Channel.CreateBounded<Bar>(4096);
 
                 pipeline.Agg1Min.OnBar += bar => {
