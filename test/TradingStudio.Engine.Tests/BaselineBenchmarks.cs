@@ -102,6 +102,8 @@ public class BaselineBenchmarks
     [Fact]
     public async Task Baseline_MaCross_Top5Daily_ReportToFile()
     {
+        if (!File.Exists(DbPath)) return;   // 无历史库的机器上软跳过
+
         StrategyFactory.Register<MaCrossStrategy>("MaCross");
         var outPath = Path.Combine(RepoRoot(), "scripts", "_baseline_benchmarks.txt");
         var lines = new List<string>
@@ -163,7 +165,7 @@ public class BaselineBenchmarks
                 var trades = sr.TotalTrades;
                 var finalEquity = report.FinalPortfolio.TotalEquity;
 
-                lines.Add($"{code,-6} {totalPnL,10:F0} {wr,6:F1}% {plr,7:F2} {mdd,7:F2} {trades,6} {finalEquity,10:F0}");
+                lines.Add($"{code,-6} {totalPnL,10:F0} {wr,6:F1}% {plr,7:F2} {mdd,7:P1} {trades,6} {finalEquity,10:F0}");
             }
             catch (Exception ex)
             {

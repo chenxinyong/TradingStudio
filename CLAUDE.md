@@ -92,10 +92,10 @@ src/
 ├── scripts/                 daily_import.ps1, data_status.py, gen_symbols_json.py
 └── test/
     ├── TradingStudio.Core.Tests/   44 tests — TickRecord, Bar, CsvTickRecord, 技术指标数学, 手续费
-    ├── TradingStudio.Data.Tests/   16 tests — BarAggregator, MultiBarAggregator, CsvTickImporter
-    ├── TradingStudio.Engine.Tests/ 143 tests — 引擎(端到端黄金验证+每日盯市结算), 风控/撮合(涨跌停/滑点/爆仓/购买力), Portfolio
+    ├── TradingStudio.Data.Tests/   22 tests — BarAggregator, MultiBarAggregator, CsvTickImporter, K线一致性
+    ├── TradingStudio.Engine.Tests/ 144 tests — 引擎(端到端黄金验证+每日盯市结算+基准回测), 风控/撮合(涨跌停/滑点/爆仓/购买力), Portfolio
     ├── TradingStudio.Strategy.Tests/ 14 tests — 缠论 包含/分型/笔/中枢
-    ├── ChanLunTest/                手动 demo (Program.cs，非自动化，不计入 217)
+    ├── ChanLunTest/                手动 demo (Program.cs，非自动化，不计入 224)
     └── TradingStudio.SignalRContractTest/  手动 demo (SignalR 连通性，非自动化)
 ```
 
@@ -267,7 +267,7 @@ main ← feat/* ← fix/* ← chore/*
 **规则：**
 - 从 `main` 创建分支，完成后合并回 `main`
 - 不在 `main` 上直接开发大于单 commit 的功能
-- 合并前确保测试全绿（当前：217/217 — Core 44 + Data 16 + Engine 143 + Strategy 14）
+- 合并前确保测试全绿（当前：224/224 — Core 44 + Data 22 + Engine 144 + Strategy 14）
 - 小修复（<20行、单文件、编译器可验证）可直接在 `main` 提交
 - 实验性工作（网格搜索、策略探索）产出放在 gitignored 目录（`configs/grid/`、`configs/batch/`）
 
