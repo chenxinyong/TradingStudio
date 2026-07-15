@@ -152,17 +152,18 @@ public class MaCrossStrategy : IStrategy
 
             if (exit)
             {
-                _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"多头出场: {bar.InstrumentId} {reason}");
+                var ticket = _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"多头出场: {bar.InstrumentId} {reason}");
                 s.ResetTrade();
                 if (reverse)
                 {
-                    var q = PositionSizer.FromAtrStop(bar.CloseDouble, s.Atr, StopAtrMult,
-                    _ctx.GetFuture(bar.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
-                    RiskPerTrade, (double)MaxMarginRatio, MaxPosition);
-                    if (q > 0) { _ctx.MarketSell(bar.InstrumentId, q, "反手");
-                        s.Trail = bar.CloseDouble + StopAtrMult * s.Atr;
-                        s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble - TakeProfitAtrMult * s.Atr : 0;
-                        s.EntryPrice = bar.CloseDouble; s.Direction = "Short"; s.BarsHeld = 0; }
+                    // 延迟反手：平仓成交确认后 OnOrderEvent 再开反向仓
+                    // 修复原 ClosePosition→立即 MarketSell 的双倍仓位 Bug
+                    s.PendingReverse = new PendingReverseInfo
+                    {
+                        CloseOrderId = ticket.OrderId,
+                        SignalPrice = bar.CloseDouble,
+                        Direction = "Short",
+                    };
                 }
             }
             else s.BarsHeld++;
@@ -181,17 +182,17 @@ public class MaCrossStrategy : IStrategy
 
             if (exit)
             {
-                _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"空头出场: {bar.InstrumentId} {reason}");
+                var ticket = _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"空头出场: {bar.InstrumentId} {reason}");
                 s.ResetTrade();
                 if (reverse)
                 {
-                    var q = PositionSizer.FromAtrStop(bar.CloseDouble, s.Atr, StopAtrMult,
-                    _ctx.GetFuture(bar.InstrumentId), (double)(_ctx.Equity > 0 ? _ctx.Equity : _ctx.AllocatedCapital),
-                    RiskPerTrade, (double)MaxMarginRatio, MaxPosition);
-                    if (q > 0) { _ctx.MarketBuy(bar.InstrumentId, q, "反手");
-                        s.Trail = bar.CloseDouble - StopAtrMult * s.Atr;
-                        s.TakeProfit = TakeProfitAtrMult > 0 ? bar.CloseDouble + TakeProfitAtrMult * s.Atr : 0;
-                        s.EntryPrice = bar.CloseDouble; s.Direction = "Long"; s.BarsHeld = 0; }
+                    // 延迟反手：平仓成交确认后 OnOrderEvent 再开反向仓
+                    s.PendingReverse = new PendingReverseInfo
+                    {
+                        CloseOrderId = ticket.OrderId,
+                        SignalPrice = bar.CloseDouble,
+                        Direction = "Long",
+                    };
                 }
             }
             else s.BarsHeld++;
@@ -252,7 +253,42 @@ public class MaCrossStrategy : IStrategy
         s.PrevSlow = curSlow;
     }
 
-    public void OnOrderEvent(OrderEvent evt) { }
+    public void OnOrderEvent(OrderEvent evt)
+    {
+        if (evt.Type != OrderEventType.Filled) return;
+        if (!_state.TryGetValue(evt.InstrumentId, out var s)) return;
+
+        // 平仓确认 → 反向开仓（修复原 ClosePosition→立即 MarketBuy 的双倍仓位 Bug）
+        if (s.PendingReverse != null && s.PendingReverse.CloseOrderId != 0
+            && evt.OrderId == s.PendingReverse.CloseOrderId)
+        {
+            var r = s.PendingReverse;
+            s.PendingReverse = null; // 清除，防重复触发
+
+            var future = _ctx.GetFuture(evt.InstrumentId);
+            var equity = (double)(_ctx.Equity > 0 ? _ctx.Equity : 100_000);
+            var q = PositionSizer.FromAtrStop(r.SignalPrice, s.Atr, StopAtrMult, future, equity, RiskPerTrade, (double)MaxMarginRatio, MaxPosition);
+            if (q <= 0) return;
+
+            if (r.Direction == "Short")
+            {
+                _ctx.MarketSell(evt.InstrumentId, q, "反手");
+                s.Trail = r.SignalPrice + StopAtrMult * s.Atr;
+                s.TakeProfit = TakeProfitAtrMult > 0 ? r.SignalPrice - TakeProfitAtrMult * s.Atr : 0;
+            }
+            else
+            {
+                _ctx.MarketBuy(evt.InstrumentId, q, "反手");
+                s.Trail = r.SignalPrice - StopAtrMult * s.Atr;
+                s.TakeProfit = TakeProfitAtrMult > 0 ? r.SignalPrice + TakeProfitAtrMult * s.Atr : 0;
+            }
+            s.EntryPrice = r.SignalPrice;
+            s.Direction = r.Direction;
+            s.BarsHeld = 0;
+            _ctx.Log($"反手开仓: {evt.InstrumentId} @{r.SignalPrice:F0} SL={s.Trail:F0} ({r.Direction})");
+        }
+    }
+
     public void OnEndOfAlgorithm() { }
 
     /// <summary>品种状态 — ATR + ADX + 止损/止盈 + 退出追踪</summary>
@@ -276,6 +312,7 @@ public class MaCrossStrategy : IStrategy
         public double PrevFast = double.NaN, PrevSlow = double.NaN;
         public double Adx;              // 当前ADX值
         public double TrendSma;         // 日线趋势代理SMA
+        public PendingReverseInfo? PendingReverse; // 平仓确认后延迟反手
 
         public InstrumentState(int atrPeriod, int adxPeriod = 0, int trendPeriod = 0)
         {
@@ -329,6 +366,15 @@ public class MaCrossStrategy : IStrategy
         {
             Trail = 0; TakeProfit = 0; EntryPrice = 0;
             Direction = null; BarsHeld = 0;
+            PendingReverse = null;
         }
+    }
+
+    /// <summary>延迟反手：平仓成交确认后，OnOrderEvent 再开反向仓</summary>
+    private sealed class PendingReverseInfo
+    {
+        public long CloseOrderId;
+        public double SignalPrice;
+        public string Direction = "";  // "Long" or "Short"
     }
 }
