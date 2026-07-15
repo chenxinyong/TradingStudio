@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using DuckDB.NET.Data;
+using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Storage;
 
@@ -427,6 +428,55 @@ public class DuckDBStore : IBarStore, ITickStore
     }
 
     // ═══════════════════════════════════════════
+    // Order/Trade 持久化（原则3: 所有事件可回放）
+    // ═══════════════════════════════════════════
+
+    /// <summary>批量写入订单事件。线程安全（每次调用创建独立连接）。</summary>
+    public void WriteOrderEvents(IReadOnlyList<OrderEvent> events)
+    {
+        if (_readOnly || events.Count == 0) return;
+        try
+        {
+            using var conn = OpenConnection();
+            using var appender = conn.CreateAppender("order_events");
+            foreach (var e in events)
+            {
+                appender.CreateRow()
+                    .AppendValue(e.OrderId).AppendValue(e.InstrumentId)
+                    .AppendValue(e.StrategyId).AppendValue(e.Direction.ToString())
+                    .AppendValue(e.Quantity).AppendValue(e.OrderQty)
+                    .AppendValue(e.FilledQty).AppendValue(e.Type.ToString())
+                    .AppendValue(e.FillPrice).AppendValue(e.Fee)
+                    .AppendValue(e.Slippage).AppendValue(e.Message ?? "")
+                    .AppendValue(e.Time.DateTime).EndRow();
+            }
+        }
+        catch (Exception ex) { Console.Error.WriteLine($"[DuckDB] WriteOrderEvents error: {ex.Message}"); }
+    }
+
+    /// <summary>批量写入成交记录。</summary>
+    public void WriteTrades(IReadOnlyList<Trade> trades)
+    {
+        if (_readOnly || trades.Count == 0) return;
+        try
+        {
+            using var conn = OpenConnection();
+            using var appender = conn.CreateAppender("trades");
+            foreach (var t in trades)
+            {
+                appender.CreateRow()
+                    .AppendValue(t.InstrumentId).AppendValue(t.StrategyId)
+                    .AppendValue(t.Quantity)
+                    .AppendValue(t.EntryPrice).AppendValue(t.ExitPrice)
+                    .AppendValue(t.PnL).AppendValue(t.Fee)
+                    .AppendValue(t.Slippage)
+                    .AppendValue(t.EntryTime).AppendValue(t.ExitTime).EndRow();
+            }
+        }
+        catch (Exception ex) { Console.Error.WriteLine($"[DuckDB] WriteTrades error: {ex.Message}"); }
+    }
+
+    // ═══════════════════════════════════════════
     // 内部
     // ═══════════════════════════════════════════
 
@@ -493,6 +543,39 @@ public class DuckDBStore : IBarStore, ITickStore
                 ON ticks_recent(symbol, exchange_ts);
             CREATE INDEX IF NOT EXISTS idx_ticks_received
                 ON ticks_recent(received_at);
+
+            -- 订单事件表（原则3: 所有事件可回放）
+            CREATE TABLE IF NOT EXISTS order_events (
+                order_id    BIGINT NOT NULL,
+                instrument_id VARCHAR NOT NULL,
+                strategy_id VARCHAR NOT NULL,
+                direction   VARCHAR NOT NULL,
+                quantity    INTEGER NOT NULL,
+                order_qty   INTEGER NOT NULL,
+                filled_qty  INTEGER NOT NULL,
+                type        VARCHAR NOT NULL,
+                fill_price  DOUBLE,
+                fee         DOUBLE,
+                slippage    DOUBLE,
+                message     VARCHAR,
+                event_time  TIMESTAMP NOT NULL,
+                PRIMARY KEY (order_id, type, event_time)
+            );
+
+            -- 成交记录表
+            CREATE TABLE IF NOT EXISTS trades (
+                instrument_id VARCHAR NOT NULL,
+                strategy_id VARCHAR NOT NULL,
+                quantity    INTEGER NOT NULL,
+                entry_price DOUBLE NOT NULL,
+                exit_price  DOUBLE NOT NULL,
+                pnl         DOUBLE NOT NULL,
+                fee         DOUBLE NOT NULL,
+                slippage    DOUBLE,
+                entry_time  TIMESTAMP NOT NULL,
+                exit_time   TIMESTAMP NOT NULL,
+                UNIQUE (instrument_id, strategy_id, entry_time, exit_time)
+            );
         ";
         cmd.ExecuteNonQuery();
     }

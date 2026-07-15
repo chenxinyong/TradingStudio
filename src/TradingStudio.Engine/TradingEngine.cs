@@ -18,6 +18,7 @@ public class TradingEngine
     private readonly StrategyContainer _strategies;
     private readonly RiskController _risk;
     private readonly DailyRiskTracker? _dailyTracker; // Chan 多层风控:日/月/连亏
+    private Data.Storage.DuckDBStore? _eventStore; // Order/Trade 持久化（原则3）
     private readonly FeedbackMonitor _feedback;
     private readonly TickSnapshot _tickSnapshot;
     private readonly EngineOptions _options;
@@ -43,6 +44,7 @@ public class TradingEngine
         _indicators = indicators;
         _strategies = strategies;
         _dailyTracker = risk.DailyTracker; // 同一实例: RiskController 管 CheckPreOrder, 引擎管 RecordPnl
+        _eventStore = null; // 持久化由外部注入（可选，见 SetEventStore）
         _risk = risk;
         _feedback = feedback;
         _tickSnapshot = tickSnapshot;
@@ -52,6 +54,9 @@ public class TradingEngine
     }
 
     /// <summary>运行引擎，返回完整报告。</summary>
+    /// <summary>注入事件持久化（原则3: Order/Trade 落盘）。回测结束前批量写入缓存的订单和成交。</summary>
+    public void SetEventStore(Data.Storage.DuckDBStore? store) { _eventStore = store; }
+
     public async Task<EngineReport> RunAsync(CancellationToken ct = default)
     {
         _dataFeed.Initialize(_options.StartTime, _options.EndTime, _options.Instruments);
@@ -329,6 +334,15 @@ public class TradingEngine
             fillChannel.Writer.Complete();
             cts.Cancel();
             try { await fillReadTask; } catch (OperationCanceledException) { }
+        }
+
+        // 回测模式：持久化 Order/Trade 事件（原则3: 所有事件必须可回放）
+        if (_eventStore != null)
+        {
+            if (_execution is ExecutionHandler eh && eh.OrderHistory.Count > 0)
+                _eventStore.WriteOrderEvents(eh.OrderHistory);
+            if (globalTrades.Count > 0)
+                _eventStore.WriteTrades(globalTrades);
         }
 
         // 回测模式：生成报告
