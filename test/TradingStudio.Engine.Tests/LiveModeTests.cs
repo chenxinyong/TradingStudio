@@ -12,23 +12,26 @@ namespace TradingStudio.Engine.Tests;
 public class LiveModeTests
 {
     [Fact]
-    public async Task LiveMode_RunAsync_WithBarFeed_ReturnsReport()
+    public async Task LiveMode_FeedEnds_KeepsWaitingForFills_UntilCancelled()
     {
-        // 用一个产出1根 Bar 后立即结束的 Feed → RunAsync 正常返回
+        // Live 模式设计：feed 结束后引擎不返回，而是持续等待 CTP 成交回报
+        // （TradingEngine L324: "实盘模式持续运行"）→ 只能通过取消令牌退出。
+        // 本测试验证: ① Bar 事件在 Live 模式下正常分发 ② 取消令牌能干净退出 RunAsync
         var bars = new[] { new Bar { InstrumentId = "rb2608", TradingDay = new(2026,1,5), BarTime = new(2026,1,5,9,0,0), Open = 3500L*10_000_000, High = 3520L*10_000_000, Low = 3480L*10_000_000, Close = 3510L*10_000_000, Volume = 1000 } }.ToList();
         var feed = new FiniteFeed(bars);
         feed.Initialize(DateTime.Today, DateTime.Today.AddDays(1), ["rb2608"]);
 
         StrategyFactory.Register<LiveNoOp>("LiveNoOp");
+        LiveNoOp.BarsSeen = 0;
         var config = new StrategyConfig { StrategyId = "s", StrategyType = "LiveNoOp", Instruments = ["rb2608"], Priority = 1, AllocatedCapital = 100_000m, };
         var options = new EngineOptions { StartTime = DateTime.Today, EndTime = DateTime.Today.AddDays(1), Instruments = ["rb2608"], StrategyConfigs = [config], StartingCapital = 100_000, IsLive = true, WarmupDays = 0, };
         var registry = FutureRegistry.LoadFromJson("""{"symbols":[{"id":1,"exchange":"SHFE","code":"rb","name":"","category":"","deliveryType":"PHYSICAL","tradingUnit":10,"unitName":"","tickSize":1,"tickValue":10,"priceLimitPct":0.10,"marginRate":0.08,"feePerLot":5,"months":"1-12"}]}""");
 
         var engine = new TradingEngine(feed, new ExecutionHandler(new RiskController(999,999,1.0m)), new PortfolioManager(100_000), new IndicatorManager(), new StrategyContainer(), new RiskController(999,999,1.0m), new FeedbackMonitor(), new TickSnapshot(), options, registry);
-        var report = await engine.RunAsync(CancellationToken.None);
 
-        Assert.NotNull(report);
-        Assert.Equal(100_000m, report.FinalPortfolio.StartingCapital);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => engine.RunAsync(cts.Token));
+        Assert.Equal(1, LiveNoOp.BarsSeen);   // feed 的 Bar 已在取消前分发到策略
     }
 
     [Fact]
@@ -51,17 +54,7 @@ public class LiveModeTests
     }
 
     private sealed class LiveNoOp : IStrategy
-    { public string Name => "LiveNoOp"; public void Initialize(StrategyContext c) { } public void OnTick(TickRecord t, string i) { } public void OnBar(Bar b) { } public void OnOrderEvent(OrderEvent e) { } public void OnEndOfAlgorithm() { } }
-
-    private sealed class EmptyFeed : IDataFeed
-    {
-        public IReadOnlyList<string> Instruments { get; private set; } = [];
-        public DateTime StartTime { get; private set; }
-        public DateTime EndTime { get; private set; }
-        public void Initialize(DateTime s, DateTime e, IReadOnlyList<string> i) { StartTime = s; EndTime = e; Instruments = i; }
-        public async IAsyncEnumerable<DataEvent> StreamAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
-        { await Task.Delay(-1, ct); yield break; }
-    }
+    { public static int BarsSeen; public string Name => "LiveNoOp"; public void Initialize(StrategyContext c) { } public void OnTick(TickRecord t, string i) { } public void OnBar(Bar b) => BarsSeen++; public void OnOrderEvent(OrderEvent e) { } public void OnEndOfAlgorithm() { } }
 
     private sealed class FiniteFeed(List<Bar> bars) : IDataFeed
     {
