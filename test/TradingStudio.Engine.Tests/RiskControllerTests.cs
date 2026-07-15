@@ -348,4 +348,32 @@ public class RiskControllerTests
         var result = rc.CheckPreOrder(Buy(), pf);
         Assert.False(result.Passed);
     }
+
+    // ═══════════════════════════════════════════
+    // DailyRiskTracker 链集成
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public void DailyRiskTracker_Chain_DailyLimitHit_Rejects()
+    {
+        var tracker = new DailyRiskTracker(new RiskTrackerConfig { DailyLossLimit = 0.02 });
+        tracker.RecordPnl(-3000, 100_000); // -3% > 2% → DailyLimitHit
+        var rc = new RiskController(100, 100, 1.0m, dailyTracker: tracker);
+
+        var result = rc.CheckPreOrder(Buy(), new MockPortfolio { Equity = 97_000 });
+        Assert.False(result.Passed);
+        Assert.Contains("DailyLimitHit", result.Reason);
+    }
+
+    [Fact]
+    public void DailyRiskTracker_Chain_NormalState_AllowsTrades()
+    {
+        var tracker = new DailyRiskTracker();
+        var rc = new RiskController(100, 100, 0.50m, dailyTracker: tracker);
+
+        // 远低于 5% 日止损 → Normal
+        tracker.RecordPnl(-1000, 100_000); // -1%
+        var result = rc.CheckPreOrder(Buy(qty: 2), new MockPortfolio { Equity = 99_000 });
+        Assert.True(result.Passed);
+    }
 }

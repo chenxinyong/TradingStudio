@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
+using TradingStudio.Core.Risk;
 using TradingStudio.Core.Strategy;
 
 namespace TradingStudio.Engine;
@@ -16,6 +17,7 @@ public class TradingEngine
     private readonly IndicatorManager _indicators;
     private readonly StrategyContainer _strategies;
     private readonly RiskController _risk;
+    private readonly DailyRiskTracker? _dailyTracker; // Chan 多层风控:日/月/连亏
     private readonly FeedbackMonitor _feedback;
     private readonly TickSnapshot _tickSnapshot;
     private readonly EngineOptions _options;
@@ -40,6 +42,7 @@ public class TradingEngine
         _portfolio = portfolio;
         _indicators = indicators;
         _strategies = strategies;
+        _dailyTracker = risk.DailyTracker; // 同一实例: RiskController 管 CheckPreOrder, 引擎管 RecordPnl
         _risk = risk;
         _feedback = feedback;
         _tickSnapshot = tickSnapshot;
@@ -167,6 +170,7 @@ public class TradingEngine
                     {
                         var trade = _portfolio.ProcessFill(fill, _registry);
                         lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
+                        _dailyTracker?.RecordPnl((double)(trade?.PnL ?? 0), (double)_portfolio.Equity);
                         _strategies.DispatchOrderEvent(fill);
                         outboxWriter?.TryWrite(fill);  // 通知 SignalR 推送端
                     }
@@ -197,7 +201,7 @@ public class TradingEngine
                         var trade = _portfolio.ProcessFill(fill, _registry);
                         lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
                         _feedback.RecordFill(fill, fill.StrategyId);
-                        if (trade != null) _feedback.RecordTrade(trade, fill.StrategyId);
+                        if (trade != null) { _feedback.RecordTrade(trade, fill.StrategyId); _dailyTracker?.RecordPnl((double)trade.PnL, (double)_portfolio.Equity); }
                         _strategies.DispatchOrderEvent(fill);
                     }
 

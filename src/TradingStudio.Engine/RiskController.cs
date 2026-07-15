@@ -12,16 +12,21 @@ public class RiskController
     private readonly List<IRiskRule> _rules = new();
 
     public RiskController(int maxPosition = 5, int maxOrderQty = 100, decimal maxDrawdown = 0.25m,
-        decimal maxStrategyDrawdown = 0)
+        decimal maxStrategyDrawdown = 0, DailyRiskTracker? dailyTracker = null)
     {
         _rules.Add(new MaxPositionPerInstrumentRule(maxPosition));
         _rules.Add(new MaxOrderQuantityRule(maxOrderQty));
         _rules.Add(new MaxDrawdownRule(maxDrawdown));
         if (maxStrategyDrawdown > 0)
             _rules.Add(new MaxStrategyDrawdownRule(maxStrategyDrawdown));
+        if (dailyTracker != null)
+            _rules.Add(dailyTracker); // Chan 多层日/月/连亏风控
     }
 
     public void AddRule(IRiskRule rule) => _rules.Add(rule);
+
+    /// <summary>获取已注册的 DailyRiskTracker（供引擎调 RecordPnl），可能为 null。</summary>
+    public DailyRiskTracker? DailyTracker => _rules.OfType<DailyRiskTracker>().FirstOrDefault();
 
     /// <summary>下单前检查。任一规则 Reject → 拒绝整个订单。</summary>
     public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)

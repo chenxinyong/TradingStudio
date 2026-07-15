@@ -1,19 +1,14 @@
+using TradingStudio.Core.Engine;
+
 namespace TradingStudio.Core.Risk;
 
 /// <summary>
 /// 日内/日间风险追踪器 — Ernie Chan Ch6.2: 风险管理。
-///
-/// Chan 的多层风险限制：
-///   单笔风险 ≤ 权益的 1-2%
-///   日风险   ≤ 权益的 3-5%    ← 日内触及即停止交易
-///   月风险   ≤ 权益的 10-15%  ← 触及后暂停当月
-///   最大回撤 ≤ 权益的 20-30%  ← 断路器，停止策略
-///
-/// 这些不是建议，是纪律。Chan: "大多数 quant 的失败不是因为策略差，
-/// 而是因为没有严格遵守风险限制。"
+/// 实现 IRiskRule，接入 RiskController 风控链，每笔成交自动更新、每单自动校验。
 /// </summary>
-public class DailyRiskTracker
+public class DailyRiskTracker : IRiskRule
 {
+    public string Name => "DailyRiskTracker";
     private readonly RiskTrackerConfig _config;
     private readonly List<DailyPnL> _dailyHistory = new();
     private double _peakEquity;
@@ -190,6 +185,37 @@ public class DailyRiskTracker
 
     /// <summary>获取日盈亏历史，用于分析</summary>
     public IReadOnlyList<DailyPnL> GetHistory() => _dailyHistory.AsReadOnly();
+
+    // ═══════════════════════════════════════════
+    // IRiskRule 实现 — 接入 RiskController 规则链
+    // ═══════════════════════════════════════════
+
+    public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
+    {
+        if (!CanTrade())
+            return RiskCheckResult.Reject(Name, $"风控熔断: {State}");
+        return RiskCheckResult.Pass;
+    }
+
+    public RiskCheckResult CheckPostFill(OrderEvent fill, IPortfolioState portfolio)
+        => RiskCheckResult.Pass; // PnL 追踪走 RecordPnl（引擎在 ProcessFill 后显式调用）
+
+    /// <summary>引擎在 ProcessFill 后调用，传入实际 Trade.PnL 更新日/月风险指标。</summary>
+    public RiskEvent? RecordPnl(double tradePnl, double currentEquity)
+        => RecordTrade(tradePnl, currentEquity);
+
+    public RiskCheckResult CheckPeriodic(IPortfolioState portfolio)
+    {
+        // 日终：记录当日收盘状态（引擎在每个交易日末调用）
+        // 注：日终结算的具体时机由引擎控制，这里只在被调用时执行
+        if (Math.Abs(TodayPnlRatio) > 0.001)
+        {
+            var dayEndEquity = (double)portfolio.Equity;
+            var dayStartEquity = dayEndEquity / (1 + TodayPnlRatio);
+            CloseDay(dayStartEquity, dayEndEquity);
+        }
+        return RiskCheckResult.Pass;
+    }
 
     /// <summary>计算滚动 Sharpe（最近 N 个交易日）</summary>
     public double RollingSharpe(int days = 60)
