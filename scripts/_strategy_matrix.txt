@@ -1,0 +1,24 @@
+═══ 策略对比矩阵 (15min K线) — 2026-07-15 20:54 ═══
+Top5 品种: rb000, MA000, TA000, FG000, SA000, 100k本金, 固定5元/手
+
+rb: loaded 43560 15min bars, 2020-01-02 ~ 2026-06-30
+  BuyAndHold  : FinalEq=     94975  uPnL=   -5025  Trades=  0  MaxDD=25.91%  Fees=      0
+  MaCross     : FinalEq=    100000  uPnL=       0  Trades=  0  MaxDD=0.00%  Fees=      0
+
+MA: loaded 38062 15min bars, 2020-01-02 ~ 2026-06-30
+  BuyAndHold  : FinalEq=    102485  uPnL=    2485  Trades=  0  MaxDD=18.86%  Fees=      0
+  MaCross     : FinalEq=    100000  uPnL=       0  Trades=  0  MaxDD=0.00%  Fees=      0
+
+TA: loaded 37919 15min bars, 2020-01-02 ~ 2026-06-30
+  BuyAndHold  : FinalEq=    106045  uPnL=    6045  Trades=  0  MaxDD=28.82%  Fees=      0
+  MaCross     : FinalEq=    100000  uPnL=       0  Trades=  0  MaxDD=0.00%  Fees=      0
+
+FG: loaded 38278 15min bars, 2020-01-02 ~ 2026-06-30
+  BuyAndHold  : FinalEq=     94795  uPnL=   -5205  Trades=  0  MaxDD=18.97%  Fees=      0
+  MaCross     : FinalEq=    100000  uPnL=       0  Trades=  0  MaxDD=0.00%  Fees=      0
+
+SA: loaded 38198 15min bars, 2020-01-02 ~ 2026-06-30
+  BuyAndHold  : FinalEq=     94445  uPnL=   -5555  Trades=  0  MaxDD=21.26%  Fees=      0
+  MaCross     : FinalEq=    100000  uPnL=       0  Trades=  0  MaxDD=0.00%  Fees=      0
+
+Done.

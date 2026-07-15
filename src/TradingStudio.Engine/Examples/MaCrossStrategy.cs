@@ -67,10 +67,7 @@ public class MaCrossStrategy : IStrategy
         {
             var history = context.GetBarHistory(inst);
             if (history.Count < SlowPeriod + AtrPeriod)
-            {
-                context.LogWarning($"{inst}: 历史不足 ({history.Count}<{SlowPeriod + AtrPeriod})");
-                continue;
-            }
+                context.LogWarning($"{inst}: 预热历史不足 ({history.Count}<{SlowPeriod + AtrPeriod})，指标将在回测期内自然就绪后才产生信号");
 
             // 注册 SMA 指标到 IndicatorManager（多策略共享去重）
             var fastTag = FastPeriod.ToString();
