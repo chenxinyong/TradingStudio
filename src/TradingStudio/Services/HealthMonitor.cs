@@ -37,10 +37,17 @@ public class HealthMonitor
             uptime = (DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).ToString(@"d\.hh\:mm\:ss")
         };
 
-        File.WriteAllText(_path, JsonSerializer.Serialize(h, new JsonSerializerOptions
+        try
         {
-            WriteIndented = true,
-            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        }));
+            File.WriteAllText(_path, JsonSerializer.Serialize(h, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            }));
+        }
+        catch
+        {
+            // health.json 被外部工具占用锁时静默跳过本次写入——不能让监控辅助路径杀死调用方循环
+        }
     }
 }
