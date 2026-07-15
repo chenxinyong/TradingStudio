@@ -128,8 +128,10 @@ public class MaCrossStrategy : IStrategy
         var prevFast = s.PrevFast;
         var prevSlow = s.PrevSlow;
 
-        // Feed ATR（策略内自算）
+        // Feed ATR/ADX/趋势SMA（策略内自算；此前 ADX 与趋势SMA 只在预热期更新，回测期内冻结——已修复）
         s.UpdateAtr(bar);
+        s.UpdateAdx(bar);
+        s.UpdateTrendSma(bar);
 
         var pos = _ctx.GetPosition(bar.InstrumentId);
         var hasLong = pos is not null && pos.Quantity > 0;
