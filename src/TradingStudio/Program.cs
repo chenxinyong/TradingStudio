@@ -97,6 +97,8 @@ static void PrintBanner()
 // ═══════════════════════════════════════════════════════════════
 static async Task RunLiveAsync(string[] args, IConfiguration config)
 {
+    ConsoleGuard.DisableQuickEdit();   // QuickEdit 划选会冻结同步 Console 日志 → 曾致采集阻塞
+
     var builder = WebApplication.CreateBuilder(args);
 
     // 非交易时段也能启动HTTP
@@ -140,6 +142,7 @@ static async Task RunBacktestAsync(string[] args, IConfiguration config)
 
 static async Task RunCollectAsync(string[] args, IConfiguration config)
 {
+    ConsoleGuard.DisableQuickEdit();   // QuickEdit 划选会冻结同步 Console 日志 → 曾致采集阻塞 3h38m
     PrintBanner();
 
     // 全局崩溃日志

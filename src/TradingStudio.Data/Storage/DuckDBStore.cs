@@ -129,6 +129,16 @@ public class DuckDBStore : IBarStore, ITickStore
         }
     }
 
+    /// <summary>后台写循环异常通知（无订阅者时回退 Console.Error）。Data 层不引日志框架。</summary>
+    public event Action<string, Exception>? OnWriteError;
+
+    private void ReportWriteError(string what, Exception ex)
+    {
+        var handler = OnWriteError;
+        if (handler != null) handler(what, ex);
+        else Console.Error.WriteLine($"[DuckDBStore] {what} 写入失败: {ex.Message}");
+    }
+
     private async Task BarWriteLoop(CancellationToken ct)
     {
         var batch = new List<Bar>(64);
@@ -138,7 +148,12 @@ public class DuckDBStore : IBarStore, ITickStore
             while (_barChannel.Reader.TryRead(out var bar) && batch.Count < 64)
                 batch.Add(bar);
             if (batch.Count > 0)
-                await WriteBatchAsync(batch, ct);
+            {
+                // 单批失败只丢本批（Tick CSV 全量原始落盘可重建），循环必须存活
+                try { await WriteBatchAsync(batch, ct); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { ReportWriteError($"bar batch({batch.Count})", ex); }
+            }
         }
     }
 
@@ -323,8 +338,14 @@ public class DuckDBStore : IBarStore, ITickStore
             if (batch.Count > 0)
             {
                 // 按 symbol 分组写入（同一 symbol 连续写入效率更高）
-                foreach (var g in batch.GroupBy(x => x.Symbol))
-                    await WriteTicksBatchAsync(g.Select(x => x.Tick), g.Key, ct);
+                // 单批失败只丢本批，循环必须存活
+                try
+                {
+                    foreach (var g in batch.GroupBy(x => x.Symbol))
+                        await WriteTicksBatchAsync(g.Select(x => x.Tick), g.Key, ct);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { ReportWriteError($"tick batch({batch.Count})", ex); }
             }
         }
     }

@@ -69,7 +69,7 @@ public class DailyBarAggregator : IDisposable
         return _bars.TryGetValue(key, out var bar) ? bar : null;
     }
 
-    /// <summary>发射并移除指定交易日的日线（交易日切换时调用）</summary>
+    /// <summary>发射并移除指定交易日之前的日线（交易日切换时调用），同步清理锁与累计量状态</summary>
     public void FlushDay(DateOnly tradingDay)
     {
         var keys = _bars.Keys.Where(k => k.Day < tradingDay).ToList();
@@ -80,10 +80,34 @@ public class DailyBarAggregator : IDisposable
                 _output.Writer.TryWrite(bar);
                 OnBar?.Invoke(bar);
             }
+            _locks.TryRemove(key, out _);
+            _lastCum.TryRemove(key, out _);
         }
     }
 
-    /// <summary>发射所有日线</summary>
+    /// <summary>
+    /// 发射所有当前日线的快照，不清任何状态 — 重连/收盘时的盘中持久化用。
+    /// _lastCum 保留 → 断连恢复后成交量增量（dV）跨重连正确累计；
+    /// 夜盘收盘时交易日尚未结束（次日日盘同属该交易日），清状态会丢整段夜盘 OHLCV。
+    /// Bar 是 record struct，发射的是副本，后续累计不受影响。
+    /// </summary>
+    public void EmitSnapshots()
+    {
+        foreach (var key in _bars.Keys.ToList())
+        {
+            var lk = _locks.GetOrAdd(key, _ => new object());
+            lock (lk)
+            {
+                if (_bars.TryGetValue(key, out var bar))
+                {
+                    _output.Writer.TryWrite(bar);
+                    OnBar?.Invoke(bar);
+                }
+            }
+        }
+    }
+
+    /// <summary>发射所有日线并清空全部状态（含锁与累计量）— 仅停机（Dispose）路径使用</summary>
     public void FlushAll()
     {
         foreach (var (key, bar) in _bars)
@@ -92,6 +116,8 @@ public class DailyBarAggregator : IDisposable
             OnBar?.Invoke(bar);
         }
         _bars.Clear();
+        _locks.Clear();
+        _lastCum.Clear();
     }
 
     public void Dispose()

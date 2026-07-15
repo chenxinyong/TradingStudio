@@ -72,8 +72,21 @@ public class PeriodMaintainer : BackgroundService
 
                 if (shouldBuild)
                 {
-                    await _builder.RunAsync(dbPath, fullRebuild: false, ct);
-                    lastBuild = now;
+                    // 耗时日志 + 超时保护（2026-07-15 曾疑似 build 卡 3h38m，实为日志 sink 冻结——
+                    // 保留此保险丝以防真发生 DB 慢查询；DuckDB.NET 的取消是尽力而为，耗时日志保证可观测）
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    using var buildCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    buildCts.CancelAfter(TimeSpan.FromMinutes(10));
+                    try
+                    {
+                        await _builder.RunAsync(dbPath, fullRebuild: false, buildCts.Token);
+                        _log.LogInformation("Multi-period build done in {Sec:F1}s", sw.Elapsed.TotalSeconds);
+                    }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        _log.LogWarning("Multi-period build 超时（{Sec:F0}s），跳过本轮", sw.Elapsed.TotalSeconds);
+                    }
+                    lastBuild = now;   // 超时也推进，避免每 5min 重复重活
                 }
 
                 await Task.Delay(interval, ct);

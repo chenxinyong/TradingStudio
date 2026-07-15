@@ -30,7 +30,7 @@ public class CollectService : BackgroundService
         _health = new HealthMonitor();
 
         var registry = FutureRegistry.Load(_cfg.SymbolsPath);
-        _pipeline = new QuotePipeline(tickWriter, registry.Top30Codes);
+        _pipeline = new QuotePipeline(tickWriter, registry.Top30Codes, registry);   // registry 启用聚合闸门（时段+陈旧快照过滤）
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -82,6 +82,8 @@ public class CollectService : BackgroundService
         // Wire Bar → Store
         _pipeline.Agg1Min.OnBar += bar => _store.WriteAsync(bar);
         _pipeline.AggDay.OnBar  += bar => _store.WriteAsync(bar);
+        if (_store is DuckDBStore duckStore)
+            duckStore.OnWriteError += (what, ex) => _log.Error(ex, "DuckDB {What} 写入失败", what);
 
         while (!ct.IsCancellationRequested)
         {
@@ -100,6 +102,10 @@ public class CollectService : BackgroundService
             _log.Information("进入{session}时段，开始采集", session);
             _lastConnect = DateTime.Now;
 
+            // 发射并清理已结束交易日的日线状态（FlushDay 只清 Day < 参数，
+            // 周五夜盘 GetFuturesTradingDay 算出周六 < CTP 实际的周一——方向永远"少清不多清"）
+            _pipeline.AggDay.FlushDay(QuoteConverter.GetFuturesTradingDay(DateTime.Now));
+
             while (_scheduler.IsInSession() && !ct.IsCancellationRequested)
             {
                 try
@@ -111,8 +117,8 @@ public class CollectService : BackgroundService
 
                 if (!_scheduler.IsInSession() || ct.IsCancellationRequested) break;
 
-                // 重连前flush BarAggregator，避免状态残留导致Bar卡住
-                _pipeline.Flush();
+                // 重连前发射快照：1min 正常 flush，日线不清状态（清了会被重连快照重建成退化单点 bar）
+                _pipeline.FlushSnapshots();
                 Interlocked.Increment(ref _reconnectCount);
                 // 快速重试：5s→10s→20s→30s，不在交易时段内浪费
                 var delay = Math.Min(30, 5 * Math.Pow(2, Math.Min(_reconnectCount - 1, 3)));
@@ -124,7 +130,8 @@ public class CollectService : BackgroundService
             }
 
             _log.Information("{Session}收盘，flush 数据", session);
-            _pipeline.Flush();
+            // 收盘只发快照：夜盘收盘时交易日尚未结束（次日日盘同属该交易日），清状态会丢夜盘 OHLCV
+            _pipeline.FlushSnapshots();
             await Task.Delay(500, ct);
         }
 
@@ -230,15 +237,24 @@ public class CollectService : BackgroundService
     {
         while (!ct.IsCancellationRequested)
         {
-            await Task.Delay(60_000, ct);
-            _lastHealth = DateTime.Now;
-            var session = _scheduler.SessionName();
-            _health.Update(
-                _scheduler.IsInSession() ? "Connected" : "Idle",
-                _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped,
-                _reconnectCount, session, _lastConnect, _lastQuote, _lastHealth);
-            _log.Information("quotes={Quotes} bars={Bars} reconnect={Reconnects} skipped={Skipped} [{Session}]",
-                _pipeline.QuoteCount, _store.WrittenCount, _reconnectCount, _pipeline.TickSkipped, session);
+            try
+            {
+                await Task.Delay(60_000, ct);
+                _lastHealth = DateTime.Now;
+                var session = _scheduler.SessionName();
+                _health.Update(
+                    _scheduler.IsInSession() ? "Connected" : "Idle",
+                    _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped,
+                    _reconnectCount, session, _lastConnect, _lastQuote, _lastHealth);
+                _log.Information("quotes={Quotes} bars={Bars} reconnect={Reconnects} skipped={Skipped} filtered={Filtered} [{Session}]",
+                    _pipeline.QuoteCount, _store.WrittenCount, _reconnectCount, _pipeline.TickSkipped, _pipeline.AggFiltered, session);
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                // 一次异常（如 health.json 被外部占用）不能永久杀死健康日志循环
+                try { _log.Error(ex, "HealthLoop 异常，继续运行"); } catch { }
+            }
         }
     }
 
