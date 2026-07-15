@@ -127,8 +127,10 @@ public class PortfolioManager : IPortfolioState
                 var dailyPnl = (settle - pos.AvgPrice) * pos.Quantity * mult;
                 Cash += dailyPnl;
 
-                // 按结算价重估占用保证金
-                var marginRate = future.MarginRate > 0 ? future.MarginRate : 0.08m;
+                // 按结算价重估占用保证金（动态保证金：基准+交割月+长假）
+                // SettleDaily 无 bar 参数，取当日系统日期（回测中 = 当前交易日）
+                var marginRate = future.GetEffectiveMarginRate(
+                    DateOnly.FromDateTime(DateTime.Today), instId);
                 var newMargin = settle * mult * Math.Abs(pos.Quantity) * marginRate;
                 var marginDelta = newMargin - pos.Margin;
                 Cash -= marginDelta;
@@ -273,8 +275,9 @@ public class PortfolioManager : IPortfolioState
         var key = fill.InstrumentId;
         var hasPosition = _positions.TryGetValue(key, out var pos);
 
-        // 保证金 = 价格 × 交易单位 × 手数 × 保证金率
-        var marginRate = future.MarginRate > 0 ? future.MarginRate : 0.08m;
+        // 保证金 = 价格 × 交易单位 × 手数 × 保证金率（动态：基准+交割月+长假）
+        var marginRate = future.GetEffectiveMarginRate(
+            DateOnly.FromDateTime(fill.Time.Date), fill.InstrumentId);
         var contractValue = fill.FillPrice * future.TradingUnit * fill.Quantity;
         var margin = contractValue * marginRate;
         var marginDelta = margin;  // 默认：新开仓 = 全额保证金

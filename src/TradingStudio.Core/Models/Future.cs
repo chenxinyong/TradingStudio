@@ -30,6 +30,11 @@ public sealed record Future
     public string Months { get; init; } = "";        // "1～12月" | "1,3,5,7,9,11" | "季月(3,6,9,12)"
     public string TradingHours { get; init; } = "";  // 交易时间描述
 
+    // === 保证金动态调整 ===
+    public double DeliveryMarginAdjust { get; init; }   // 临近交割月加收保证金率 (如 +0.03 = +3%)
+    public int DeliveryMarginMonths { get; init; }      // 提前几个月开始加收 (默认2)
+    public double HolidayMarginAdjust { get; init; }    // 长假期间加收保证金率
+
     // === Phase 3 品种研究 ===
     public bool IsTop30 { get; init; }
     public string ContractCycle { get; init; } = "";   // "三主力轮换" | "多月活跃" | "单合约主导" | "少合约(新品种)"
@@ -60,6 +65,74 @@ public sealed record Future
     public bool HasDistinctCloseTodayFee =>
         CloseTodayFeePerLot > 0 ||
         (CloseTodayFeeRate > 0 && Math.Abs(CloseTodayFeeRate - FeeRate) > 1e-9);
+
+    // ═══ 保证金动态调整 ═══
+
+    /// <summary>中国长假保证金上调窗口（交易所通用，取最保守的覆盖区间）</summary>
+    private static readonly (DateOnly Start, DateOnly End)[] HolidayWindows =
+    [
+        // 春节前 1 周 → 春节后 1 周（覆盖最广范围）
+        (new(2020, 01, 18), new(2020, 02, 08)),
+        (new(2021, 02, 06), new(2021, 02, 27)),
+        (new(2022, 01, 25), new(2022, 02, 15)),
+        (new(2023, 01, 16), new(2023, 02, 05)),
+        (new(2024, 02, 05), new(2024, 02, 25)),
+        (new(2025, 01, 23), new(2025, 02, 12)),
+        (new(2026, 02, 10), new(2026, 03, 01)),
+        // 国庆（9/25 → 10/10）
+        (new(2020, 09, 25), new(2020, 10, 10)),
+        (new(2021, 09, 25), new(2021, 10, 10)),
+        (new(2022, 09, 25), new(2022, 10, 10)),
+        (new(2023, 09, 24), new(2023, 10, 10)),
+        (new(2024, 09, 25), new(2024, 10, 10)),
+        (new(2025, 09, 25), new(2025, 10, 10)),
+        // 五一（4/28 → 5/7）
+        (new(2020, 04, 28), new(2020, 05, 07)),
+        (new(2021, 04, 28), new(2021, 05, 07)),
+        (new(2022, 04, 28), new(2022, 05, 07)),
+        (new(2023, 04, 28), new(2023, 05, 07)),
+        (new(2024, 04, 28), new(2024, 05, 07)),
+        (new(2025, 04, 28), new(2025, 05, 07)),
+    ];
+
+    /// <summary>
+    /// 获取当日有效保证金率：基准 + 交割月加成(仅实际合约) + 长假加成。
+    /// instrumentId 非 null 且非连续合约时启用交割月加成。
+    /// </summary>
+    public decimal GetEffectiveMarginRate(DateOnly barDate, string? instrumentId = null)
+    {
+        var rate = MarginRate;
+
+        // 交割月加成：仅对实际合约（非 xxx000 连续合约）
+        if (DeliveryMarginAdjust > 0 && DeliveryMarginMonths > 0
+            && instrumentId != null && !instrumentId.EndsWith("000"))
+        {
+            var (_, year, month) = ContractCodeGenerator.ParseCode(instrumentId);
+            if (month > 0)
+            {
+                int y = year < 100 ? 2000 + year : year;
+                var delivery = new DateTime(y, month, 1);
+                var m = (delivery.Year - barDate.Year) * 12 + delivery.Month - barDate.Month;
+                if (m <= DeliveryMarginMonths)
+                    rate += (decimal)DeliveryMarginAdjust;
+            }
+        }
+
+        // 长假加成
+        if (HolidayMarginAdjust > 0)
+        {
+            foreach (var (s, e) in HolidayWindows)
+            {
+                if (barDate >= s && barDate <= e)
+                {
+                    rate += (decimal)HolidayMarginAdjust;
+                    break;
+                }
+            }
+        }
+
+        return rate;
+    }
 
     public override string ToString() => $"{Exchange.ShortName()}/{Code} {Name}";
 }

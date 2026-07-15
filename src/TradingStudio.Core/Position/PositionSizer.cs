@@ -17,6 +17,7 @@ public static class PositionSizer
         if (atr <= 0 || price <= 0) return 0;
 
         var mult = (double)(future?.TradingUnit ?? 10m);
+        // 注：PositonSizer 取基准保证金率（不含动态调整），开仓前预估偏宽松
         var marginRate = (double)(future?.MarginRate ?? 0.08m);
         var stopDist = stopAtrMult * atr;
         var riskAmt = equity * riskPerTrade;
@@ -41,6 +42,7 @@ public static class PositionSizer
         if (price <= 0 || stopPct <= 0) return 0;
 
         var mult = (double)(future?.TradingUnit ?? 10m);
+        // 注：PositonSizer 取基准保证金率（不含动态调整），开仓前预估偏宽松
         var marginRate = (double)(future?.MarginRate ?? 0.08m);
         var stopDist = stopPct * price;
         var riskAmt = equity * riskPerTrade;
