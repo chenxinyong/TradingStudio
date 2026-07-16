@@ -181,8 +181,9 @@ public class DuckDBStore : IBarStore, ITickStore
                 "instrument_id ILIKE '{0}%' AND bar_time >= '{1}' AND bar_time <= '{2}'",
                 instrumentId, startStr, endStr);
         else
+            // 大小写不敏感精确匹配：CZCE品种用大写(SA000)，SHFE用小写(rb000)
             whereClause = string.Format(
-                "instrument_id = '{0}' AND bar_time >= '{1}' AND bar_time <= '{2}'",
+                "instrument_id ILIKE '{0}' AND bar_time >= '{1}' AND bar_time <= '{2}'",
                 instrumentId, startStr, endStr);
 
         cmd.CommandText = string.Format(
@@ -202,7 +203,7 @@ public class DuckDBStore : IBarStore, ITickStore
             {
                 InstrumentId = instId,
                 TradingDay = ReadDateOnly(reader, 1),
-                BarTime = DateTime.Parse(reader.GetString(2)),
+                BarTime = ReadDateTime(reader, 2),
                 Open = reader.GetInt64(3),
                 High = reader.GetInt64(4),
                 Low = reader.GetInt64(5),
@@ -223,6 +224,16 @@ public class DuckDBStore : IBarStore, ITickStore
         if (type == typeof(string))
             return DateOnly.Parse(reader.GetString(ordinal));
         return DateOnly.FromDateTime(reader.GetDateTime(ordinal));
+    }
+
+    private static DateTime ReadDateTime(DuckDBDataReader reader, int ordinal)
+    {
+        // bar_time may be VARCHAR (BuildPeriodsService-generated tables) or TIMESTAMP (bars_1min)
+        // DuckDB.NET 1.3.0+ returns DuckDBTimestamp for TIMESTAMP columns — GetString() throws
+        var type = reader.GetFieldType(ordinal);
+        if (type == typeof(string))
+            return DateTime.Parse(reader.GetString(ordinal));
+        return reader.GetDateTime(ordinal);
     }
 
     public async Task<IReadOnlyList<string>> QueryInstrumentsAsync(

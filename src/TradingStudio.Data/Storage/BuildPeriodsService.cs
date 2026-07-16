@@ -34,7 +34,9 @@ public class BuildPeriodsService
         }
 
         // Step 0: 自动生成缺失的连续合约（从月份合约计算最活跃主力）
-        var generated = await BuildContinuousContractsAsync(conn, dateFilter, ct);
+        // 始终全量扫描——WHERE NOT EXISTS 保证幂等，增量 dateFilter 会导致历史缺失的品种
+        //（如 SA000）永远无法补上。连续合约生成是智能拷贝（非聚合），全量也很快。
+        var generated = await BuildContinuousContractsAsync(conn, dateFilter: null, ct);
         if (generated > 0)
             _log.LogInformation("Generated {Count:N0} continuous contract bars (xxx000) from individual contracts", generated);
 

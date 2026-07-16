@@ -41,10 +41,11 @@ try
 
     switch (args[0])
     {
-        case "live":     await RunLiveAsync(args[1..], config);     break;
-        case "backtest": await RunBacktestAsync(args[1..], config); break;
-        case "collect":  await RunCollectAsync(args[1..], config);  break;
-        default:         PrintUsage(); break;
+        case "live":        await RunLiveAsync(args[1..], config);        break;
+        case "backtest":    await RunBacktestAsync(args[1..], config);    break;
+        case "walkforward": await RunWalkForwardAsync(args[1..], config); break;
+        case "collect":     await RunCollectAsync(args[1..], config);     break;
+        default:            PrintUsage(); break;
     }
 }
 catch (Exception ex)
@@ -137,6 +138,12 @@ static async Task RunLiveAsync(string[] args, IConfiguration config)
 static async Task RunBacktestAsync(string[] args, IConfiguration config)
 {
     var exitCode = await TradingStudio.Commands.BacktestCommand.RunAsync(args);
+    Environment.Exit(exitCode);
+}
+
+static async Task RunWalkForwardAsync(string[] args, IConfiguration config)
+{
+    var exitCode = await TradingStudio.Commands.WalkForwardCommand.RunAsync(args);
     Environment.Exit(exitCode);
 }
 

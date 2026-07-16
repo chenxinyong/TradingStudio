@@ -2,7 +2,7 @@
     "StrategyId": "sma-macd-sa000-15min",
     "StrategyType": "SmaMacd",
     "Description": "15min SMA233核心 — SA(纯碱) 2021-2025",
-    "Instruments": ["sa000"],
+    "Instruments": ["SA000"],
     "PrimaryBarType": "bars_1min",
     "BarPeriodMinutes": 1,
     "AllocatedCapital": 1000000,
