@@ -95,6 +95,7 @@ public static class LiveComposer
             };
             var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts);
             services.AddSingleton(bridge);
+            bridge.Connect(); // 启动 CTP 交易 API 连接（此前遗漏，导致从未连上 Simnow）
             execution.SendToExchange = bridge.SendOrder;
         }
         execution.IsLive = true;
