@@ -110,11 +110,26 @@ public static class LiveComposer
         };
 
         var strategyConfigPath = config["Live:StrategyConfig"];
+        // 相对路径 → 从 EXE 目录解析（CWD 可能不是 EXE 目录）
+        if (!string.IsNullOrEmpty(strategyConfigPath))
+        {
+            if (!Path.IsPathRooted(strategyConfigPath))
+                strategyConfigPath = Path.Combine(AppContext.BaseDirectory, strategyConfigPath);
+            Console.Error.WriteLine($"[LiveComposer] Strategy config path: {strategyConfigPath}  exists={File.Exists(strategyConfigPath)}");
+        }
         if (!string.IsNullOrEmpty(strategyConfigPath) && File.Exists(strategyConfigPath))
         {
             var json = File.ReadAllText(strategyConfigPath);
-            var sc = System.Text.Json.JsonSerializer.Deserialize<TradingStudio.Core.Strategy.StrategyConfig>(
-                json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            TradingStudio.Core.Strategy.StrategyConfig? sc = null;
+            try
+            {
+                sc = System.Text.Json.JsonSerializer.Deserialize<TradingStudio.Core.Strategy.StrategyConfig>(
+                    json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[LiveComposer] 策略 JSON 解析失败: {ex.Message}");
+            }
             if (sc != null)
             {
                 var warmupDays = config.GetValue("Live:WarmupDays", 5);

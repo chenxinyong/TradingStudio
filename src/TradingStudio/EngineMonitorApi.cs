@@ -1,5 +1,6 @@
 using DuckDB.NET.Data;
 using Microsoft.AspNetCore.Mvc;
+using TradingStudio.Core.Engine;
 using TradingStudio.Core.Strategy;
 using TradingStudio.Engine;
 using TradingStudio.Services;
@@ -170,6 +171,25 @@ public static class EngineMonitorApi
             return Results.Ok(new { StrategyId = id, Rule = req.RuleName, Phase = 3 });
         });
 
+        // ═══ 测试: 手动下单到 Simnow ═══
+        api.MapPost("/orders/test", ([FromBody] TestOrderRequest req,
+            [FromServices] ExecutionHandler execution) =>
+        {
+            if (execution.SendToExchange == null)
+                return Results.BadRequest("SendToExchange not bound — Trader bridge not connected");
+
+            var order = new Order
+            {
+                InstrumentId = req.InstrumentId,
+                Direction = req.Side == "buy" ? OrderDirection.Buy : OrderDirection.Sell,
+                Type = OrderType.Market,
+                Quantity = req.Quantity,
+                StrategyId = "manual-test",
+            };
+            var ticket = execution.Submit(order, "manual-test");
+            return Results.Ok(new { ticket.OrderId, ticket.Status, order.InstrumentId, order.Direction, order.Quantity });
+        });
+
         api.MapPost("/orders/close-position", (ClosePositionRequest req) =>
         {
             // Phase 3: 紧急平仓
@@ -186,6 +206,7 @@ public static class EngineMonitorApi
 
 public record TightenRiskRequest(string RuleName, string NewValue);
 public record ClosePositionRequest(string InstrumentId);
+public record TestOrderRequest(string InstrumentId, string Side, int Quantity);
 
 /// <summary>API 响应类型</summary>
 public record BarDto(DateTime Dt, double Open, double High, double Low, double Close, long Volume);
