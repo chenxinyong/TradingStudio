@@ -35,7 +35,11 @@ public class CtpTraderBridge : IDisposable
 
     public void Connect()
     {
-        _trader = new CTP.TraderApi();
+        lock (_sync)
+        {
+            if (_trader != null) return; // 防止重复连接导致回调丢失
+            _trader = new CTP.TraderApi();
+        }
 
         _trader.OnFrontConnected += () =>
         {
@@ -130,12 +134,16 @@ public class CtpTraderBridge : IDisposable
         // CTP 回报 → OrderEvent
         _trader.OnOrder += ctpOrder =>
         {
+            _log.Information("[CTP-Trader] OnRtnOrder: Instrument={Inst} Status={Status} Ref={Ref} VolTraded={Vol}",
+                ctpOrder.InstrumentID, ctpOrder.OrderStatus, ctpOrder.OrderRef, ctpOrder.VolumeTraded);
             var evt = ConvertOrder(ctpOrder);
             if (evt != null) _fillWriter.TryWrite(evt);
         };
 
         _trader.OnTrade += ctpTrade =>
         {
+            _log.Information("[CTP-Trader] OnRtnTrade: Instrument={Inst} Price={Price} Vol={Vol}",
+                ctpTrade.InstrumentID, ctpTrade.Price, ctpTrade.Volume);
             var evt = ConvertTrade(ctpTrade);
             if (evt != null) _fillWriter.TryWrite(evt);
         };
