@@ -12,6 +12,8 @@ namespace TradingStudio.Services;
 /// </summary>
 public static class LiveComposer
 {
+    private static readonly List<string> _pendingStrategyInstruments = new();
+
     public static void Configure(WebApplicationBuilder builder, IConfiguration config)
     {
         var services = builder.Services;
@@ -39,6 +41,7 @@ public static class LiveComposer
         {
             var feed = new CtpLiveFeed(mdOpts, sp.GetRequiredService<Serilog.ILogger>());
             feed.ActivityTracker = activityTracker;
+            foreach (var inst in _pendingStrategyInstruments) feed.StrategyInstruments.Add(inst);
             return feed;
         });
         services.AddSingleton(sp => (CtpLiveFeed)sp.GetRequiredService<IDataFeed>());
@@ -147,6 +150,9 @@ public static class LiveComposer
                     IsLive = true, WarmupDays = warmupDays, WarmupStore = warmupStore,
                 };
                 StrategyFactory.DiscoverFromAssembly(typeof(TradingEngine).Assembly);
+                // 策略品种强制加入 CtpLiveFeed 的 Activity Filter 活跃集
+                foreach (var inst in sc.Instruments) _pendingStrategyInstruments.Add(inst);
+                Console.Error.WriteLine($"[LiveComposer] Strategy instruments: {string.Join(",", sc.Instruments)}");
             }
         }
         services.AddSingleton(engineOptions);

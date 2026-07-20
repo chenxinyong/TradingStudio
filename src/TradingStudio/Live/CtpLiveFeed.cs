@@ -29,6 +29,9 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     /// <summary>活跃度追踪器：观察期后筛选高活跃合约，减少 CTP 订阅量</summary>
     public ContractActivityTracker? ActivityTracker { get; set; }
 
+    /// <summary>策略订阅品种——始终通过 Activity Filter(夜盘/日盘切换时确保不被过滤)</summary>
+    public HashSet<string> StrategyInstruments { get; } = new();
+
     public IReadOnlyList<string> Instruments => _instruments;
     public DateTime StartTime => _startTime;
     public DateTime EndTime => _endTime;
@@ -189,6 +192,9 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                         var topProducts = tracker.GetTopProducts(30);
                         var topRanking = tracker.GetTopProductRanking(30);
                         _activeProductSet = new HashSet<string>(topProducts);
+                        // 策略品种强制加入活跃集(夜盘/日盘切换时个别品种可能尚未交易)
+                        foreach (var inst in StrategyInstruments)
+                            _activeProductSet.Add(ProductOf(inst));
                         var filteredCount = _instruments.Count(c => _activeProductSet.Contains(ProductOf(c)));
                         _filterReady = true;
 

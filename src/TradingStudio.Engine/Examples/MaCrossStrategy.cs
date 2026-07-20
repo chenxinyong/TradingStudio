@@ -201,7 +201,8 @@ public class MaCrossStrategy : IStrategy
         // ── 入场（仅首次开仓，反手已在出场段处理）──
         if (!hasLong && !hasShort)
         {
-            if (s.Atr / bar.CloseDouble < 0.003) return;
+            // 1min K线 ATR 极小(~1-2点/8000≈0.00025)，0.003 会过滤全部信号 → 降至 0.0001
+            if (s.Atr / bar.CloseDouble < 0.0001) return;
 
             // ADX 趋势过滤: ADX低于阈值 → 震荡市，不交易
             if (MinAdx > 0 && s.Adx < MinAdx) return;

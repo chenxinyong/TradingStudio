@@ -11,7 +11,7 @@
     "AdxPeriod": 0,
     "MinAdx": 0,
     "RiskPerTrade": 0.05,
-    "MaxMarginRatio": 0.80
+    "MaxMarginRatio": 0.50
   },
   "SkipAuction": false
 }
