@@ -193,19 +193,27 @@ public class CtpTraderBridge : IDisposable
 
     private static OrderEvent? ConvertOrder(CTP.Order ctpOrder)
     {
-        var isCancelled = ctpOrder.OrderStatus == '5';
-        var isRejected = ctpOrder.OrderStatus == '4';
-        if (!isCancelled && !isRejected) return null;
-
-        var type = isCancelled ? OrderEventType.Cancelled : OrderEventType.Rejected;
+        var traded = ctpOrder.VolumeTraded > 0;
+        var type = ctpOrder.OrderStatus switch
+        {
+            '0' => OrderEventType.Submitted,       // 已受理
+            '1' => traded ? OrderEventType.PartiallyFilled : OrderEventType.Submitted,
+            '2' => traded ? OrderEventType.Filled : OrderEventType.Submitted,
+            '3' => traded ? OrderEventType.PartiallyFilled : OrderEventType.Submitted,
+            '4' => OrderEventType.Rejected,        // 拒单
+            '5' => OrderEventType.Cancelled,       // 撤单
+            _ => OrderEventType.Submitted,         // 其他状态 → 视为已受理
+        };
 
         return new OrderEvent
         {
             OrderId = ParseOrderRef(ctpOrder.OrderRef),
             InstrumentId = ctpOrder.InstrumentID ?? "",
             Direction = ctpOrder.Direction == '0' ? OrderDirection.Buy : OrderDirection.Sell,
-            Quantity = ctpOrder.VolumeTotalOriginal,
+            Quantity = ctpOrder.VolumeTraded > 0 ? ctpOrder.VolumeTraded : ctpOrder.VolumeTotalOriginal,
             OrderQty = ctpOrder.VolumeTotalOriginal,
+            FilledQty = ctpOrder.VolumeTraded,
+            FillPrice = (decimal)(ctpOrder.LimitPrice > 0 ? ctpOrder.LimitPrice : 0),
             Type = type,
             Message = ctpOrder.StatusMsg,
             Time = DateTimeOffset.UtcNow,
