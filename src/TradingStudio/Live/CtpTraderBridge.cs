@@ -15,7 +15,6 @@ public class CtpTraderBridge : IDisposable
     private readonly ChannelWriter<OrderEvent> _fillWriter;
     private readonly Serilog.ILogger _log;
     private CTP.TraderApi? _trader;
-    private CancellationTokenSource? _reconnectCts;
     private readonly object _sync = new();
     private bool _disposed;
 
@@ -71,48 +70,14 @@ public class CtpTraderBridge : IDisposable
         _trader.OnFrontDisconnected += reason =>
         {
             IsReady = false;
-            _log.Warning("CTP Trader disconnected (0x{Reason:X}) — reconnecting in 5s...", reason);
+            _log.Warning("CTP Trader disconnected (0x{Reason:X}) — EngineHost will restart", reason);
 
-            // 通知引擎：交易已断
+            // 通知引擎：交易已断（不自动重连——自动重连产生僵尸session，flow目录为空，InsertOrder发到空session无回报）
             _fillWriter.TryWrite(new OrderEvent
             {
                 Type = OrderEventType.Rejected,
                 Message = "CTP交易连接断开",
                 Time = DateTimeOffset.UtcNow,
-            });
-
-            // 防竞态重连：取消前次重连，创建新实例
-            CancellationTokenSource cts;
-            lock (_sync)
-            {
-                _reconnectCts?.Cancel();
-                _reconnectCts = new CancellationTokenSource();
-                cts = _reconnectCts;
-            }
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(5000, cts.Token);
-                    if (_disposed || cts.IsCancellationRequested) return;
-
-                    // 销毁旧实例，创建新实例重连（CTP 不允许同一实例重复 Connect）
-                    lock (_sync)
-                    {
-                        var oldTrader = _trader;
-                        _trader = null;
-                        try { oldTrader?.Dispose(); } catch { }
-                    }
-
-                    _log.Information("CTP Trader reconnecting with new instance...");
-                    Connect(); // 创建新 TraderApi 并连接
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception ex)
-                {
-                    _log.Error(ex, "CTP Trader reconnect failed");
-                }
             });
         };
 
