@@ -225,8 +225,6 @@ public class CtpTraderBridge : IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            _reconnectCts?.Cancel();
-            _reconnectCts?.Dispose();
             _trader?.Dispose();
             _trader = null;
         }
