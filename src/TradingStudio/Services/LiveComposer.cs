@@ -96,9 +96,18 @@ public static class LiveComposer
                 AuthCode = config["Live:AuthCode"] ?? "0000000000000000",
                 AppId = config["Live:AppId"] ?? "simnow_client_test",
             };
-            var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts);
+            var bridgeLogger = builder.Services.BuildServiceProvider().GetRequiredService<Serilog.ILogger>();
+            var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts, bridgeLogger);
             services.AddSingleton(bridge);
-            bridge.Connect(); // 启动 CTP 交易 API 连接（此前遗漏，导致从未连上 Simnow）
+            try
+            {
+                bridge.Connect();
+                Console.Error.WriteLine("[LiveComposer] CtpTraderBridge.Connect() called — check logs for 'CTP Trader connected'");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[LiveComposer] CtpTraderBridge.Connect() FAILED: {ex.GetType().Name}: {ex.Message}");
+            }
             execution.SendToExchange = bridge.SendOrder;
         }
         execution.IsLive = true;

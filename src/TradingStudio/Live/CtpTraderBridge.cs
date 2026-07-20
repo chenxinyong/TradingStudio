@@ -185,6 +185,8 @@ public class CtpTraderBridge : IDisposable
         };
 
         trader.InsertOrder(req);
+        _log.Information("CTP InsertOrder: #{Id} {Dir} {Inst} x{Qty} {Type}",
+            order.OrderId, order.Direction, order.InstrumentId, order.Quantity, order.Type);
     }
 
     // ── 回报转换 ──
