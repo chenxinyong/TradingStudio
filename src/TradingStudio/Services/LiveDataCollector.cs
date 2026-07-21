@@ -17,7 +17,7 @@ namespace TradingStudio.Services;
 /// </summary>
 public class LiveDataCollector : BackgroundService
 {
-    private readonly CtpLiveFeed _feed;
+    private readonly CtpLiveFeedV2 _feed;
     private readonly IBarStore _barStore;
     private readonly HealthMonitor _health;
     private readonly Serilog.ILogger _log;
@@ -32,7 +32,7 @@ public class LiveDataCollector : BackgroundService
 
     private readonly TickCsvWriter? _tickWriter;
 
-    public LiveDataCollector(CtpLiveFeed feed, IBarStore barStore,
+    public LiveDataCollector(CtpLiveFeedV2 feed, IBarStore barStore,
                              HealthMonitor health, Serilog.ILogger log,
                              FutureRegistry registry,
                              TickCsvWriter? tickWriter = null,
@@ -74,16 +74,16 @@ public class LiveDataCollector : BackgroundService
                 var reader = _feed.PersistChannel.Reader;
                 await foreach (var item in reader.ReadAllAsync(ct))
                 {
-                    var (instId, quote, tradingDay) = item;
+                    var (instId, tick, tradingDay) = item;
 
-                    // 去重（Live 特有：CTP 可能推送重复快照）
-                    var tickKey = $"{quote.UpdateTime}_{quote.UpdateMillisec}";
+                    // 去重（基于 ExchangeTimestamp）
+                    var tickKey = tick.ExchangeTimestamp.ToString();
                     if (_lastTickKey.TryGetValue(instId, out var prevKey) && prevKey == tickKey)
                         continue;
                     _lastTickKey[instId] = tickKey;
 
                     Interlocked.Increment(ref _tickCount);
-                    pipeline.Feed(quote);
+                    pipeline.FeedTick(instId, tick, tradingDay);
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

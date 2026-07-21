@@ -29,6 +29,22 @@ public class ContractActivityTracker
         _observationComplete = false;
     }
 
+    /// <summary>从原始数据累积活跃度（FtdcNet.CTP 路径，不依赖 C++/CLI CTP.Quote）</summary>
+    public void Feed(string instId, long volume, double openInterest, double lastPrice)
+    {
+        if (_observationComplete) return;
+        var stats = _stats.GetOrAdd(instId, _ => new ContractStats { InstrumentId = instId });
+        if (volume > stats.MaxVolume) stats.MaxVolume = (int)volume;
+        if (openInterest > stats.MaxOpenInterest) stats.MaxOpenInterest = openInterest;
+        stats.LastPrice = lastPrice;
+        Interlocked.Increment(ref stats.TickCount);
+        if (_startTime.HasValue && !_observationComplete)
+        {
+            var elapsed = (DateTime.UtcNow - _startTime.Value).TotalSeconds;
+            if (elapsed >= ObservationSeconds) _observationComplete = true;
+        }
+    }
+
     /// <summary>从 CTP Quote 提取活跃度数据并累积</summary>
     public void Feed(string instId, CTP.Quote quote)
     {

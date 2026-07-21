@@ -32,7 +32,7 @@ public class QuotePipeline : IDisposable
         AggDay = new DailyBarAggregator();
     }
 
-    /// <summary>处理一条 CTP Quote。线程安全。</summary>
+    /// <summary>处理一条 CTP Quote（C++/CLI 路径，保留兼容）。线程安全。</summary>
     public void Feed(CTP.Quote q)
     {
         if (string.IsNullOrEmpty(q.InstrumentID)) return;
@@ -68,6 +68,20 @@ public class QuotePipeline : IDisposable
             string.IsNullOrEmpty(q.ExchangeID) ? TickCsvWriter.GuessExchange(q.InstrumentID) : q.ExchangeID,
             q.TradingDay);
         _tickWriter.Write(in row);
+    }
+
+    /// <summary>处理已转换的 TickRecord — 仅 Bar 聚合，不写 CSV（FtdcNet.CTP 路径）。</summary>
+    public void FeedTick(string instId, TickRecord record, DateOnly tradingDay)
+    {
+        var pass = _gate == null || _gate.ShouldAggregate(instId,
+            record.ExchangeTime.TimeOfDay, record.LocalTime.AddHours(8).TimeOfDay);
+        if (pass)
+        {
+            Agg1Min.Feed(record, instId, tradingDay);
+            AggDay.Feed(record, instId, tradingDay);
+        }
+        else Interlocked.Increment(ref AggFiltered);
+        Interlocked.Increment(ref QuoteCount);
     }
 
     /// <summary>

@@ -39,12 +39,12 @@ public static class LiveComposer
         services.AddSingleton(activityTracker);
         services.AddSingleton<IDataFeed>(sp =>
         {
-            var feed = new CtpLiveFeed(mdOpts, sp.GetRequiredService<Serilog.ILogger>());
+            var feed = new CtpLiveFeedV2(mdOpts, sp.GetRequiredService<Serilog.ILogger>());
             feed.ActivityTracker = activityTracker;
             foreach (var inst in _pendingStrategyInstruments) feed.StrategyInstruments.Add(inst);
             return feed;
         });
-        services.AddSingleton(sp => (CtpLiveFeed)sp.GetRequiredService<IDataFeed>());
+        services.AddSingleton(sp => (CtpLiveFeedV2)sp.GetRequiredService<IDataFeed>());
 
         // ── 风控 ──
         var risk = new RiskController(
