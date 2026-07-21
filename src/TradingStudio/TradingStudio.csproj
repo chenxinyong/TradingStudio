@@ -71,6 +71,9 @@
       <_CtpDlls Include="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
       <_CtpDlls Include="..\CTP\SDK\dll\thostmduserapi_se.dll" />
       <_CtpDlls Include="..\CTP\SDK\dll\thosttraderapi_se.dll" />
+      <!-- FtdcNet.CTP 1.4.0 native bridge DLLs (需在 runtimes/ 子目录下) -->
+      <_CtpDlls Include="$(NuGetPackageRoot)ftdcnet.ctp\1.4.0\runtimes\win-x64\native\ftdc2c_ctp.dll" DestinationSubFolder="runtimes\win-x64\native\" />
+      <_CtpDlls Include="$(NuGetPackageRoot)ftdcnet.ctp\1.4.0\runtimes\win-x64\native\thosttraderapi_se.dll" DestinationSubFolder="runtimes\win-x64\native\" />
       <_CtpDlls Include="C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\10.0.10\runtimes\win-x64\native\ijwhost.dll" />
       <_CtpDlls Include="C:\Windows\System32\vcruntime140.dll" />
       <_CtpDlls Include="C:\Windows\System32\vcruntime140_1.dll" />
