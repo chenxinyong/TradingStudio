@@ -59,9 +59,9 @@ TradingStudio.Mind           — LLM 模块（研究助手、策略解释、异�
 TradingStudio.Terminal              — 监控与管理界面
 ```
 
-> **实际实现映射（与代码对齐）**：`Risk` / `Execution` / `Backtest` 三层目前统一在 `TradingStudio.Engine` 内，未拆为独立项目；另有 `TradingStudio.Research`（统计/可视化）与 `TradingStudio`（.NET Host 主程序）。CTP 适配在 `TradingStudio/Live/`（CtpLiveFeed / CtpTraderBridge）——早期规划的独立 `TradingStudio.Ctp` 适配层未落地，已删除。
+> **实际实现映射（与代码对齐）**：`Risk` / `Execution` / `Backtest` 三层目前统一在 `TradingStudio.Engine` 内，未拆为独立项目；另有 `TradingStudio.Research`（统计/可视化）与 `TradingStudio`（.NET Host 主程序）。CTP 适配在 `TradingStudio/Live/`（CtpLiveFeedV2 / CtpTraderBridgeV2，基于 FtdcNet.CTP NuGet P/Invoke）；早期规划的独立 `TradingStudio.Ctp` 适配层未落地，已删除。旧 C++/CLI 版（CtpLiveFeed / CtpTraderBridge）保留备用。
 
-### 当前实现 (2026-07-10)
+### 当前实现 (2026-07-22)
 
 ```
 src/
@@ -83,7 +83,7 @@ src/
 │   └── 命令: import / import-jinshuyuan / import-url / verify / merge / append / build-periods / analyze / continuous
 ├── TradingStudio/           引擎主程序 (.NET Host + DI + Serilog)
 │   ├── Program.cs           入口（live / collect / backtest）
-│   ├── Live/                CtpLiveFeed (MdApi→Tick), CtpTraderBridge (TraderApi), ContractActivityTracker
+│   ├── Live/                CtpLiveFeedV2 (MdApi,FtdcNet.CTP P/Invoke), CtpTraderBridgeV2 (TraderApi,FtdcNet.CTP), ContractActivityTracker
 │   ├── Services/            CollectService, LiveDataCollector, QuotePipeline, PeriodMaintainer, SessionScheduler
 │   ├── Commands/            BacktestCommand
 │   ├── Options/             CollectOptions
