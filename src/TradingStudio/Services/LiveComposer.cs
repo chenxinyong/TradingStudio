@@ -97,12 +97,12 @@ public static class LiveComposer
                 AppId = config["Live:AppId"] ?? "simnow_client_test",
             };
             var bridgeLogger = builder.Services.BuildServiceProvider().GetRequiredService<Serilog.ILogger>();
-            var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts, bridgeLogger);
+            var bridge = new CtpTraderBridgeV2(execution.FillChannel, traderOpts, bridgeLogger);
             services.AddSingleton(bridge);
             try
             {
                 bridge.Connect();
-                Console.Error.WriteLine("[LiveComposer] CtpTraderBridge.Connect() called — check logs for 'CTP Trader connected'");
+                Console.Error.WriteLine("[LiveComposer] CtpTraderBridgeV2.Connect() called — FtdcNet.CTP P/Invoke");
             }
             catch (Exception ex)
             {
