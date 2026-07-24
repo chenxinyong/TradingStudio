@@ -61,13 +61,10 @@ TradingStudio.Terminal              — 监控与管理界面
 
 > **实际实现映射（与代码对齐）**：`Risk` / `Execution` / `Backtest` 三层目前统一在 `TradingStudio.Engine` 内，未拆为独立项目；另有 `TradingStudio.Research`（统计/可视化）与 `TradingStudio`（.NET Host 主程序）。CTP 适配在 `TradingStudio/Live/`（CtpLiveFeed / CtpTraderBridge，基于 FtdcNet.CTP NuGet P/Invoke）；C++/CLI 旧版已删除，`TradingStudio.Ctp` 占位项目也已清理。
 
-### 当前实现 (2026-07-22)
+### 当前实现 (2026-07-25)
 
 ```
 src/
-├── CTP/
-│   ├── SDK/               CTP 6.7.13 原生库 (include/lib/dll)
-│   └── Wrapper/           C++/CLI 封装 (CTP.Quote, CTP.MdApi, CTP.TraderApi)
 ├── TradingStudio.Core/    核心模型 + 抽象 (Models, Strategy, Risk, Indicators, Position)
 │   └── Models/            Exchange, Future, FutureRegistry, TickRecord, Bar, ContractCodeGenerator
 ├── TradingStudio.Data/    数据聚合 + 存储
@@ -84,7 +81,7 @@ src/
 ├── TradingStudio/           引擎主程序 (.NET Host + DI + Serilog)
 │   ├── Program.cs           入口（live / collect / backtest）
 │   ├── Live/                CtpLiveFeed (FtdcNet.CTP P/Invoke), CtpTraderBridge (FtdcNet.CTP P/Invoke), ContractActivityTracker, CtpOptions
-│   ├── Services/            CollectService, LiveDataCollector, QuotePipeline, PeriodMaintainer, SessionScheduler
+│   ├── Services/            CollectService, LiveDataCollector, QuotePipeline, EngineHost, SessionScheduler, HealthMonitor
 │   ├── Commands/            BacktestCommand
 │   ├── Options/             CollectOptions
 │   ├── appsettings.json     Serilog + CTP + DuckDB 默认配置
@@ -161,7 +158,7 @@ PeriodMaintainer (每 5min / 收盘):
 | 层次 | 技术 | 说明 |
 |------|------|------|
 | 运行时 | .NET 10 | VS 2026 (v18), x64 |
-| CTP 封装 | **C++/CLI 自封装** | `src/CTP/Wrapper/` — MdApi + TraderApi 完整封装 |
+| CTP 封装 | **FtdcNet.CTP P/Invoke** | NuGet 包 `FtdcNet.CTP 1.4.0`，纯托管调用 `ftdc2c_ctp.dll` 原生桥接 |
 | 时序数据 | **DuckDB** (Phase 2) | 列存 OLAP，bars_1min/5min/15min/day/week，历史库 8.4 GB / 8100 万 Bar |
 | 关系数据 | SQLite (Phase 1) → PostgreSQL (Phase 3) | 品种配置、订单记录 |
 | 回测框架 | 自研 | 通用回测框架不适合期货特性 |
@@ -195,28 +192,39 @@ PeriodMaintainer (每 5min / 收盘):
 
 | 功能 | 状态 |
 |------|------|
-| CTP C++/CLI 封装 (MdApi + TraderApi) | ✅ |
+| CTP 封装 (C++/CLI → FtdcNet.CTP P/Invoke 迁移完成) | ✅ |
 | 全市场 Quote 实时接收 (883 合约, 74 品种) | ✅ |
 | Tick CSV 持续化 (金数源 44 列格式, GBK) | ✅ |
 | 1min Bar + Day Bar 聚合入库 | ✅ |
 | 5min/15min/Week 多周期表 | ✅ PeriodMaintainer 自动维护 |
 | 连续合约 (xxx000) 自动生成 | ✅ BuildContinuousContracts |
-| 7×24 自动重连 + 健康日志 | ✅ |
+| 7×24 自动重连 + 健康日志 | ✅ 指数退避 5s→300s |
 | 金数源历史数据导入 2020-2026 | ✅ 8100 万 Bar, DuckDB 8.4 GB |
 | 全量数据验证 (6 维度, 0 硬伤) | ✅ |
 | 三种运行模式: Live / Collect / Backtest | ✅ |
 | 每日导入管线: 下载→追加→多周期→验证 | ✅ daily_import.ps1 |
 
-### 第二阶段：回测基础（3-4周）← 当前阶段
-历史数据回放 → 模拟撮合 → 仓位资金管理 → 绩效指标。交付物：结果可信的回测系统。
+> **2026-07-25 架构升级**：CTP 封装从 C++/CLI 全面迁移至 FtdcNet.CTP P/Invoke。
+> `src/CTP/` 目录已删除（Wrapper + SDK），`CtpLiveFeed`/`CtpTraderBridge` 直接调用 `FtdcNet.CTP.dll`。
+
+### 第二阶段：回测基础 ✅ 基本完成
+历史数据回放 → 模拟撮合 → 仓位资金管理 → 绩效指标。Engine 150 测试覆盖核心链路。
 > 设计文档：[phase2-backtest-design-v2.md](docs/design/phase2-backtest-design-v2.md)
 > 数据就绪：DuckDB 8.42 GB，8100 万 Bar，2020-2026 全周期，0 硬伤
+> ⚠️ 待做：与文华/博易 K线交叉验证
 
-### 第三阶段：策略研发（4-8周）
+### 第三阶段：策略研发（进行中）
 趋势跟踪（海龟/均线）→ 均值回归（布林带/RSI）→ 套利 → 组合优化。目标：2-3个正期望值策略雏形。
+> ✅ MaCross、BollingerReversion、DonchianTrend 已实现
+> ⚠️ simnow 账户开仓权限阻塞 Live 验证
 
-### 第四阶段：实盘对接（3-4周）
+### 第四阶段：实盘对接 ← 当前冲刺
 TraderApi 风控规则引擎 → simnow 模拟盘 → 小合约实盘验证。
+> ✅ CtpTraderBridge 下单链路（认证→登录→InsertOrder result=0）
+> ✅ RiskController + ExecutionHandler Live 模式
+> ✅ Live 模式 Tick→Bar→策略→订单 全链路跑通
+> ⚠️ simnow 拒单"平昨仓位不足" — 账户权限问题
+> ❌ 订单事件持久化未实现
 
 ---
 
