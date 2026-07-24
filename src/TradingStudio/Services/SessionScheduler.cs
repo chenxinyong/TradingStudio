@@ -76,6 +76,22 @@ public class SessionScheduler
         return t >= NightStart || t <= NightEnd ? "夜盘" : "日盘";
     }
 
+    /// <summary>当前交易时段的结束时间（北京时间），不在时段内返回 null</summary>
+    public DateTime? GetSessionEndTime()
+    {
+        if (!IsInSession()) return null;
+        var now = BeijingNow;
+        var t = now.TimeOfDay;
+        // 日盘结束 15:30
+        if (t >= DayStart && t <= DayEnd)
+            return now.Date.Add(DayEnd);
+        // 夜盘结束 03:00（次日）
+        if (t >= NightStart)
+            return now.Date.AddDays(1).Add(NightEnd);
+        // 夜盘延续 00:00-03:00
+        return now.Date.Add(NightEnd);
+    }
+
     #region 节假日数据 (2026)
 
     public static SessionScheduler CreateWithHolidays()

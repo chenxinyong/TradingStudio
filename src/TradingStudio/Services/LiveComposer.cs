@@ -39,12 +39,12 @@ public static class LiveComposer
         services.AddSingleton(activityTracker);
         services.AddSingleton<IDataFeed>(sp =>
         {
-            var feed = new CtpLiveFeedV2(mdOpts, sp.GetRequiredService<Serilog.ILogger>());
+            var feed = new CtpLiveFeed(mdOpts, sp.GetRequiredService<Serilog.ILogger>());
             feed.ActivityTracker = activityTracker;
             foreach (var inst in _pendingStrategyInstruments) feed.StrategyInstruments.Add(inst);
             return feed;
         });
-        services.AddSingleton(sp => (CtpLiveFeedV2)sp.GetRequiredService<IDataFeed>());
+        services.AddSingleton(sp => (CtpLiveFeed)sp.GetRequiredService<IDataFeed>());
 
         // ── 风控 ──
         var risk = new RiskController(
@@ -97,12 +97,12 @@ public static class LiveComposer
                 AppId = config["Live:AppId"] ?? "simnow_client_test",
             };
             var bridgeLogger = builder.Services.BuildServiceProvider().GetRequiredService<Serilog.ILogger>();
-            var bridge = new CtpTraderBridgeV2(execution.FillChannel, traderOpts, bridgeLogger);
+            var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts, bridgeLogger);
             services.AddSingleton(bridge);
             try
             {
                 bridge.Connect();
-                Console.Error.WriteLine("[LiveComposer] CtpTraderBridgeV2.Connect() called — FtdcNet.CTP P/Invoke");
+                Console.Error.WriteLine("[LiveComposer] CtpTraderBridge.Connect() called — FtdcNet.CTP P/Invoke");
             }
             catch (Exception ex)
             {

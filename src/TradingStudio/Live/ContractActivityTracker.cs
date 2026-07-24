@@ -29,7 +29,7 @@ public class ContractActivityTracker
         _observationComplete = false;
     }
 
-    /// <summary>从原始数据累积活跃度（FtdcNet.CTP 路径，不依赖 C++/CLI CTP.Quote）</summary>
+    /// <summary>从原始数据累积活跃度（FtdcNet.CTP 路径）</summary>
     public void Feed(string instId, long volume, double openInterest, double lastPrice)
     {
         if (_observationComplete) return;
@@ -42,36 +42,6 @@ public class ContractActivityTracker
         {
             var elapsed = (DateTime.UtcNow - _startTime.Value).TotalSeconds;
             if (elapsed >= ObservationSeconds) _observationComplete = true;
-        }
-    }
-
-    /// <summary>从 CTP Quote 提取活跃度数据并累积</summary>
-    public void Feed(string instId, CTP.Quote quote)
-    {
-        if (_observationComplete) return;
-
-        var stats = _stats.GetOrAdd(instId, _ => new ContractStats { InstrumentId = instId });
-
-        // 成交量（累计最大，取最新快照值）
-        if (quote.Volume > stats.MaxVolume)
-            stats.MaxVolume = quote.Volume;
-
-        // 持仓量（累计最大）
-        if (quote.OpenInterest > stats.MaxOpenInterest)
-            stats.MaxOpenInterest = quote.OpenInterest;
-
-        // 最新价（持续更新）
-        stats.LastPrice = quote.LastPrice;
-
-        // Tick 到达次数（反映行情推送频率）
-        Interlocked.Increment(ref stats.TickCount);
-
-        // 检查观察期是否结束
-        if (_startTime.HasValue && !_observationComplete)
-        {
-            var elapsed = (DateTime.UtcNow - _startTime.Value).TotalSeconds;
-            if (elapsed >= ObservationSeconds)
-                _observationComplete = true;
         }
     }
 

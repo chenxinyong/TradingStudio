@@ -17,7 +17,7 @@ namespace TradingStudio.Services;
 /// </summary>
 public class LiveDataCollector : BackgroundService
 {
-    private readonly CtpLiveFeedV2 _feed;
+    private readonly CtpLiveFeed _feed;
     private readonly IBarStore _barStore;
     private readonly HealthMonitor _health;
     private readonly Serilog.ILogger _log;
@@ -32,7 +32,7 @@ public class LiveDataCollector : BackgroundService
 
     private readonly TickCsvWriter? _tickWriter;
 
-    public LiveDataCollector(CtpLiveFeedV2 feed, IBarStore barStore,
+    public LiveDataCollector(CtpLiveFeed feed, IBarStore barStore,
                              HealthMonitor health, Serilog.ILogger log,
                              FutureRegistry registry,
                              TickCsvWriter? tickWriter = null,

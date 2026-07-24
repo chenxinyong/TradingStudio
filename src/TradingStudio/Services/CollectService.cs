@@ -1,4 +1,3 @@
-using CTP;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using TradingStudio.Core.Storage;
@@ -6,6 +5,7 @@ using TradingStudio.Data.Aggregation;
 using TradingStudio.Core.Models;
 using TradingStudio.Data.Storage;
 using TradingStudio.Options;
+using CTP;
 
 namespace TradingStudio.Services;
 
@@ -117,11 +117,11 @@ public class CollectService : BackgroundService
 
                 if (!_scheduler.IsInSession() || ct.IsCancellationRequested) break;
 
-                // 重连前发射快照：1min 正常 flush，日线不清状态（清了会被重连快照重建成退化单点 bar）
+                // 重连前发射快照
                 _pipeline.FlushSnapshots();
                 Interlocked.Increment(ref _reconnectCount);
-                // 快速重试：5s→10s→20s→30s，不在交易时段内浪费
-                var delay = Math.Min(30, 5 * Math.Pow(2, Math.Min(_reconnectCount - 1, 3)));
+                // 指数退避：5s→10s→20s→40s→80s→160s→300s
+                var delay = Math.Min(300, 5 * (int)Math.Pow(2, Math.Min(_reconnectCount - 1, 6)));
                 _log.Warning("Reconnect #{Count} in {Delay:F0}s (session={Session})",
                     _reconnectCount, delay, _scheduler.SessionName());
                 _health.Update("Reconnecting", _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped,
@@ -144,7 +144,7 @@ public class CollectService : BackgroundService
 
     private async Task RunSession(List<string[]> batches, CancellationToken ct)
     {
-        using var md = new MdApi();
+        using var api = new CTP.FtdcMdAdapter("", false, false);
         var connected = new TaskCompletionSource<bool>();
         var loggedIn = new TaskCompletionSource<bool>();
         var session = _scheduler.SessionName();
@@ -152,58 +152,65 @@ public class CollectService : BackgroundService
         var discLock = new object();
         var disconnected = false;
         var discTcs = new TaskCompletionSource<bool>();
-
-        md.OnFrontConnected += () =>
-        {
-            _log.Information("[{Session}] Connected → Login", session);
-            connected.TrySetResult(true);
-            md.Login(_cfg.BrokerId, _cfg.UserId, _cfg.Password);
-        };
-        md.OnFrontDisconnected += r =>
-        {
-            _log.Warning("[{Session}] Disconnected (0x{Reason:X})", session, r);
-            lock (discLock) { disconnected = true; }
-            discTcs.TrySetResult(true);
-        };
-        md.OnLogin += (err, info) =>
-        {
-            if (err.IsOK()) { _log.Information("[{Session}] Login OK TradingDay={Day}", session, info?.TradingDay); loggedIn.TrySetResult(true); }
-            else { _log.Error("[{Session}] Login FAIL [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg); loggedIn.TrySetResult(false); }
-        };
-        // CTP错误回调 + 订阅错误 → 强制重连
         var errorTcs = new TaskCompletionSource<bool>();
-        md.OnError += (err, req) =>
+        int requestId = 0;
+
+        api.OnFrontEvent += (_, e) =>
         {
-            if (err.ErrorID != 0)
+            if (e.EventType == CTP.EnumOnFrontType.OnFrontConnected)
             {
-                _log.Error("[{Session}] CTP Error [{Code}] {Msg}", session, err.ErrorID, err.ErrorMsg);
-                if (err.ErrorID < 0) errorTcs.TrySetResult(true); // 严重错误→重连
+                _log.Information("[{Session}] Connected → Login", session);
+                connected.TrySetResult(true);
+                api.ReqUserLogin(new CTP.ThostFtdcReqUserLoginField
+                { BrokerID = _cfg.BrokerId, UserID = _cfg.UserId, Password = _cfg.Password }, ++requestId);
+            }
+            else if (e.EventType == CTP.EnumOnFrontType.OnFrontDisconnected)
+            {
+                _log.Warning("[{Session}] Disconnected (0x{Reason:X})", session, e.Reason);
+                lock (discLock) { disconnected = true; }
+                discTcs.TrySetResult(true);
             }
         };
-        md.OnSubscribeRsp += (instrumentId, err, isLast) =>
+
+        api.OnRspEvent += (_, e) =>
         {
-            if (!err.IsOK())
-                _log.Warning("[{Session}] Subscribe error [{Code}] {Msg} for {Instrument}",
-                    session, err.ErrorID, err.ErrorMsg, instrumentId);
-        };
-        var lastQuoteTime = DateTime.Now;
-        md.OnQuote += q =>
-        {
-            try { _pipeline.Feed(q); var now = DateTime.Now; _lastQuote = now; lastQuoteTime = now; }
-            catch (Exception ex) { _log.Error(ex, "Quote handler error"); }
+            if (e.EventType == CTP.EnumOnRspType.OnRspUserLogin)
+            {
+                if (e.RspInfo == null || e.RspInfo.ErrorID == 0)
+                { _log.Information("[{Session}] Login OK TradingDay={Day}", session, api.GetTradingDay()); loggedIn.TrySetResult(true); }
+                else { _log.Error("[{Session}] Login FAIL [{Code}] {Msg}", session, e.RspInfo.ErrorID, e.RspInfo.ErrorMsg); loggedIn.TrySetResult(false); }
+            }
+            else if (e.RspInfo != null && e.RspInfo.ErrorID != 0)
+            {
+                _log.Error("[{Session}] CTP Rsp Error [{Code}] {Msg}", session, e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
+                if (e.RspInfo.ErrorID < 0) errorTcs.TrySetResult(true);
+            }
         };
 
-        md.Connect(_cfg.MdFront);
+        var lastQuoteTime = DateTime.Now;
+        api.OnRtnEvent += (_, e) =>
+        {
+            if (e.EventType == CTP.EnumOnRtnType.OnRtnDepthMarketData && e.Param != IntPtr.Zero)
+            {
+                var q = CTP.Conv.P2S<CTP.ThostFtdcDepthMarketDataField>(e.Param);
+                if (string.IsNullOrEmpty(q.InstrumentID)) return;
+                try { _pipeline.Feed(q); var now = DateTime.Now; _lastQuote = now; lastQuoteTime = now; }
+                catch (Exception ex) { _log.Error(ex, "Quote handler error"); }
+            }
+        };
+
+        api.RegisterFront(_cfg.MdFront);
+        api.Init();
         if (!await WaitFor(connected, 15000, ct)) throw new Exception("Connection timeout");
         if (!await WaitFor(loggedIn, 15000, ct)) throw new Exception("Login timeout");
 
         _reconnectCount = 0;
-        _log.Information("[{Session}] Subscribing {Count} contracts in {Batches} batches (50/batch)...",
+        _log.Information("[{Session}] Login OK, subscribing {Count} contracts in {Batches} batches (50/batch)...",
             session, batches.Sum(b => b.Length), batches.Count);
         for (int i = 0; i < batches.Count && _scheduler.IsInSession(); i++)
         {
-            md.Subscribe(batches[i]);
-            if (i % 5 == 4) await Task.Delay(500, ct); else await Task.Delay(150, ct); // 每5批多歇一下
+            api.SubscribeMarketData(batches[i]);
+            if (i % 5 == 4) await Task.Delay(500, ct); else await Task.Delay(150, ct);
         }
         _log.Information("[{Session}] Subscription done", session);
 

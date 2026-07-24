@@ -210,6 +210,8 @@ public class MaCrossStrategy : IStrategy
             // 金叉做多
             if (prevFast <= prevSlow && curFast > curSlow)
             {
+                // 已有入场/持仓则跳过
+                if (s.Direction != null) return;
                 // 日线趋势过滤: 仅日线上升时做多
                 if (DailyTrendFilter && s.TrendSma > 0 && bar.CloseDouble < s.TrendSma) return;
 
@@ -230,6 +232,8 @@ public class MaCrossStrategy : IStrategy
             // 死叉做空
             else if (prevFast >= prevSlow && curFast < curSlow)
             {
+                // 已有入场/持仓则跳过
+                if (s.Direction != null) return;
                 // 日线趋势过滤: 仅日线下降时做空
                 if (DailyTrendFilter && s.TrendSma > 0 && bar.CloseDouble > s.TrendSma) return;
 
@@ -256,8 +260,20 @@ public class MaCrossStrategy : IStrategy
 
     public void OnOrderEvent(OrderEvent evt)
     {
-        if (evt.Type != OrderEventType.Filled) return;
         if (!_state.TryGetValue(evt.InstrumentId, out var s)) return;
+
+        // 订单被拒：复位入场状态，允许下一根 Bar 重新发单
+        if (evt.Type == OrderEventType.Rejected)
+        {
+            if (s.PendingReverse != null && s.PendingReverse.CloseOrderId == evt.OrderId)
+                s.PendingReverse = null;
+            else
+                s.ResetTrade();
+            _ctx.Log($"订单被拒 #{evt.OrderId} {evt.Message} → 状态复位");
+            return;
+        }
+
+        if (evt.Type != OrderEventType.Filled) return;
 
         // 平仓确认 → 反向开仓（修复原 ClosePosition→立即 MarketBuy 的双倍仓位 Bug）
         if (s.PendingReverse != null && s.PendingReverse.CloseOrderId != 0

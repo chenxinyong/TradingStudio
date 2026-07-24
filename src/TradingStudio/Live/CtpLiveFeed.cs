@@ -4,298 +4,180 @@ using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Data.Aggregation;
 using Serilog;
-using System.Linq;
 
 namespace TradingStudio.Live;
 
 /// <summary>
-/// 实盘数据源 — CTP 行情接收在普通 Task 中运行，通过 Channel 传给迭代器，
-/// 彻底避免 yield return 与原生回调的线程冲突。
+/// 实盘数据源 v2 — 基于 FtdcNet.CTP(P/Invoke)。完全替代 C++/CLI CTPWrapper。
 /// </summary>
 public class CtpLiveFeed : IDataFeed, IDisposable
 {
     private readonly CtpMdOptions _opts;
     private readonly Serilog.ILogger _log;
-
-    /// <summary>数据持久化通道 — 传递原始 CTP Quote（全42字段），供 TickCsvWriter 落盘</summary>
-    public Channel<(string InstId, CTP.Quote Quote, DateOnly TradingDay)> PersistChannel { get; }
-        = Channel.CreateBounded<(string, CTP.Quote, DateOnly)>(8192);
-
-    private DateTime _startTime;
-    private DateTime _endTime;
-    private IReadOnlyList<string> _instruments = [];
+    private CTP.FtdcMdAdapter? _api;
     private bool _disposed;
 
-    /// <summary>活跃度追踪器：观察期后筛选高活跃合约，减少 CTP 订阅量</summary>
+    public Channel<(string InstId, TickRecord Tick, DateOnly TradingDay)> PersistChannel { get; }
+        = Channel.CreateBounded<(string, TickRecord, DateOnly)>(8192);
+
+    private DateTime _startTime, _endTime;
+    private IReadOnlyList<string> _instruments = [];
+    private HashSet<string>? _activeProductSet;
+    private bool _filterReady;
+    private int _requestId;
+
     public ContractActivityTracker? ActivityTracker { get; set; }
-
-    /// <summary>策略订阅品种——始终通过 Activity Filter(夜盘/日盘切换时确保不被过滤)</summary>
     public HashSet<string> StrategyInstruments { get; } = new();
-
     public IReadOnlyList<string> Instruments => _instruments;
     public DateTime StartTime => _startTime;
     public DateTime EndTime => _endTime;
     public bool IsConnected { get; private set; }
 
-    /// <summary>活跃品种集合（观察期后填充），用于引擎事件过滤，不影响数据落盘</summary>
-    private HashSet<string>? _activeProductSet;
-    private bool _filterReady;
-
     public CtpLiveFeed(CtpMdOptions opts, Serilog.ILogger? log = null)
-    {
-        _opts = opts;
-        _log = (log ?? Serilog.Log.Logger).ForContext<CtpLiveFeed>();
-    }
+    { _opts = opts; _log = (log ?? Serilog.Log.Logger).ForContext<CtpLiveFeed>(); }
 
-    public void Initialize(DateTime startTime, DateTime endTime, IReadOnlyList<string> instruments)
-    {
-        _startTime = startTime;
-        _endTime = endTime;
-        _instruments = instruments;
-    }
+    public void Initialize(DateTime s, DateTime e, IReadOnlyList<string> i)
+    { _startTime = s; _endTime = e; _instruments = i; }
 
-    /// <summary>
-    /// 迭代器层 — 仅从 Channel 消费，不直接接触 CTP 原生代码。
-    /// </summary>
-    public async IAsyncEnumerable<DataEvent> StreamAsync(
-        [EnumeratorCancellation] CancellationToken ct)
+    public async IAsyncEnumerable<DataEvent> StreamAsync([EnumeratorCancellation] CancellationToken ct)
     {
         if (_instruments.Count == 0) yield break;
-
-        var eventChannel = Channel.CreateBounded<DataEvent>(8192);
-
-        // 生产者：在普通 Task 中跑 CTP 连接（无 yield return）
-        using var producerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var producerTask = RunProducerLoop(eventChannel.Writer, producerCts.Token);
-
-        // 消费者：从 Channel 读取并 yield
-        try
-        {
-            var reader = eventChannel.Reader;
-            while (await reader.WaitToReadAsync(ct))
-            {
-                while (reader.TryRead(out var evt))
-                {
-                    yield return evt;
-                }
-            }
-        }
-        finally
-        {
-            producerCts.Cancel();
-            try { await producerTask; } catch (OperationCanceledException) { }
-        }
+        var ch = Channel.CreateBounded<DataEvent>(8192);
+        using var pCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var prod = RunProducerLoop(ch.Writer, pCts.Token);
+        try { var r = ch.Reader; while (await r.WaitToReadAsync(ct)) while (r.TryRead(out var e)) yield return e; }
+        finally { pCts.Cancel(); try { await prod; } catch (OperationCanceledException) { } }
     }
 
-    /// <summary>
-    /// 生产者循环 — 普通 async Task，不使用 yield return。
-    /// CTP 连接、回调、订阅全部在此 Task 的线程上下文中完成。
-    /// </summary>
-    private async Task RunProducerLoop(
-        ChannelWriter<DataEvent> writer, CancellationToken ct)
+    private async Task RunProducerLoop(ChannelWriter<DataEvent> writer, CancellationToken ct)
     {
+        var reconnectDelay = 0;
         while (!ct.IsCancellationRequested)
         {
-            CTP.MdApi? mdApi = null;
+            if (reconnectDelay > 0)
+            {
+                _log.Information("CTP reconnecting in {Delay}s...", reconnectDelay);
+                try { await Task.Delay(TimeSpan.FromSeconds(reconnectDelay), ct); }
+                catch (OperationCanceledException) { break; }
+            }
+
+            _api = null;
             var barAgg = new BarAggregator();
             var barQueue = new Queue<BarEvent>();
-            barAgg.OnBar += b =>
-            {
-                lock (barQueue)
-                    barQueue.Enqueue(new BarEvent { Bar = b, Time = new DateTimeOffset(b.BarTime, TimeSpan.Zero), IsNewBar = true });
-            };
+            barAgg.OnBar += b => { lock (barQueue) barQueue.Enqueue(new BarEvent { Bar = b, Time = new DateTimeOffset(b.BarTime, TimeSpan.Zero), IsNewBar = true }); };
 
+            var crashed = false;
             try
             {
-                mdApi = new CTP.MdApi();
-                var merged = Channel.CreateBounded<(string InstId, TickRecord Tick, DateOnly TradingDay)>(8192);
-
+                _api = new CTP.FtdcMdAdapter("", false, false);
+                var merged = Channel.CreateBounded<(string, TickRecord, DateOnly)>(8192);
                 var connected = new TaskCompletionSource<bool>();
                 var loggedIn = new TaskCompletionSource<bool>();
                 var discLock = new object();
                 var disconnected = false;
 
-                mdApi.OnFrontConnected += () =>
+                _api.OnFrontEvent += (_, e) =>
                 {
-                    IsConnected = true;
-                    connected.TrySetResult(true);
-                    mdApi.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
+                    if (e.EventType == CTP.EnumOnFrontType.OnFrontConnected) { IsConnected = true; connected.TrySetResult(true); _api.ReqUserLogin(new CTP.ThostFtdcReqUserLoginField { BrokerID = _opts.BrokerId, UserID = _opts.UserId, Password = _opts.Password }, ++_requestId); }
+                    else if (e.EventType == CTP.EnumOnFrontType.OnFrontDisconnected) { lock (discLock) { disconnected = true; } IsConnected = false; _log.Warning("CTP MdApi disconnected (0x{Reason:X})", e.Reason); }
                 };
-                mdApi.OnFrontDisconnected += r =>
+                _api.OnRspEvent += (_, e) =>
                 {
-                    lock (discLock) { disconnected = true; }
-                    IsConnected = false;
-                    _log.Warning("CTP MdApi disconnected (0x{Reason:X})", r);
+                    if (e.EventType == CTP.EnumOnRspType.OnRspUserLogin)
+                    {
+                        if (e.RspInfo == null || e.RspInfo.ErrorID == 0) { _log.Information("CTP login OK TradingDay={Day}", _api.GetTradingDay()); loggedIn.TrySetResult(true); }
+                        else { _log.Error("CTP login FAIL [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg); loggedIn.TrySetResult(false); }
+                    }
                 };
-                mdApi.OnLogin += (err, info) =>
-                {
-                    if (err.IsOK()) { _log.Information("CTP login OK TradingDay={Day}", info?.TradingDay); loggedIn.TrySetResult(true); }
-                    else { _log.Error("CTP login FAIL [{Code}] {Msg}", err.ErrorID, err.ErrorMsg); loggedIn.TrySetResult(false); }
-                };
+
                 var firstQuote = true;
                 var tracker = ActivityTracker;
-                mdApi.OnQuote += q =>
+                _api.OnRtnEvent += (_, e) =>
                 {
-                    if (string.IsNullOrEmpty(q.InstrumentID)) return;
-                    var record = QuoteConverter.FromCTPQuote(q);
-                    var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
-                    var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
-                    merged.Writer.TryWrite((instId, record, tradingDay));
-                    PersistChannel.Writer.TryWrite((instId, q, tradingDay));  // 原始 Quote 全42字段
-                    tracker?.Feed(instId, q);
-                    if (firstQuote) { firstQuote = false; _log.Information("[CTP-MD] First tick: {InstId} @ {Price}", instId, q.LastPrice); }
+                    if (e.EventType == CTP.EnumOnRtnType.OnRtnDepthMarketData && e.Param != IntPtr.Zero)
+                    {
+                        var q = CTP.Conv.P2S<CTP.ThostFtdcDepthMarketDataField>(e.Param);
+                        if (string.IsNullOrEmpty(q.InstrumentID)) return;
+                        var tick = FromFtdcQuote(q);
+                        var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
+                        var td = ParseTradingDay(q.TradingDay ?? "");
+                        merged.Writer.TryWrite((instId, tick, td));
+                        PersistChannel.Writer.TryWrite((instId, tick, td));
+                        tracker?.FeedTick(instId, q);
+                        if (firstQuote) { firstQuote = false; _log.Information("[CTP-MD] First tick: {InstId} @ {Price}", instId, q.LastPrice); }
+                    }
                 };
 
                 _log.Information("CTP: Connecting to {Front}...", _opts.MdFront);
-                mdApi.Connect(_opts.MdFront);
-
-                if (!await WaitFor(connected, 15000, ct))
-                {
-                    _log.Warning("CTP connect timeout");
-                    continue;
-                }
-                if (!await WaitFor(loggedIn, 15000, ct))
-                {
-                    _log.Warning("CTP login timeout/failed");
-                    continue;
-                }
-
+                _api.RegisterFront(_opts.MdFront);
+                _api.Init();
+                if (!await WaitFor(connected, 15000, ct)) { _log.Warning("CTP connect timeout"); reconnectDelay = Math.Min(300, reconnectDelay == 0 ? 5 : reconnectDelay * 2); continue; }
+                if (!await WaitFor(loggedIn, 15000, ct)) { _log.Warning("CTP login timeout/failed"); reconnectDelay = Math.Min(300, reconnectDelay == 0 ? 5 : reconnectDelay * 2); continue; }
                 _log.Information("CTP connected: {Front}", _opts.MdFront);
+                reconnectDelay = 0;  // 连接成功，重置重试延迟
 
-                // 始终订阅全量合约（数据落盘不丢）
-                if (!_filterReady && tracker != null)
-                {
-                    tracker.Start();
-                    _log.Information("Activity observation started ({Sec}s), full list: {Count} instruments",
-                        tracker.ObservationSeconds, _instruments.Count);
-                }
+                if (!_filterReady && tracker != null) { tracker.Start(); _log.Information("Activity observation started ({Sec}s), full list: {Count} instruments", tracker.ObservationSeconds, _instruments.Count); }
 
                 _log.Information("Subscribing to {Count} instruments in batches of 50", _instruments.Count);
                 for (int i = 0; i < _instruments.Count && !ct.IsCancellationRequested; i += 50)
-                {
-                    var batch = _instruments.Skip(i).Take(50).ToArray();
-                    mdApi.Subscribe(batch);
-                    await Task.Delay(200, ct);
-                }
+                { _api.SubscribeMarketData(_instruments.Skip(i).Take(50).ToArray()); await Task.Delay(200, ct); }
                 _log.Information("Subscription completed: {Count} instruments", _instruments.Count);
 
-                // 消费循环 — 软过滤：全量落盘，仅活跃品种推送引擎
                 var reader = merged.Reader;
                 var lastObserveCheck = DateTime.UtcNow;
                 while (!ct.IsCancellationRequested)
                 {
                     lock (discLock) { if (disconnected) break; }
-
-                    // 观察期结束 → 计算活跃品种集合（不打断连接，零数据丢失）
                     if (!_filterReady && tracker is { IsComplete: true })
                     {
-                        var topProducts = tracker.GetTopProducts(30);
-                        var topRanking = tracker.GetTopProductRanking(30);
-                        _activeProductSet = new HashSet<string>(topProducts);
-                        // 策略品种强制加入活跃集(夜盘/日盘切换时个别品种可能尚未交易)
-                        foreach (var inst in StrategyInstruments)
-                            _activeProductSet.Add(ProductOf(inst));
-                        var filteredCount = _instruments.Count(c => _activeProductSet.Contains(ProductOf(c)));
+                        var top = tracker.GetTopProducts(30); var topR = tracker.GetTopProductRanking(30);
+                        _activeProductSet = new HashSet<string>(top);
+                        foreach (var inst in StrategyInstruments) _activeProductSet.Add(ProductOf(inst));
                         _filterReady = true;
-
-                        var top5 = string.Join(", ", topRanking.Take(5).Select(x =>
-                            $"{x.Product}(V{x.TotalVol},OI{x.TotalOI:F0},{x.Contracts}ct)"));
-                        _log.Information(
-                            "Activity filter ready: {ProductCount} products → engine {Filtered}/{Total}, Top5={Top5}",
-                            topProducts.Count, filteredCount, _instruments.Count, top5);
+                        _log.Information("Activity filter ready: {Count} products → engine {F}/{T}", top.Count, _instruments.Count(c => _activeProductSet.Contains(ProductOf(c))), _instruments.Count);
                     }
-
-                    // 过滤未就绪前：定期检查观察期（每 5s 超时一次）
-                    if (!_filterReady)
-                    {
-                        using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                        readCts.CancelAfter(5000);
-                        try
-                        {
-                            if (!await reader.WaitToReadAsync(readCts.Token)) break;
-                        }
-                        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                        {
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        if (!await reader.WaitToReadAsync(ct)) break;
-                    }
-
+                    if (!_filterReady) { using var rc = CancellationTokenSource.CreateLinkedTokenSource(ct); rc.CancelAfter(5000); try { if (!await reader.WaitToReadAsync(rc.Token)) break; } catch (OperationCanceledException) when (!ct.IsCancellationRequested) { continue; } }
+                    else { if (!await reader.WaitToReadAsync(ct)) break; }
                     while (reader.TryRead(out var item))
                     {
                         var (instId, tick, tradingDay) = item;
-
-                        // 引擎推送：仅活跃品种（落盘 PersistChannel 已在 OnQuote 中全量写入）
                         if (!_filterReady || _activeProductSet!.Contains(ProductOf(instId)))
-                        {
-                            writer.TryWrite(new TickEvent
-                            {
-                                Tick = tick, InstrumentId = instId, TradingDay = tradingDay,
-                                Time = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp),
-                            });
-                            barAgg.Feed(tick, instId, tradingDay);
-                            lock (barQueue)
-                                while (barQueue.Count > 0) writer.TryWrite(barQueue.Dequeue());
-                        }
+                        { writer.TryWrite(new TickEvent { Tick = tick, InstrumentId = instId, TradingDay = tradingDay, Time = DateTimeOffset.FromUnixTimeMilliseconds(tick.ExchangeTimestamp) }); barAgg.Feed(tick, instId, tradingDay); lock (barQueue) while (barQueue.Count > 0) writer.TryWrite(barQueue.Dequeue()); }
                     }
                 }
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+            catch (Exception ex) { crashed = true; _log.Error(ex, "CTP producer loop crashed — retrying in {Delay}s...", reconnectDelay == 0 ? 30 : reconnectDelay); reconnectDelay = Math.Min(300, reconnectDelay == 0 ? 30 : reconnectDelay * 2); }
+            finally { try { _api?.Release(); } catch { } _api = null; }
+
+            // 断连/超时退避：连接成功复位为 0；崩溃已走 catch，这里只处理非崩溃退出
+            if (!ct.IsCancellationRequested && !crashed)
             {
-                _log.Warning(ex, "CTP stream error — reconnecting in 5s...");
+                reconnectDelay = Math.Min(300, reconnectDelay == 0 ? 5 : reconnectDelay * 2);
             }
-            finally
-            {
-                // 等待原生回调线程完成
-                try { await Task.Delay(300, ct); } catch { }
-
-                if (mdApi != null)
-                {
-                    IsConnected = false;
-                    try { mdApi.Dispose(); } catch (Exception ex) { _log.Warning(ex, "Error disposing MdApi"); }
-                }
-
-                barAgg.Flush();
-                lock (barQueue) while (barQueue.Count > 0) writer.TryWrite(barQueue.Dequeue());
-                barAgg.Dispose();
-            }
-
-            _log.Information("Reconnecting in 5s...");
-            try { await Task.Delay(5000, ct); } catch (OperationCanceledException) { break; }
         }
-
-        writer.TryComplete();
     }
 
-    /// <summary>从合约代码提取品种代码（ag2608 → ag, TA608 → TA, IF2606 → IF）</summary>
-    private static string ProductOf(string instId)
+    private static TickRecord FromFtdcQuote(CTP.ThostFtdcDepthMarketDataField q) => new()
     {
-        var span = instId.AsSpan();
-        int i = 0;
-        while (i < span.Length && !char.IsDigit(span[i])) i++;
-        return i > 0 ? span[..i].ToString() : instId;
-    }
+        ExchangeTimestamp = DateTimeOffset.ParseExact($"{q.ActionDay} {q.UpdateTime}", "yyyyMMdd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture).ToUnixTimeMilliseconds(),
+        LocalTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        LastPrice = (long)(q.LastPrice * TickRecord.PriceScale),
+        BidPrice1 = (long)(q.BidPrice1 * TickRecord.PriceScale),
+        AskPrice1 = (long)(q.AskPrice1 * TickRecord.PriceScale),
+        Volume = q.Volume, Turnover = q.Turnover, OpenInterest = q.OpenInterest,
+        BidVolume1 = q.BidVolume1, AskVolume1 = q.AskVolume1, Flags = 0,
+    };
 
-    private static async Task<bool> WaitFor(TaskCompletionSource<bool> tcs, int ms, CancellationToken ct)
-    {
-        var done = await Task.WhenAny(tcs.Task, Task.Delay(ms, ct));
-        return done == tcs.Task && tcs.Task.Result;
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return; _disposed = true;
-    }
+    private static DateOnly ParseTradingDay(string td) => td.Length >= 8 && DateOnly.TryParseExact(td[..8], "yyyyMMdd", out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+    private static string ProductOf(string i) => new(i.Where(c => !char.IsDigit(c)).ToArray());
+    private static async Task<bool> WaitFor(TaskCompletionSource<bool> tcs, int ms, CancellationToken ct) { using var c = CancellationTokenSource.CreateLinkedTokenSource(ct); c.CancelAfter(ms); try { await tcs.Task.WaitAsync(c.Token); return tcs.Task.Result; } catch (OperationCanceledException) { return false; } }
+    public void Dispose() { if (_disposed) return; _disposed = true; try { _api?.Release(); } catch { } }
 }
 
-public class CtpMdOptions
+public static class TrackerExtensions
 {
-    public string MdFront { get; init; } = "tcp://182.254.243.31:30011";
-    public string BrokerId { get; init; } = "9999";
-    public string UserId { get; init; } = "";
-    public string Password { get; init; } = "";
-    public string? FlowDir { get; init; }
+    /// <summary>FtdcNet.CTP 版本的 ActivityTracker.Feed — 直接传 Volume/OpenInterest</summary>
+    public static void FeedTick(this ContractActivityTracker t, string instId, CTP.ThostFtdcDepthMarketDataField q)
+        => t.Feed(instId, q.Volume, q.OpenInterest, q.LastPrice);
 }

@@ -41,11 +41,27 @@ public class EngineHost : BackgroundService
             var sessionName = _session.SessionName();
             _log.Information("Session starting: {Session}", sessionName);
 
-            // ── 运行引擎 ──
+            // ── 运行引擎（会话结束自动停止）──
+            using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var sessionEnd = _session.GetSessionEndTime();
+            if (sessionEnd.HasValue)
+            {
+                var remaining = sessionEnd.Value - SessionScheduler.BeijingNow;
+                if (remaining > TimeSpan.Zero)
+                {
+                    _log.Information("Session ends at {End} (in {Remaining})", sessionEnd.Value.ToString("HH:mm"), remaining);
+                    sessionCts.CancelAfter(remaining);
+                }
+            }
+
             try
             {
                 _health.Update("Running", 0, 0, 0, 0, sessionName, DateTime.Now, null, null);
-                await _engine.RunAsync(ct);
+                await _engine.RunAsync(sessionCts.Token);
+            }
+            catch (OperationCanceledException) when (sessionCts.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                _log.Information("Session ended (scheduled): {Session}", sessionName);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

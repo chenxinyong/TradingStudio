@@ -5,24 +5,23 @@ using Serilog;
 namespace TradingStudio.Live;
 
 /// <summary>
-/// CTP 交易桥接 — ExecutionHandler.SendToExchange → CTP InsertOrder。
-/// CTP 回报 (OnOrder/OnTrade) → OrderEvent → FillChannel。
-/// 内置断线检测：断开时 IsReady=false，后续订单立即拒绝。
+/// CTP 交易桥接 v2 — 使用 FtdcNet.CTP (P/Invoke) 替代 C++/CLI CTPWrapper。
 /// </summary>
 public class CtpTraderBridge : IDisposable
 {
     private readonly CtpTraderOptions _opts;
     private readonly ChannelWriter<OrderEvent> _fillWriter;
     private readonly Serilog.ILogger _log;
-    private CTP.TraderApi? _trader;
     private readonly object _sync = new();
+    private CTP.FtdcTdAdapter? _api;
+    private int _requestId;
     private bool _disposed;
 
     public bool IsReady { get { lock (_sync) return _isReady; } private set { lock (_sync) _isReady = value; } }
     private bool _isReady;
 
     public CtpTraderBridge(Channel<OrderEvent> fillChannel, CtpTraderOptions opts,
-                           Serilog.ILogger? log = null)
+                              Serilog.ILogger? log = null)
     {
         _fillWriter = fillChannel.Writer;
         _opts = opts;
@@ -34,209 +33,151 @@ public class CtpTraderBridge : IDisposable
 
     public void Connect()
     {
-        lock (_sync)
-        {
-            if (_trader != null) return; // 防止重复连接导致回调丢失
-            _trader = new CTP.TraderApi();
-        }
+        if (_api != null) return;
+        _api = new CTP.FtdcTdAdapter("");
 
-        _trader.OnFrontConnected += () =>
+        // ── OnFront ──
+        _api.OnFrontEvent += (_, e) =>
         {
-            _log.Information("CTP Trader connected: {Front}", _opts.TraderFront);
-            if (!string.IsNullOrEmpty(_opts.AuthCode))
+            if (e.EventType == CTP.EnumOnFrontType.OnFrontConnected)
             {
-                _log.Information("CTP Trader authenticating...");
-                _trader.Authenticate(_opts.BrokerId, _opts.UserId, _opts.AuthCode, _opts.AppId ?? "simnow_client_test");
+                _log.Information("CTP Trader connected: {Front}", _opts.TraderFront);
+                if (!string.IsNullOrEmpty(_opts.AuthCode))
+                {
+                    _log.Information("CTP Trader authenticating...");
+                    _api.ReqAuthenticate(new CTP.ThostFtdcReqAuthenticateField
+                    {
+                        BrokerID = _opts.BrokerId, UserID = _opts.UserId,
+                        AuthCode = _opts.AuthCode, AppID = _opts.AppId ?? "simnow_client_test",
+                    }, ++_requestId);
+                }
+                else DoLogin();
             }
-            else
+            else if (e.EventType == CTP.EnumOnFrontType.OnFrontDisconnected)
             {
-                _trader.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
-            }
-        };
-
-        _trader.OnAuth += err =>
-        {
-            if (err.IsOK())
-            {
-                _log.Information("CTP Trader auth OK → Login");
-                _trader.Login(_opts.BrokerId, _opts.UserId, _opts.Password);
-            }
-            else
-            {
-                _log.Error("CTP Trader auth failed [{Code}] {Msg}", err.ErrorID, err.ErrorMsg);
+                IsReady = false;
+                _log.Warning("CTP Trader disconnected (0x{Reason:X})", e.Reason);
+                _fillWriter.TryWrite(new OrderEvent { Type = OrderEventType.Rejected, Message = "CTP交易连接断开", Time = DateTimeOffset.UtcNow });
             }
         };
 
-        _trader.OnFrontDisconnected += reason =>
+        // ── OnRsp (login/auth/settlement) ──
+        _api.OnRspEvent += (_, e) =>
         {
-            IsReady = false;
-            _log.Warning("CTP Trader disconnected (0x{Reason:X}) — EngineHost will restart", reason);
+            if (e.RspInfo != null && e.RspInfo.ErrorID != 0)
+                _log.Error("CTP Trader error [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
 
-            // 通知引擎：交易已断（不自动重连——自动重连产生僵尸session，flow目录为空，InsertOrder发到空session无回报）
-            _fillWriter.TryWrite(new OrderEvent
+            if (e.EventType == CTP.EnumOnRspType.OnRspAuthenticate)
             {
-                Type = OrderEventType.Rejected,
-                Message = "CTP交易连接断开",
-                Time = DateTimeOffset.UtcNow,
-            });
-        };
-
-        // ③ OnLogin → 确认结算
-        _trader.OnLogin += (err, _) =>
-        {
-            if (err.IsOK())
-            {
-                IsReady = true;
-                _log.Information("CTP Trader login OK → ConfirmSettlement");
-                _trader.ConfirmSettlement();
+                if (e.RspInfo == null || e.RspInfo.ErrorID == 0)
+                { _log.Information("CTP Trader auth OK → Login"); DoLogin(); }
+                else _log.Error("CTP Trader auth failed [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
             }
-            else
+            else if (e.EventType == CTP.EnumOnRspType.OnRspUserLogin)
             {
-                _log.Error("CTP Trader login failed [{Code}] {Msg}", err.ErrorID, err.ErrorMsg);
+                if (e.RspInfo == null || e.RspInfo.ErrorID == 0)
+                {
+                    IsReady = true;
+                    _log.Information("CTP Trader login OK → ConfirmSettlement");
+                    _api.ReqSettlementInfoConfirm(new CTP.ThostFtdcSettlementInfoConfirmField
+                    { BrokerID = _opts.BrokerId, InvestorID = _opts.UserId }, ++_requestId);
+                }
+                else _log.Error("CTP Trader login failed [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
             }
         };
 
-        // CTP 回报 → OrderEvent
-        _trader.OnOrder += ctpOrder =>
+        // ── OnRtn (Order/Trade) ──
+        _api.OnRtnEvent += (_, e) =>
         {
-            _log.Information("[CTP-Trader] OnRtnOrder: Instrument={Inst} Status={Status} Ref={Ref} VolTraded={Vol}",
-                ctpOrder.InstrumentID, ctpOrder.OrderStatus, ctpOrder.OrderRef, ctpOrder.VolumeTraded);
-            var evt = ConvertOrder(ctpOrder);
-            if (evt != null) _fillWriter.TryWrite(evt);
+            if (e.EventType == CTP.EnumOnRtnType.OnRtnOrder && e.Param != IntPtr.Zero)
+            {
+                var ord = CTP.Conv.P2S<CTP.ThostFtdcOrderField>(e.Param);
+                _log.Information("[CTP-Trader] OnRtnOrder: {Inst} Status={Status} Ref={Ref} VolTraded={Vol}",
+                    ord.InstrumentID, ord.OrderStatus, ord.OrderRef, ord.VolumeTraded);
+                var evt = ConvertOrder(ord); if (evt != null) _fillWriter.TryWrite(evt);
+            }
+            else if (e.EventType == CTP.EnumOnRtnType.OnRtnTrade && e.Param != IntPtr.Zero)
+            {
+                var trd = CTP.Conv.P2S<CTP.ThostFtdcTradeField>(e.Param);
+                _log.Information("[CTP-Trader] OnRtnTrade: {Inst} Price={Price} Vol={Vol}",
+                    trd.InstrumentID, trd.Price, trd.Volume);
+                var evt = ConvertTrade(trd); if (evt != null) _fillWriter.TryWrite(evt);
+            }
         };
 
-        _trader.OnTrade += ctpTrade =>
-        {
-            _log.Information("[CTP-Trader] OnRtnTrade: Instrument={Inst} Price={Price} Vol={Vol}",
-                ctpTrade.InstrumentID, ctpTrade.Price, ctpTrade.Volume);
-            var evt = ConvertTrade(ctpTrade);
-            if (evt != null) _fillWriter.TryWrite(evt);
-        };
+        _api.OnErrRtnEvent += (_, e) =>
+            _log.Warning("[CTP-Trader] ErrRtn: [{Code}] {Msg}", e.RspInfo?.ErrorID, e.RspInfo?.ErrorMsg);
 
-        _trader.OnError += (err, _) =>
-            _log.Warning("[CTP-Trader] [{Code}] {Msg}", err.ErrorID, err.ErrorMsg);
-
-        _trader.Connect(_opts.TraderFront);
+        // ── 连接序列 ──
+        _api.SubscribePublicTopic(CTP.EnumTeResumeType.THOST_TERT_QUICK);
+        _api.SubscribePrivateTopic(CTP.EnumTeResumeType.THOST_TERT_QUICK);
+        _api.RegisterFront(_opts.TraderFront);
+        _api.Init();
     }
 
-    /// <summary>ExecutionHandler.SendToExchange → CTP InsertOrder（线程安全）</summary>
+    private void DoLogin()
+    {
+        _api!.ReqUserLogin(new CTP.ThostFtdcReqUserLoginField
+        { BrokerID = _opts.BrokerId, UserID = _opts.UserId, Password = _opts.Password }, ++_requestId);
+    }
+
     public void SendOrder(Order order)
     {
-        CTP.TraderApi? trader;
-        bool ready;
-        lock (_sync) { trader = _trader; ready = _isReady; }
+        CTP.FtdcTdAdapter? api; bool ready;
+        lock (_sync) { api = _api; ready = _isReady; }
 
-        if (!ready || trader == null)
+        if (!ready || api == null)
         {
-            _log.Warning("Order rejected — CTP not ready (OrderId={Id}, Inst={Inst})",
-                order.OrderId, order.InstrumentId);
-            // 立即拒绝——策略知道订单没成交
-            _fillWriter.TryWrite(new OrderEvent
-            {
-                OrderId = order.OrderId,
-                InstrumentId = order.InstrumentId,
-                Direction = order.Direction,
-                Quantity = order.Quantity,
-                Type = OrderEventType.Rejected,
-                Message = "CTP交易未就绪",
-                Time = DateTimeOffset.UtcNow,
-            });
+            _log.Warning("Order rejected — CTP not ready");
+            _fillWriter.TryWrite(new OrderEvent { OrderId = order.OrderId, InstrumentId = order.InstrumentId, Direction = order.Direction, Quantity = order.Quantity, Type = OrderEventType.Rejected, Message = "CTP交易未就绪", Time = DateTimeOffset.UtcNow });
             return;
         }
 
-        var req = new CTP.OrderRequest
+        var req = new CTP.ThostFtdcInputOrderField
         {
-            InstrumentID = order.InstrumentId,
-            Direction = order.Direction == OrderDirection.Buy
-                ? CTP.Direction.Buy : CTP.Direction.Sell,
-            PriceType = order.Type == OrderType.Market
-                ? CTP.OrderPriceType.AnyPrice : CTP.OrderPriceType.LimitPrice,
-            Price = (double)(order.LimitPrice ?? 0m),
-            Volume = order.Quantity,
-            Offset = order.IsCloseOrder ? CTP.OffsetFlag.Close : CTP.OffsetFlag.Open,
-            OrderRef = order.OrderId.ToString(),
+            BrokerID = _opts.BrokerId, InvestorID = _opts.UserId, UserID = _opts.UserId,
+            InstrumentID = order.InstrumentId, OrderRef = order.OrderId.ToString(),
+            Direction = order.Direction == OrderDirection.Buy ? CTP.EnumDirectionType.Buy : CTP.EnumDirectionType.Sell,
+            CombOffsetFlag_0 = order.IsCloseOrder ? CTP.EnumOffsetFlagType.Close : CTP.EnumOffsetFlagType.Open,
+            OrderPriceType = order.Type == OrderType.Market ? CTP.EnumOrderPriceTypeType.AnyPrice : CTP.EnumOrderPriceTypeType.LimitPrice,
+            LimitPrice = (double)(order.LimitPrice ?? 0m), VolumeTotalOriginal = order.Quantity,
+            VolumeCondition = CTP.EnumVolumeConditionType.AV, TimeCondition = CTP.EnumTimeConditionType.GFD,
+            ContingentCondition = CTP.EnumContingentConditionType.Immediately, ForceCloseReason = CTP.EnumForceCloseReasonType.NotForceClose,
+            CombHedgeFlag_0 = CTP.EnumHedgeFlagType.Speculation, IsAutoSuspend = 0, UserForceClose = 0,
         };
-
-        trader.InsertOrder(req);
-        _log.Information("CTP InsertOrder: #{Id} {Dir} {Inst} x{Qty} {Type}",
-            order.OrderId, order.Direction, order.InstrumentId, order.Quantity, order.Type);
+        int result = api.ReqOrderInsert(req, ++_requestId);
+        _log.Information("CTP InsertOrder: #{Id} {Dir} {Inst} x{Qty} (result={Result})", order.OrderId, order.Direction, order.InstrumentId, order.Quantity, result);
     }
 
-    // ── 回报转换 ──
-
-    private static OrderEvent? ConvertOrder(CTP.Order ctpOrder)
+    private static OrderEvent? ConvertOrder(CTP.ThostFtdcOrderField o)
     {
-        var traded = ctpOrder.VolumeTraded > 0;
-        var type = ctpOrder.OrderStatus switch
+        var t = o.VolumeTraded > 0;
+        var type = o.OrderStatus switch
         {
-            '0' => OrderEventType.Submitted,       // 已受理
-            '1' => traded ? OrderEventType.PartiallyFilled : OrderEventType.Submitted,
-            '2' => traded ? OrderEventType.Filled : OrderEventType.Submitted,
-            '3' => traded ? OrderEventType.PartiallyFilled : OrderEventType.Submitted,
-            '4' => OrderEventType.Rejected,        // 拒单
-            '5' => OrderEventType.Cancelled,       // 撤单
-            _ => OrderEventType.Submitted,         // 其他状态 → 视为已受理
+            CTP.EnumOrderStatusType.AllTraded => t ? OrderEventType.Filled : OrderEventType.Submitted,
+            CTP.EnumOrderStatusType.PartTradedQueueing or CTP.EnumOrderStatusType.PartTradedNotQueueing => t ? OrderEventType.PartiallyFilled : OrderEventType.Submitted,
+            CTP.EnumOrderStatusType.NoTradeQueueing or CTP.EnumOrderStatusType.NoTradeNotQueueing => OrderEventType.Submitted,
+            CTP.EnumOrderStatusType.Canceled => OrderEventType.Cancelled,
+            _ => OrderEventType.Submitted,
         };
-
-        return new OrderEvent
-        {
-            OrderId = ParseOrderRef(ctpOrder.OrderRef),
-            InstrumentId = ctpOrder.InstrumentID ?? "",
-            Direction = ctpOrder.Direction == '0' ? OrderDirection.Buy : OrderDirection.Sell,
-            Quantity = ctpOrder.VolumeTraded > 0 ? ctpOrder.VolumeTraded : ctpOrder.VolumeTotalOriginal,
-            OrderQty = ctpOrder.VolumeTotalOriginal,
-            FilledQty = ctpOrder.VolumeTraded,
-            FillPrice = (decimal)(ctpOrder.LimitPrice > 0 ? ctpOrder.LimitPrice : 0),
-            Type = type,
-            Message = ctpOrder.StatusMsg,
-            Time = DateTimeOffset.UtcNow,
-        };
+        return new OrderEvent { OrderId = ParseOrderRef(o.OrderRef), InstrumentId = o.InstrumentID ?? "", Direction = o.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t ? o.VolumeTraded : o.VolumeTotalOriginal, OrderQty = o.VolumeTotalOriginal, FilledQty = o.VolumeTraded, FillPrice = (decimal)(o.LimitPrice > 0 ? o.LimitPrice : 0), Type = type, Message = o.StatusMsg, Time = DateTimeOffset.UtcNow };
     }
 
-    private static OrderEvent? ConvertTrade(CTP.Trade ctpTrade)
+    private static OrderEvent? ConvertTrade(CTP.ThostFtdcTradeField t)
     {
-        if (ctpTrade.Volume <= 0) return null;
-
-        return new OrderEvent
-        {
-            OrderId = ParseOrderRef(ctpTrade.OrderRef),
-            InstrumentId = ctpTrade.InstrumentID ?? "",
-            Direction = ctpTrade.Direction == '0' ? OrderDirection.Buy : OrderDirection.Sell,
-            Quantity = ctpTrade.Volume,
-            OrderQty = ctpTrade.Volume,
-            FilledQty = ctpTrade.Volume,
-            Type = OrderEventType.Filled,
-            FillPrice = (decimal)ctpTrade.Price,
-            Time = DateTimeOffset.UtcNow,
-        };
+        if (t.Volume <= 0) return null;
+        return new OrderEvent { OrderId = ParseOrderRef(t.OrderRef), InstrumentId = t.InstrumentID ?? "", Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, Time = DateTimeOffset.UtcNow };
     }
 
-    private static long ParseOrderRef(string? orderRef)
+    private static long ParseOrderRef(string? r)
     {
-        if (string.IsNullOrEmpty(orderRef) || orderRef == "0")
-            return -1;  // CTP 未分配 OrderRef
-        return long.TryParse(orderRef, out var id) ? id : -1;
+        if (string.IsNullOrEmpty(r) || r == "0") return -1;
+        return long.TryParse(r, out var id) ? id : -1;
     }
 
     public void Dispose()
     {
         if (_disposed) return;
-        lock (_sync)
-        {
-            if (_disposed) return;
-            _disposed = true;
-            _trader?.Dispose();
-            _trader = null;
-        }
+        lock (_sync) { if (_disposed) return; _disposed = true; _api?.Release(); _api = null; }
     }
-}
-
-public class CtpTraderOptions
-{
-    public string TraderFront { get; init; } = "";
-    public string BrokerId { get; init; } = "9999";
-    public string UserId { get; init; } = "";
-    public string Password { get; init; } = "";
-    public string? AuthCode { get; init; }
-    public string? AppId { get; init; }
 }

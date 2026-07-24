@@ -32,28 +32,25 @@ public class QuotePipeline : IDisposable
         AggDay = new DailyBarAggregator();
     }
 
-    /// <summary>处理一条 CTP Quote（C++/CLI 路径，保留兼容）。线程安全。</summary>
-    public void Feed(CTP.Quote q)
+    /// <summary>处理一条 CTP Quote（Collect 路径）。线程安全。</summary>
+    public void Feed(dynamic q)
     {
         if (string.IsNullOrEmpty(q.InstrumentID)) return;
 
-        var instId = ContractCodeGenerator.Normalize(q.InstrumentID).ToLowerInvariant(); // CZCE大写→小写, 与其他交易所统一
+        var instId = ContractCodeGenerator.Normalize(q.InstrumentID).ToLowerInvariant();
         var record = QuoteConverter.FromCTPQuote(q);
         var tradingDay = QuoteConverter.ParseTradingDay(q.TradingDay);
 
-        // Bar 聚合（闸门只挡聚合路径：盘外/陈旧快照 tick 不进 Bar，CSV 照写）
-        // ExchangeTime 是"北京墙钟当UTC"编码 → TimeOfDay 即北京时间；LocalTime 是真实 UTC → +8h
+        // Bar 聚合 — ExchangeTime 是 UTC (+00:00)，需转北京时间与本地时间对齐
         var pass = _gate == null || _gate.ShouldAggregate(instId,
-            record.ExchangeTime.TimeOfDay, record.LocalTime.AddHours(8).TimeOfDay);
+            record.ExchangeTime.ToOffset(TimeSpan.FromHours(8)).TimeOfDay,
+            record.LocalTime.AddHours(8).TimeOfDay);
         if (pass)
         {
             Agg1Min.Feed(record, instId, tradingDay);
             AggDay.Feed(record, instId, tradingDay);
         }
-        else
-        {
-            Interlocked.Increment(ref AggFiltered);
-        }
+        else Interlocked.Increment(ref AggFiltered);
         Interlocked.Increment(ref QuoteCount);
 
         // Top 30 分层：空集合 = 全量写 CSV
@@ -64,17 +61,18 @@ public class QuotePipeline : IDisposable
             return;
         }
 
-        var row = CsvTickRecord.FromCtpQuote(q, instId,
-            string.IsNullOrEmpty(q.ExchangeID) ? TickCsvWriter.GuessExchange(q.InstrumentID) : q.ExchangeID,
-            q.TradingDay);
-        _tickWriter.Write(in row);
+        var exchangeId = TickCsvWriter.GuessExchange(instId);
+        CsvTickRecord row = CsvTickRecord.FromTickRecord(record, instId, exchangeId, tradingDay);
+        _tickWriter.Write(row);
     }
 
-    /// <summary>处理已转换的 TickRecord — 仅 Bar 聚合，不写 CSV（FtdcNet.CTP 路径）。</summary>
+    /// <summary>处理已转换的 TickRecord — Bar 聚合 + CSV 落盘（FtdcNet.CTP 路径）。</summary>
     public void FeedTick(string instId, TickRecord record, DateOnly tradingDay)
     {
+        // ExchangeTime 是 UTC (+00:00)，需转北京时间与本地时间对齐
         var pass = _gate == null || _gate.ShouldAggregate(instId,
-            record.ExchangeTime.TimeOfDay, record.LocalTime.AddHours(8).TimeOfDay);
+            record.ExchangeTime.ToOffset(TimeSpan.FromHours(8)).TimeOfDay,
+            record.LocalTime.AddHours(8).TimeOfDay);
         if (pass)
         {
             Agg1Min.Feed(record, instId, tradingDay);
@@ -82,6 +80,18 @@ public class QuotePipeline : IDisposable
         }
         else Interlocked.Increment(ref AggFiltered);
         Interlocked.Increment(ref QuoteCount);
+
+        // Top 30 分层：空集合 = 全量写 CSV
+        var productCode = instId.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
+        if (_top30Codes.Count > 0 && !_top30Codes.Contains(productCode))
+        {
+            Interlocked.Increment(ref TickSkipped);
+            return;
+        }
+
+        var exchangeId = TickCsvWriter.GuessExchange(instId);
+        CsvTickRecord row = CsvTickRecord.FromTickRecord(record, instId, exchangeId, tradingDay);
+        _tickWriter.Write(row);
     }
 
     /// <summary>

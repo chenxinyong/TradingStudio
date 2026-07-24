@@ -26,13 +26,24 @@ public static class QuoteConverter
         };
     }
 
-    /// <summary>CTP Quote → TickRecord。需要 using CTP; 的调用方。</summary>
+    /// <summary>CTP Quote → TickRecord（兼容 C++/CLI CTP.Quote 和 FtdcNet.CTP ThostFtdcDepthMarketDataField）</summary>
     public static TickRecord FromCTPQuote(dynamic q)
     {
+        // FtdcNet.CTP: ActionDay(yyyyMMdd) + UpdateTime(HH:mm:ss) → ExchangeTimestamp
+        // C++/CLI: 直接有 ExchangeTimestamp 属性
+        long exchangeTs;
+        try { exchangeTs = q.ExchangeTimestamp; }
+        catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
+        {
+            var dt = DateTimeOffset.ParseExact($"{q.ActionDay} {q.UpdateTime}", "yyyyMMdd HH:mm:ss",
+                System.Globalization.CultureInfo.InvariantCulture);
+            exchangeTs = dt.ToUnixTimeMilliseconds();
+        }
+
         return new TickRecord
         {
-            ExchangeTimestamp = q.ExchangeTimestamp,
-            LocalTimestamp = q.LocalTimestamp,
+            ExchangeTimestamp = exchangeTs,
+            LocalTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
             LastPrice = (long)(q.LastPrice * TickRecord.PriceScale),
             Volume = q.Volume,
             Turnover = q.Turnover,

@@ -32,9 +32,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- C++/CLI Wrapper — 始终用预编译 DLL (C++/CLI 不支持 SelfContained) -->
-    <!-- 修改 CTPWrapper 后需先运行 src\CTP\Wrapper\build.bat -->
-    <Reference Include="CTPWrapper" HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
     <ProjectReference Include="..\TradingStudio.Core\TradingStudio.Core.csproj" />
     <ProjectReference Include="..\TradingStudio.Data\TradingStudio.Data.csproj" />
     <ProjectReference Include="..\TradingStudio.Engine\TradingStudio.Engine.csproj" />
@@ -43,12 +40,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\10.0.10\runtimes\win-x64\native\ijwhost.dll" CopyToPublishDirectory="PreserveNewest" Link="ijwhost.dll" />
     <Content Include="C:\Windows\System32\vcruntime140.dll" CopyToPublishDirectory="PreserveNewest" Link="vcruntime140.dll" />
     <Content Include="C:\Windows\System32\vcruntime140_1.dll" CopyToPublishDirectory="PreserveNewest" Link="vcruntime140_1.dll" />
     <Content Include="C:\Windows\System32\msvcp140.dll" CopyToPublishDirectory="PreserveNewest" Link="msvcp140.dll" />
-    <Content Include="..\CTP\SDK\dll\thostmduserapi_se.dll" CopyToPublishDirectory="PreserveNewest" Link="thostmduserapi_se.dll" />
-    <Content Include="..\CTP\SDK\dll\thosttraderapi_se.dll" CopyToPublishDirectory="PreserveNewest" Link="thosttraderapi_se.dll" />
     <Content Include="..\..\tools\UnRAR.exe" CopyToPublishDirectory="PreserveNewest" Link="tools\UnRAR.exe" />
     <Content Include="start-collect.bat" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="start-collect.ps1" CopyToPublishDirectory="PreserveNewest" />
@@ -68,13 +62,10 @@
   <!-- 拷贝 CTP 原生 DLL 到输出目录 -->
   <Target Name="CopyCtpNative" AfterTargets="Build">
     <ItemGroup>
-      <_CtpDlls Include="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
-      <_CtpDlls Include="..\CTP\SDK\dll\thostmduserapi_se.dll" />
-      <_CtpDlls Include="..\CTP\SDK\dll\thosttraderapi_se.dll" />
-      <!-- FtdcNet.CTP 1.4.0 native bridge DLLs (需在 runtimes/ 子目录下) -->
-      <_CtpDlls Include="$(NuGetPackageRoot)ftdcnet.ctp\1.4.0\runtimes\win-x64\native\ftdc2c_ctp.dll" DestinationSubFolder="runtimes\win-x64\native\" />
-      <_CtpDlls Include="$(NuGetPackageRoot)ftdcnet.ctp\1.4.0\runtimes\win-x64\native\thosttraderapi_se.dll" DestinationSubFolder="runtimes\win-x64\native\" />
-      <_CtpDlls Include="C:\Program Files\dotnet\packs\Microsoft.NETCore.App.Host.win-x64\10.0.10\runtimes\win-x64\native\ijwhost.dll" />
+      <!-- FtdcNet.CTP 1.4.0 native bridge DLLs -->
+      <_CtpDlls Include="$(NuGetPackageRoot)ftdcnet.ctp\1.4.0\runtimes\win-x64\native\ftdc2c_ctp.dll" DestinationSubDirectory="runtimes\win-x64\native\" />
+      <_CtpDlls Include="$(NuGetPackageRoot)ftdcnet.ctp\1.4.0\runtimes\win-x64\native\thostmduserapi_se.dll" DestinationSubDirectory="runtimes\win-x64\native\" />
+      <_CtpDlls Include="$(NuGetPackageRoot)ftdcnet.ctp\1.4.0\runtimes\win-x64\native\thosttraderapi_se.dll" DestinationSubDirectory="runtimes\win-x64\native\" />
       <_CtpDlls Include="C:\Windows\System32\vcruntime140.dll" />
       <_CtpDlls Include="C:\Windows\System32\vcruntime140_1.dll" />
       <_CtpDlls Include="C:\Windows\System32\msvcp140.dll" />

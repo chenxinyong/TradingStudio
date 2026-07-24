@@ -118,11 +118,6 @@ static async Task RunLiveAsync(string[] args, IConfiguration config)
 
     var app = builder.Build();
 
-    // 交易桥接异步启动（不阻塞HTTP）
-    var traderBridge = app.Services.GetService<CtpTraderBridge>();
-    if (traderBridge != null)
-        _ = Task.Run(() => { try { traderBridge.Connect(); } catch (Exception ex) { Log.Warning(ex, "TraderBridge connection failed (non-fatal)"); } });
-
     app.UseCors();
     TradingStudio.EngineMonitorApi.MapEndpoints(app);
     app.MapHub<TradingStudio.EngineHub>("/hubs/engine");

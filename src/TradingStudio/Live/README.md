@@ -17,7 +17,7 @@ Program.RunLiveAsync()
   │
   ├─ 2. 构建 DI 容器
   │     FutureRegistry      ← symbols.json (75品种)
-  │     CtpLiveFeed         ← IDataFeed, 行情接入
+  │     CtpLiveFeed         ← IDataFeed, 行情接入 (FtdcNet.CTP P/Invoke)
   │     ContractActivityTracker ← 60秒观察期, 筛选活跃合约
   │     RiskController      ← 风控横切层
   │     ExecutionHandler    ← IExecutionHandler, IsLive=true
@@ -26,20 +26,19 @@ Program.RunLiveAsync()
   │     StrategyContainer   ← 策略注册
   │     BarStore            ← DuckDB 或 SQLite
   │     TickCsvWriter       ← 金数源格式 CSV 落盘
-  │     (可选) CtpTraderBridge ← SendToExchange 委托注入
+  │     (可选) CtpTraderBridge ← SendToExchange 委托注入 (FtdcNet.CTP P/Invoke)
   │
   ├─ 3. 启动 SignalR Hub (REST API + 实时推送)
   │     /hubs/engine → WPF Terminal 连接
   │
-  ├─ 4. CtpLiveFeed.Connect()
-  │     → CTP MdApi 连接行情前置
-  │     → 订阅全市场合约 Quote
-  │     → Channel<TickRecord> 输出
+  ├─ 4. CtpLiveFeed.Initialize() → StreamAsync()
+  │     → RunProducerLoop: FtdcMdAdapter → OnRtnDepthMarketData
+  │     → 全市场合约订阅 → Channel<DataEvent> 输出
+  │     → 断连指数退避重连 (5s→300s)
   │
   ├─ 5. (可选) CtpTraderBridge.Connect()
-  │     → CTP TraderApi 连接交易前置
-  │     → Authenticate → Login
-  │     → FillChannel 接收成交回报
+  │     → FtdcTdAdapter → OnFrontConnected → Auth/Login
+  │     → FillChannel 接收 Order/Trade 回报
   │
   └─ 6. TradingEngine.RunAsync(ct)
         → 主循环: await foreach (event in _dataFeed.StreamAsync(ct))
@@ -53,10 +52,10 @@ Program.RunLiveAsync()
 
 | 文件 | 职责 |
 |------|------|
-| `CtpLiveFeed.cs` | `IDataFeed` 实现。CTP 行情接入 → Channel → `IAsyncEnumerable<EngineEvent>` |
-| `CtpTraderBridge.cs` | CTP 交易桥接。`SendToExchange` → CTP InsertOrder，回报 → `FillChannel` |
+| `CtpLiveFeed.cs` | `IDataFeed` 实现。基于 FtdcNet.CTP P/Invoke，行情接入 → Channel → `IAsyncEnumerable<DataEvent>` |
+| `CtpTraderBridge.cs` | CTP 交易桥接。基于 FtdcNet.CTP P/Invoke，`SendToExchange` → CTP InsertOrder，回报 → `FillChannel` |
+| `CtpOptions.cs` | `CtpMdOptions` + `CtpTraderOptions` 配置类 |
 | `ContractActivityTracker.cs` | 观察期内统计合约活跃度，筛选高流动性合约减少订阅量 |
-| `PeriodMaintainer.cs` | 后台自动维护：每 5min 增量刷新 5min/15min/week 连续合约表 |
 | `LiveDataCollector.cs` | 独立数据落盘：Tick CSV + 1min/day Bar，与引擎并行 |
 
 ## 数据存储

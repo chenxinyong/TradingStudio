@@ -9,9 +9,4 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
   </ItemGroup>
-  <!-- C++/CLI Wrapper — 始终用预编译 DLL (C++/CLI 不支持 SelfContained) -->
-  <!-- 修改 CTPWrapper 后需先运行 src\CTP\Wrapper\build.bat -->
-  <ItemGroup>
-    <Reference Include="CTPWrapper" HintPath="..\CTP\Wrapper\bin\Release\CTPWrapper.dll" />
-  </ItemGroup>
 </Project>
