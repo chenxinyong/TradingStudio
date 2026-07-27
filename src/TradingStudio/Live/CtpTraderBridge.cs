@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using TradingStudio.Core.Engine;
+using TradingStudio.Core.Models;
 using Serilog;
 
 namespace TradingStudio.Live;
@@ -12,6 +13,7 @@ public class CtpTraderBridge : IDisposable
     private readonly CtpTraderOptions _opts;
     private readonly ChannelWriter<OrderEvent> _fillWriter;
     private readonly Serilog.ILogger _log;
+    private readonly FutureRegistry? _registry;
     private readonly object _sync = new();
     private CTP.FtdcTdAdapter? _api;
     private int _requestId;
@@ -20,11 +22,18 @@ public class CtpTraderBridge : IDisposable
     public bool IsReady { get { lock (_sync) return _isReady; } private set { lock (_sync) _isReady = value; } }
     private bool _isReady;
 
+    /// <summary>
+    /// SHFE (上期所) 和 INE (上能所) 不接受泛型 Close ('1'), 必须区分 CloseToday / CloseYesterday。
+    /// </summary>
+    private static bool RequiresExplicitClose(ExchangeCode ex) =>
+        ex is ExchangeCode.SHFE or ExchangeCode.INE;
+
     public CtpTraderBridge(Channel<OrderEvent> fillChannel, CtpTraderOptions opts,
-                              Serilog.ILogger? log = null)
+                              Serilog.ILogger? log = null, FutureRegistry? registry = null)
     {
         _fillWriter = fillChannel.Writer;
         _opts = opts;
+        _registry = registry;
         _log = (log ?? Serilog.Log.Logger)?.ForContext<CtpTraderBridge>()
             ?? new Serilog.LoggerConfiguration()
                 .WriteTo.Console(outputTemplate: "{Timestamp:HH:mm:ss} [{Level}] {Message:lj}{NewLine}{Exception}")
@@ -133,12 +142,14 @@ public class CtpTraderBridge : IDisposable
             return;
         }
 
+        // 开平标志：上期所/上能所必须区分平今/平昨，不能使用泛型 Close ('1')
+        var offsetFlag = ResolveOffsetFlag(order);
         var req = new CTP.ThostFtdcInputOrderField
         {
             BrokerID = _opts.BrokerId, InvestorID = _opts.UserId, UserID = _opts.UserId,
             InstrumentID = order.InstrumentId, OrderRef = order.OrderId.ToString(),
             Direction = order.Direction == OrderDirection.Buy ? CTP.EnumDirectionType.Buy : CTP.EnumDirectionType.Sell,
-            CombOffsetFlag_0 = order.IsCloseOrder ? CTP.EnumOffsetFlagType.Close : CTP.EnumOffsetFlagType.Open,
+            CombOffsetFlag_0 = offsetFlag,
             OrderPriceType = order.Type == OrderType.Market ? CTP.EnumOrderPriceTypeType.AnyPrice : CTP.EnumOrderPriceTypeType.LimitPrice,
             LimitPrice = (double)(order.LimitPrice ?? 0m), VolumeTotalOriginal = order.Quantity,
             VolumeCondition = CTP.EnumVolumeConditionType.AV, TimeCondition = CTP.EnumTimeConditionType.GFD,
@@ -146,7 +157,30 @@ public class CtpTraderBridge : IDisposable
             CombHedgeFlag_0 = CTP.EnumHedgeFlagType.Speculation, IsAutoSuspend = 0, UserForceClose = 0,
         };
         int result = api.ReqOrderInsert(req, ++_requestId);
-        _log.Information("CTP InsertOrder: #{Id} {Dir} {Inst} x{Qty} (result={Result})", order.OrderId, order.Direction, order.InstrumentId, order.Quantity, result);
+        _log.Information("CTP InsertOrder: #{Id} {Dir} {Inst} x{Qty} Offset={Offset} (result={Result})",
+            order.OrderId, order.Direction, order.InstrumentId, order.Quantity, offsetFlag, result);
+    }
+
+    /// <summary>
+    /// 根据订单方向和品种所属交易所，选择合适的开平标志。
+    /// 上期所/上能所平仓必须明确区分 CloseToday / CloseYesterday，不能使用泛型 Close。
+    /// 由于当前 CTP 会话内的所有开仓均为"今仓"，平仓统一使用 CloseToday。
+    /// TODO: 实盘需根据持仓日期区分平今/平昨。
+    /// </summary>
+    private CTP.EnumOffsetFlagType ResolveOffsetFlag(Order order)
+    {
+        if (!order.IsCloseOrder)
+            return CTP.EnumOffsetFlagType.Open;
+
+        // 平仓：根据交易所选择正确的 OffsetFlag
+        if (_registry != null)
+        {
+            var future = _registry.Resolve(order.InstrumentId);
+            if (future != null && RequiresExplicitClose(future.Exchange))
+                return CTP.EnumOffsetFlagType.CloseToday;
+        }
+
+        return CTP.EnumOffsetFlagType.Close;
     }
 
     private static OrderEvent? ConvertOrder(CTP.ThostFtdcOrderField o)

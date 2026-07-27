@@ -187,9 +187,9 @@ public class ChanLunStrategy : IStrategy
     {
         if (evt.Type == OrderEventType.Filled)
             _ctx.Log($"成交: {evt.InstrumentId} {evt.Direction} {evt.Quantity}手 @ {evt.FillPrice:F2} [{evt.Message}]");
-        if (evt.Type == OrderEventType.Rejected)
+        if (evt.Type is OrderEventType.Rejected or OrderEventType.Cancelled)
         {
-            _ctx.LogWarning($"拒单: {evt.InstrumentId} {evt.Message}");
+            _ctx.LogWarning($"{(evt.Type == OrderEventType.Rejected ? "拒单" : "撤单")}: {evt.InstrumentId} {evt.Message}");
             if (_state.TryGetValue(evt.InstrumentId, out var s)) s.HasPendingEntry = false;
         }
     }
