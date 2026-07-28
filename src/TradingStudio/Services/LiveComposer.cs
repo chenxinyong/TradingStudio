@@ -178,5 +178,6 @@ public static class LiveComposer
         services.AddHostedService<EngineHubPushService>();
         services.AddHostedService<LiveDataCollector>();
         services.AddHostedService<PeriodMaintainer>();
+        services.AddHostedService<OrderPersistenceService>();
     }
 }

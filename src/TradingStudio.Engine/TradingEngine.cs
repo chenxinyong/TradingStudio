@@ -173,11 +173,18 @@ public class TradingEngine
                 {
                     while (reader.TryRead(out var fill))
                     {
-                        var trade = _portfolio.ProcessFill(fill, _registry);
-                        lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
-                        _dailyTracker?.RecordPnl((double)(trade?.PnL ?? 0), (double)_portfolio.Equity);
+                        // 仅真实成交事件更新持仓/资金 — Submitted/Cancelled/Rejected 不产生持仓变更
+                        bool isFill = fill.Type is OrderEventType.Filled or OrderEventType.PartiallyFilled;
+                        Trade? trade = null;
+                        if (isFill)
+                        {
+                            trade = _portfolio.ProcessFill(fill, _registry);
+                            lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
+                            _dailyTracker?.RecordPnl((double)(trade?.PnL ?? 0), (double)_portfolio.Equity);
+                            _feedback.RecordFill(fill, fill.StrategyId);
+                        }
                         _strategies.DispatchOrderEvent(fill);
-                        outboxWriter?.TryWrite(fill);  // 通知 SignalR 推送端
+                        outboxWriter?.TryWrite(fill);  // 通知 SignalR 推送端（含状态变更）
                     }
                 }
             }, ct)
