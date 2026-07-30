@@ -40,9 +40,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="C:\Windows\System32\vcruntime140.dll" CopyToPublishDirectory="PreserveNewest" Link="vcruntime140.dll" />
-    <Content Include="C:\Windows\System32\vcruntime140_1.dll" CopyToPublishDirectory="PreserveNewest" Link="vcruntime140_1.dll" />
-    <Content Include="C:\Windows\System32\msvcp140.dll" CopyToPublishDirectory="PreserveNewest" Link="msvcp140.dll" />
     <Content Include="..\..\tools\UnRAR.exe" CopyToPublishDirectory="PreserveNewest" Link="tools\UnRAR.exe" />
     <Content Include="start-collect.bat" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="start-collect.ps1" CopyToPublishDirectory="PreserveNewest" />

@@ -1,0 +1,23 @@
+{
+  "StrategyId": "backtest-macross-ag000-1h",
+  "StrategyType": "MaCross",
+  "Instruments": ["ag000"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 60,
+  "AllocatedCapital": 200000,
+  "MaxPositionPerInstrument": 4,
+  "Parameters": {
+    "FastPeriod": 5,
+    "SlowPeriod": 34,
+    "AdxPeriod": 0,
+    "MinAdx": 0,
+    "RiskPerTrade": 0.02,
+    "MaxMarginRatio": 0.50,
+    "StopAtrMult": 2.0,
+    "TakeProfitAtrMult": 2.5,
+    "DailyTrendFilter": false
+  },
+  "DataStartDate": "2025-01-01",
+  "DataEndDate": "2026-06-30",
+  "BacktestMode": 0
+}

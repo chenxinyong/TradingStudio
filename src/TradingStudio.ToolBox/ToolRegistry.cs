@@ -21,6 +21,7 @@ public class ToolRegistry
         Register(new BuildPeriodsTool.BuildPeriodsTool());
         Register(new MindTool.MindTool());
         Register(new ChanLunTool.ChanLunAnalyzeTool());
+        Register(new BarExportTool.BarExportTool());
         // 未来扩展：只需加下面这类行
         // Register(new InfoTool.InfoTool());
         // Register(new ConvertTool.ConvertTool());

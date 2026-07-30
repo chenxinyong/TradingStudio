@@ -29,7 +29,7 @@ public class BaselineBenchmarks
         return dir;
     }
 
-    private static string DbPath => Path.Combine(RepoRoot(), "data", "bars_history.duckdb");
+    private static string DbPath => Path.GetFullPath(Path.Combine(RepoRoot(), "..", "..", "Datas", "bars_history.duckdb"));
 
     private static readonly string[] Top5 = ["rb000", "MA000", "TA000", "FG000", "SA000"];
 

@@ -172,7 +172,13 @@
       "PowerShell($script = \"c:\\\\Works\\\\ClaudeCode\\\\TradingStudio\\\\scripts\\\\daily_update.ps1\"; & $script 2>&1)",
       "Bash(\"C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe\" \"c:/Works/ClaudeCode/TradingStudio/src/TradingStudio/TradingStudio.csproj\" /t:Build /p:Configuration=Debug /p:Platform=x64)",
       "Bash(ls TradingStudio.dll thostmduserapi_se.dll CTPWrapper.dll)",
-      "Bash(dotnet TradingStudio.dll live)"
+      "Bash(dotnet TradingStudio.dll live)",
+      "Bash(python scripts/cross_validate.py --ours /tmp/test_export.csv --ref /tmp/test_export.csv --instrument ag --tolerance 1 --top 5)",
+      "Bash(python scripts/cross_validate.py --help)",
+      "Bash(pip list *)",
+      "Bash(python -c \"import akshare; print\\('akshare version:', akshare.__version__\\)\")",
+      "Bash(pip install *)",
+      "Bash(python scripts/cross_validate_ag2612.py)"
     ],
     "additionalDirectories": [
       "C:\\Works\\ClaudeCode\\TradingStudio\\data",

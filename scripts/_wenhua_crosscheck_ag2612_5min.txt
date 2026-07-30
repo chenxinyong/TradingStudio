@@ -1,0 +1,6 @@
+═══ ag2612 5min Bar Wenhua Cross-Check ═══
+Exported: 2026-07-28 06:53
+ag000 range: 2020-01-02 08:55:00 ~ 2026-06-30 23:55:00
+
+--- ag000 (白银连续) 5min Bar — 2026-06-01 ~ 2026-07-25 ---
+DateTime            |   Open |   High |    Low |  Close |     Vol

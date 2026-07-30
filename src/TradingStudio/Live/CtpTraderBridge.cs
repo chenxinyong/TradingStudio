@@ -14,6 +14,7 @@ public class CtpTraderBridge : IDisposable
     private readonly ChannelWriter<OrderEvent> _fillWriter;
     private readonly Serilog.ILogger _log;
     private readonly FutureRegistry? _registry;
+    private readonly TradingStudio.Engine.TickSnapshot? _snapshot;
     private readonly object _sync = new();
     private CTP.FtdcTdAdapter? _api;
     private int _requestId;
@@ -29,11 +30,13 @@ public class CtpTraderBridge : IDisposable
         ex is ExchangeCode.SHFE or ExchangeCode.INE;
 
     public CtpTraderBridge(Channel<OrderEvent> fillChannel, CtpTraderOptions opts,
-                              Serilog.ILogger? log = null, FutureRegistry? registry = null)
+                              Serilog.ILogger? log = null, FutureRegistry? registry = null,
+                              TradingStudio.Engine.TickSnapshot? snapshot = null)
     {
         _fillWriter = fillChannel.Writer;
         _opts = opts;
         _registry = registry;
+        _snapshot = snapshot;
         _log = (log ?? Serilog.Log.Logger)?.ForContext<CtpTraderBridge>()
             ?? new Serilog.LoggerConfiguration()
                 .WriteTo.Console(outputTemplate: "{Timestamp:HH:mm:ss} [{Level}] {Message:lj}{NewLine}{Exception}")
@@ -101,8 +104,8 @@ public class CtpTraderBridge : IDisposable
             if (e.EventType == CTP.EnumOnRtnType.OnRtnOrder && e.Param != IntPtr.Zero)
             {
                 var ord = CTP.Conv.P2S<CTP.ThostFtdcOrderField>(e.Param);
-                _log.Information("[CTP-Trader] OnRtnOrder: {Inst} Status={Status} Ref={Ref} VolTraded={Vol}",
-                    ord.InstrumentID, ord.OrderStatus, ord.OrderRef, ord.VolumeTraded);
+                _log.Information("[CTP-Trader] OnRtnOrder: {Inst} Status={Status} Ref={Ref} VolTraded={Vol} Msg={Msg}",
+                    ord.InstrumentID, ord.OrderStatus, ord.OrderRef, ord.VolumeTraded, ord.StatusMsg);
                 var evt = ConvertOrder(ord); if (evt != null) _fillWriter.TryWrite(evt);
             }
             else if (e.EventType == CTP.EnumOnRtnType.OnRtnTrade && e.Param != IntPtr.Zero)
@@ -144,14 +147,34 @@ public class CtpTraderBridge : IDisposable
 
         // 开平标志：上期所/上能所必须区分平今/平昨，不能使用泛型 Close ('1')
         var offsetFlag = ResolveOffsetFlag(order);
+
+        // 上期所/上能所不支持市价单(AnyPrice)，转为限价单
+        // 用当前快照价格 ± 3跳点，确保成交
+        var orderType = order.Type == OrderType.Market
+            ? CTP.EnumOrderPriceTypeType.LimitPrice
+            : CTP.EnumOrderPriceTypeType.LimitPrice; // SHFE一律限价
+        var futures = _registry?.Resolve(order.InstrumentId);
+        bool isShfe = futures != null && RequiresExplicitClose(futures.Exchange);
+        var limitPrice = (double)(order.LimitPrice ?? 0m);
+        if (order.Type == OrderType.Market || isShfe)
+        {
+            var snapPrice = _snapshot?.Get(order.InstrumentId)?.LastPrice ?? 0;
+            if (snapPrice > 0)
+            {
+                var tick = futures?.TickSize > 0 ? (double)futures.TickSize : 1;
+                limitPrice = order.Direction == OrderDirection.Buy
+                    ? snapPrice + tick * 3  // 买单略高于市价
+                    : snapPrice - tick * 3; // 卖单略低于市价
+            }
+        }
         var req = new CTP.ThostFtdcInputOrderField
         {
             BrokerID = _opts.BrokerId, InvestorID = _opts.UserId, UserID = _opts.UserId,
             InstrumentID = order.InstrumentId, OrderRef = order.OrderId.ToString(),
             Direction = order.Direction == OrderDirection.Buy ? CTP.EnumDirectionType.Buy : CTP.EnumDirectionType.Sell,
             CombOffsetFlag_0 = offsetFlag,
-            OrderPriceType = order.Type == OrderType.Market ? CTP.EnumOrderPriceTypeType.AnyPrice : CTP.EnumOrderPriceTypeType.LimitPrice,
-            LimitPrice = (double)(order.LimitPrice ?? 0m), VolumeTotalOriginal = order.Quantity,
+            OrderPriceType = orderType,
+            LimitPrice = limitPrice, VolumeTotalOriginal = order.Quantity,
             VolumeCondition = CTP.EnumVolumeConditionType.AV, TimeCondition = CTP.EnumTimeConditionType.GFD,
             ContingentCondition = CTP.EnumContingentConditionType.Immediately, ForceCloseReason = CTP.EnumForceCloseReasonType.NotForceClose,
             CombHedgeFlag_0 = CTP.EnumHedgeFlagType.Speculation, IsAutoSuspend = 0, UserForceClose = 0,

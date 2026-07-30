@@ -25,7 +25,7 @@ public class KLineConsistencyTests
         return dir;
     }
 
-    private static string DbPath => Path.Combine(RepoRoot(), "data", "bars_history.duckdb");
+    private static string DbPath => Path.GetFullPath(Path.Combine(RepoRoot(), "..", "..", "Datas", "bars_history.duckdb"));
 
     private static DateTime RdDt(DuckDBDataReader r, int idx) =>
         r.GetFieldType(idx) == typeof(string) ? DateTime.Parse(r.GetString(idx)) : r.GetDateTime(idx);

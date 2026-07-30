@@ -97,7 +97,8 @@ public static class LiveComposer
                 AppId = config["Live:AppId"] ?? "simnow_client_test",
             };
             var bridgeLogger = builder.Services.BuildServiceProvider().GetRequiredService<Serilog.ILogger>();
-            var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts, bridgeLogger, registry);
+            var tickSnapshot = builder.Services.BuildServiceProvider().GetRequiredService<TickSnapshot>();
+            var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts, bridgeLogger, registry, tickSnapshot);
             services.AddSingleton(bridge);
             try
             {
