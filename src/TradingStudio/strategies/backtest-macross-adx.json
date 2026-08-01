@@ -1,10 +1,11 @@
 {
-  "StrategyId": "live-test",
+  "StrategyId": "backtest-macross-adx",
   "StrategyType": "MaCross",
-  "Instruments": ["ag2612"],
+  "Instruments": ["ag000"],
   "PrimaryBarType": "bars_1min",
-  "AllocatedCapital": 1000000,
-  "MaxPositionPerInstrument": 2,
+  "BarPeriodMinutes": 60,
+  "AllocatedCapital": 200000,
+  "MaxPositionPerInstrument": 4,
   "Parameters": {
     "FastPeriod": 5,
     "SlowPeriod": 34,
@@ -16,5 +17,7 @@
     "TakeProfitAtrMult": 2.5,
     "DailyTrendFilter": false
   },
-  "SkipAuction": false
+  "DataStartDate": "2025-01-01",
+  "DataEndDate": "2026-06-30",
+  "BacktestMode": 0
 }

@@ -18,6 +18,9 @@ public class CtpTraderBridge : IDisposable
     private readonly object _sync = new();
     private CTP.FtdcTdAdapter? _api;
     private int _requestId;
+    private int _reconnectDelay;
+    private CancellationTokenSource? _reconnectCts;
+    private bool _reconnecting;
     private bool _disposed;
 
     public bool IsReady { get { lock (_sync) return _isReady; } private set { lock (_sync) _isReady = value; } }
@@ -45,7 +48,13 @@ public class CtpTraderBridge : IDisposable
 
     public void Connect()
     {
-        if (_api != null) return;
+        _reconnectCts = new CancellationTokenSource();
+        ConnectInternal();
+    }
+
+    private void ConnectInternal()
+    {
+        try { _api?.Release(); } catch { }
         _api = new CTP.FtdcTdAdapter("");
 
         // ── OnFront ──
@@ -70,6 +79,7 @@ public class CtpTraderBridge : IDisposable
                 IsReady = false;
                 _log.Warning("CTP Trader disconnected (0x{Reason:X})", e.Reason);
                 _fillWriter.TryWrite(new OrderEvent { Type = OrderEventType.Rejected, Message = "CTP交易连接断开", Time = DateTimeOffset.UtcNow });
+                ScheduleReconnect();
             }
         };
 
@@ -90,6 +100,7 @@ public class CtpTraderBridge : IDisposable
                 if (e.RspInfo == null || e.RspInfo.ErrorID == 0)
                 {
                     IsReady = true;
+                    _reconnectDelay = 0;  // 登录成功，复位退避
                     _log.Information("CTP Trader login OK → ConfirmSettlement");
                     _api.ReqSettlementInfoConfirm(new CTP.ThostFtdcSettlementInfoConfirmField
                     { BrokerID = _opts.BrokerId, InvestorID = _opts.UserId }, ++_requestId);
@@ -232,9 +243,31 @@ public class CtpTraderBridge : IDisposable
         return long.TryParse(r, out var id) ? id : -1;
     }
 
+    private async void ScheduleReconnect()
+    {
+        if (_reconnecting) return;  // 已有重连任务在执行
+        _reconnecting = true;
+        try { _api?.Release(); } catch { }
+        _api = null;
+        _reconnectDelay = Math.Min(300, _reconnectDelay == 0 ? 5 : _reconnectDelay * 2);
+        _log.Information("CTP Trader reconnecting in {Delay}s...", _reconnectDelay);
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(_reconnectDelay), _reconnectCts?.Token ?? CancellationToken.None);
+            if (!_disposed)
+                ConnectInternal();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "CTP Trader reconnect error");
+        }
+        finally { _reconnecting = false; }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
-        lock (_sync) { if (_disposed) return; _disposed = true; _api?.Release(); _api = null; }
+        lock (_sync) { if (_disposed) return; _disposed = true; _reconnectCts?.Cancel(); _reconnectCts?.Dispose(); _api?.Release(); _api = null; }
     }
 }

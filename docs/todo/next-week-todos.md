@@ -1,34 +1,22 @@
----
-name: next-week-todos
-description: 下周待办 7/26-8/1 — 收尾Phase2 + 推进Phase4实盘验证
-metadata: 
-  node_type: memory
-  type: project
-  originSessionId: c1ace19e-0bd1-478f-a0ae-9b732d7ae630
-  modified: 2026-07-24T22:39:49.759Z
----
+## 下周待办（8/1 — 8/7）
 
-## 下周待办（7/26 — 8/1）
+### 周一-二：策略优化
+- [ ] MaCross 加 ADX 趋势过滤回测（MinAdx>0, DailyTrendFilter=true）
+- [ ] 多品种回测 — Top 5 流动性品种（rb000, MA000, ag000, TA000, FG000）
+- [ ] 参数扫描：快线(5,10,20) × 慢线(20,34,50) × 风险(1%,2%,3%)
 
-### 周一-二：数据质量收尾
-- [ ] 修复 Data 测试 6/28 — bars_history.duckdb 路径
-- [ ] 文华 K 线交叉验证 — ag2612 5min Bar OHLCV 对照
-- [ ] 连续合约 xxx000 生成修复
+### 周三-四：实盘持续
+- [ ] Live 每日运行 ≥4h，记录 equity 曲线
+- [ ] AtrTrail 止损/止盈触发率统计
+- [ ] CtpTraderBridge 自动重连（断连后重连，当前断连就永久掉线）
+- [ ] 日盘+夜盘完整交易日覆盖
 
-### 周三-四：实盘链路
-- [ ] 解决 simnow 开户权限
-- [ ] 订单事件持久化（OrderEvent → SQLite/DuckDB）
-- [ ] Live 模式日盘端到端验证
-
-### 周五-六：策略迭代
-- [ ] MaCross 回测 2024-2026
-- [ ] AtrTrail 止损 Live 验证
-- [ ] Collect + Live 分时并行
+### 周五-六：数据与工具
+- [ ] 文华 K 线人工交叉核对（已导出数据）
+- [ ] Tick→Bar 数据质量验证报告
+- [ ] OrderEvent 持久化验证（查询 DuckDB 确认写入）
 
 ### 周日：复盘
-- [ ] K 线验证报告
-- [ ] 更新 CLAUDE.md 状态
+- [ ] 本周策略绩效报告（胜率/盈亏比/最大回撤）
+- [ ] 更新 CLAUDE.md 阶段状态
 - [ ] 提交 + 推送
-
-**Why:** 当前项目阻塞在 simnow 账户 + 数据验证，需要一周攻克。
-**How to apply:** 每日对照推进，阻塞项优先。
