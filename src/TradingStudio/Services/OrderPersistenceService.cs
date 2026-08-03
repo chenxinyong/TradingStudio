@@ -8,6 +8,7 @@ namespace TradingStudio.Services;
 
 /// <summary>
 /// 订单事件持久化 — 消费 FillChannel，写入 DuckDB + 转发到 OrderOutbox。
+/// 5 秒定时刷盘，确保订单事件及时落库。
 /// </summary>
 public class OrderPersistenceService : BackgroundService
 {
@@ -16,6 +17,7 @@ public class OrderPersistenceService : BackgroundService
     private readonly IBarStore _store;
     private readonly Serilog.ILogger _log;
     private readonly List<OrderEvent> _batch = new(64);
+    private readonly object _lock = new();
 
     public OrderPersistenceService(
         ExecutionHandler execution,
@@ -31,16 +33,21 @@ public class OrderPersistenceService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         _log.Information("OrderPersistenceService started");
+        using var flushTimer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+
         try
         {
+            // 定时刷盘 + 事件消费并发
+            var flushTask = Task.Run(async () =>
+            {
+                while (await flushTimer.WaitForNextTickAsync(ct))
+                    await FlushAsync();
+            }, ct);
+
             await foreach (var evt in _fillReader.ReadAllAsync(ct))
             {
-                _batch.Add(evt);
-                // 转发到 OrderOutbox（供 SignalR 推送）
-                _outboxWriter.TryWrite(evt);
-
-                if (_batch.Count >= 64)
-                    await FlushAsync();
+                lock (_lock) _batch.Add(evt);
+                _outboxWriter.TryWrite(evt); // 转发到 OrderOutbox（SignalR）
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
@@ -57,17 +64,22 @@ public class OrderPersistenceService : BackgroundService
 
     private async Task FlushAsync()
     {
-        if (_batch.Count == 0) return;
+        List<OrderEvent> snapshot;
+        lock (_lock)
+        {
+            if (_batch.Count == 0) return;
+            snapshot = new List<OrderEvent>(_batch);
+            _batch.Clear();
+        }
+
         try
         {
             if (_store is DuckDBStore duck)
-                duck.WriteOrderEvents(_batch);
-            // SQLite 不支持订单事件持久化
+                duck.WriteOrderEvents(snapshot);
         }
         catch (Exception ex)
         {
-            _log.Error(ex, "Failed to persist {Count} order events", _batch.Count);
+            _log.Error(ex, "Failed to persist {Count} order events", snapshot.Count);
         }
-        _batch.Clear();
     }
 }
