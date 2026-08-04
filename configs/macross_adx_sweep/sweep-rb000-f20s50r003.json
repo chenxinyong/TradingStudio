@@ -1,0 +1,29 @@
+﻿{
+    "Version":  1,
+    "PrimaryBarType":  "bars_1min",
+    "StrategyType":  "MaCross",
+    "AllocatedCapital":  500000,
+    "DataStartDate":  "2024-01-01",
+    "DataEndDate":  "2026-06-30",
+    "Description":  "螺纹钢 双均线+ADX+日线趋势过滤",
+    "MaxPositionPerInstrument":  3,
+    "StrategyId":  "sweep-rb000-f20s50r003",
+    "BarPeriodMinutes":  15,
+    "Instruments":  [
+                        "rb000"
+                    ],
+    "Parameters":  {
+                       "FastPeriod":  20,
+                       "StopAtrMult":  2,
+                       "AtrPeriod":  20,
+                       "MinAdx":  20,
+                       "RiskPerTrade":  0.03,
+                       "TakeProfitAtrMult":  2.5,
+                       "MaxMarginRatio":  0.35,
+                       "AdxPeriod":  14,
+                       "DailyTrendPeriod":  50,
+                       "DailyTrendFilter":  true,
+                       "SlowPeriod":  50
+                   },
+    "SkipAuction":  true
+}

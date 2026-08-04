@@ -178,7 +178,14 @@
       "Bash(pip list *)",
       "Bash(python -c \"import akshare; print\\('akshare version:', akshare.__version__\\)\")",
       "Bash(pip install *)",
-      "Bash(python scripts/cross_validate_ag2612.py)"
+      "Bash(python scripts/cross_validate_ag2612.py)",
+      "Bash(python3 -c \"import duckdb; print\\('duckdb:', duckdb.__version__\\); import pandas; print\\('pandas:', pandas.__version__\\); import numpy; print\\('numpy:', numpy.__version__\\); import scipy; print\\('scipy:', scipy.__version__\\)\")",
+      "Bash(python3 scripts/factor_research/factor_compute.py)",
+      "Bash(python3 scripts/factor_research/factor_preprocess.py)",
+      "Bash(python3 scripts/factor_research/factor_ic.py)",
+      "Bash(python3 scripts/factor_research/factor_quantile.py)",
+      "Bash(python3 scripts/factor_research/factor_report.py)",
+      "Bash(python3 -c ' *)"
     ],
     "additionalDirectories": [
       "C:\\Works\\ClaudeCode\\TradingStudio\\data",

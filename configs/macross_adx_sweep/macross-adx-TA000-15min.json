@@ -1,0 +1,29 @@
+﻿{
+    "Version":  1,
+    "PrimaryBarType":  "bars_1min",
+    "StrategyType":  "MaCross",
+    "AllocatedCapital":  500000,
+    "DataStartDate":  "2024-01-01",
+    "DataEndDate":  "2026-06-30",
+    "Description":  "PTA 双均线+ADX+日线趋势过滤",
+    "MaxPositionPerInstrument":  3,
+    "StrategyId":  "macross-adx-TA000-15min",
+    "BarPeriodMinutes":  15,
+    "Instruments":  [
+                        "TA000"
+                    ],
+    "Parameters":  {
+                       "FastPeriod":  10,
+                       "StopAtrMult":  2,
+                       "AtrPeriod":  20,
+                       "MinAdx":  20,
+                       "RiskPerTrade":  0.02,
+                       "TakeProfitAtrMult":  2.5,
+                       "MaxMarginRatio":  0.35,
+                       "AdxPeriod":  14,
+                       "DailyTrendPeriod":  50,
+                       "DailyTrendFilter":  true,
+                       "SlowPeriod":  30
+                   },
+    "SkipAuction":  true
+}
