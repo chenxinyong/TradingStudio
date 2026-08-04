@@ -1,0 +1,26 @@
+{
+  "StrategyId": "IntradayMom-RB-Day-WF",
+  "StrategyType": "IntradayMomentum",
+  "Description": "日内动量因子 — 前日IntradayMom Z-score预测当日方向, 日线交易, ATR止损/止盈",
+  "Version": 1,
+  "Instruments": ["rb000"],
+  "PrimaryBarType": "bars_day",
+  "BarPeriodMinutes": 1,
+  "AllocatedCapital": 500000,
+  "MaxDrawdownPct": 0.50,
+  "MaxPositionPerInstrument": 2,
+  "SkipAuction": true,
+  "Parameters": {
+    "ZEntryThreshold": 0.5,
+    "ZWindowDays": 252,
+    "AtrPeriod": 20,
+    "StopAtrMult": 2.0,
+    "TakeProfitAtrMult": 3.0,
+    "RiskPerTrade": 0.02,
+    "MaxMarginRatio": 0.35,
+    "FactorCsvPath": "C:\\Works\\ClaudeCode\\TradingStudio\\scripts\\factor_research\\output\\intraday_mom_z.csv"
+  },
+  "DataStartDate": "2020-01-02",
+  "DataEndDate": "2026-06-30",
+  "BacktestMode": 0
+}
