@@ -390,9 +390,79 @@ public class WalkForwardCommand
         return (DateTime.Parse("2020-01-02"), DateTime.Parse("2026-06-22"));
     }
 
+    /// <summary>
+    /// 参数扫描范围选择 — v2: 优先从 StrategyParam&lt;T&gt;.OptimizeRange 自动生成。
+    /// 无 StrategyParam&lt;T&gt; 的旧策略回退硬编码逻辑。
+    /// </summary>
     private static List<(string Name, double[] Values)> SelectScanParameters(StrategyConfig config)
     {
-        // 从 StrategyConfig.Parameters 中，根据策略类型选择核心参数 + 合理的扫描范围
+        // ── 新风格: 从 StrategyParam&lt;T&gt;.OptimizeRange 自动生成 ──
+        try
+        {
+            var strategy = StrategyFactory.Create(config);
+            var metas = StrategyFactory.GetOptimizableParams(strategy);
+            if (metas.Count > 0)
+            {
+                var result = new List<(string, double[])>();
+                foreach (var meta in metas)
+                {
+                    var values = GenerateScanValues(meta);
+                    if (values.Length >= 3)  // 至少3个值才有扫描意义
+                        result.Add((meta.Name, values));
+                }
+                if (result.Count > 0)
+                {
+                    Console.WriteLine($"  Auto-discovered {result.Count} params from StrategyParam<T>.OptimizeRange");
+                    return result;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"  [WalkForward] StrategyParam scan failed: {ex.Message}, falling back to legacy");
+        }
+
+        // ── 旧风格: 硬编码回退（兼容 [StrategyParameter] 策略）──
+        return SelectScanParametersLegacy(config);
+    }
+
+    /// <summary>从 ParamMeta 生成扫描值数组。Step=0 或范围过宽时做智能截断。</summary>
+    private static double[] GenerateScanValues(ParamMeta meta)
+    {
+        const int maxValues = 10; // 单参数最多生成 10 个扫描点
+
+        if (meta.Step <= 0 || meta.Min >= meta.Max)
+            return Array.Empty<double>();
+
+        var range = meta.Max - meta.Min;
+        var rawCount = range / meta.Step;
+
+        // 截断: 如果原始步数 > maxValues，自动放大步长
+        double effectiveStep = meta.Step;
+        if (rawCount > maxValues)
+        {
+            effectiveStep = range / (maxValues - 1);
+            // 对 int 参数，步长至少为 1
+            if (meta.ValueType == "Int32")
+                effectiveStep = Math.Max(1, Math.Round(effectiveStep));
+        }
+
+        var list = new List<double>();
+        for (double v = meta.Min; v <= meta.Max + effectiveStep * 0.1; v += effectiveStep)
+        {
+            var val = meta.ValueType == "Int32" ? Math.Round(v) : Math.Round(v, 6);
+            if (val < meta.Min || val > meta.Max) continue;
+            // 去重
+            if (list.Count > 0 && Math.Abs(list[^1] - val) < effectiveStep * 0.01) continue;
+            list.Add(val);
+        }
+
+        return list.ToArray();
+    }
+
+    /// <summary>旧风格硬编码回退 — 保留现有策略的预设扫描范围。</summary>
+    private static List<(string Name, double[] Values)> SelectScanParametersLegacy(StrategyConfig config)
+    {
         var strategyType = config.StrategyType;
 
         if (strategyType == "DonchianTrend")
