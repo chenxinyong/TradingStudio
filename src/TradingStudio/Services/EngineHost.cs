@@ -87,7 +87,6 @@ public class EngineHost : BackgroundService
             catch (Exception ex)
             {
                 _crashCount++;
-                _lastCrashTime = DateTime.Now;
 
                 // 指数退避: 5s, 10s, 20s, 40s, ..., cap 300s
                 var delay = Math.Min(300, 5 * (int)Math.Pow(2, Math.Min(_crashCount - 1, 6)));
