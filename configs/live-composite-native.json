@@ -1,0 +1,29 @@
+{
+  "StrategyId": "Live-Composite-Native",
+  "StrategyType": "CompositeFactor",
+  "Description": "Live C#原生复合因子 — IntradayMom+VWAP_Dev实时计算, 无需Python预计算",
+  "Version": 1,
+  "Instruments": [
+    "rb000", "i000", "hc000", "cu000", "al000",
+    "ag000", "au000", "MA000", "TA000", "FG000",
+    "SA000", "ru000", "sc000", "fu000", "m000",
+    "y000", "p000", "zn000", "CF000", "SR000"
+  ],
+  "PrimaryBarType": "bars_15min",
+  "BarPeriodMinutes": 1,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.35,
+  "MaxPositionPerInstrument": 3,
+  "SkipAuction": true,
+  "Parameters": {
+    "TopN": 5,
+    "AtrPeriod": 20,
+    "StopAtrMult": 3.0,
+    "RiskPerTrade": 0.01,
+    "MaxPosition": 2,
+    "W_IntradayMom": 0.22,
+    "W_VwapDev": -0.27,
+    "W_Amihud": 0.33,
+    "W_VolumeRatio": 0.17
+  }
+}

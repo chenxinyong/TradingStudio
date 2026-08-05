@@ -149,11 +149,12 @@ public class IntradaySignalExecutor : IStrategy
                 continue;
             }
 
-            // 市价单 + ATR仓位管理 (SlippageAtrFactor=0.02控制滑点)
+            // 限价单 @ 当前Bar价格 (09:30 bar) → 零滑点入场
+            var limitPrice = (decimal)(price > 0 ? price : sig.EntryPrice);
             if (sig.Direction == "LONG")
-                _ctx.MarketBuy(inst, q, $"ML");
+                _ctx.LimitBuy(inst, q, limitPrice);
             else
-                _ctx.MarketSell(inst, q, $"ML");
+                _ctx.LimitSell(inst, q, limitPrice);
             count++;
         }
 

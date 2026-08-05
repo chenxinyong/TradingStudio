@@ -72,14 +72,19 @@ public class HistoricalBarFeed : IDataFeed
         }
         else
         {
-            // 多品种：加载每个品种的 Bar 列表，K-way merge
-            var lists = new List<List<Bar>>();
-            var indices = new List<int>();
-            foreach (var inst in _instruments)
+            // 多品种并行加载 → K-way merge
+            var loadTasks = _instruments.Select(async inst =>
             {
-                if (ct.IsCancellationRequested) yield break;
                 var raw = await _store.QueryBarsAsync(inst, _startTime, _endTime, _barTable, ct);
                 var bars = _periodMinutes > 1 ? MultiAggregate(raw) : raw.ToList();
+                return (inst, bars);
+            });
+            var results = await Task.WhenAll(loadTasks);
+
+            var lists = new List<List<Bar>>();
+            var indices = new List<int>();
+            foreach (var (_, bars) in results)
+            {
                 if (bars.Count > 0) { lists.Add(bars); indices.Add(0); }
             }
 
