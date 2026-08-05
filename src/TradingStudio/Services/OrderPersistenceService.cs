@@ -7,13 +7,15 @@ using TradingStudio.Engine;
 namespace TradingStudio.Services;
 
 /// <summary>
-/// 订单事件持久化 — 消费 FillChannel，写入 DuckDB + 转发到 OrderOutbox。
+/// 订单事件持久化 — 消费 OrderOutbox (TradingEngine 处理完毕的 Fill)，写入 DuckDB。
 /// 5 秒定时刷盘，确保订单事件及时落库。
+///
+/// 架构: CtpTraderBridge → FillChannel → TradingEngine(唯一消费者, portfolio处理)
+///         → OrderOutbox → [SignalR推送, 本服务持久化]
 /// </summary>
 public class OrderPersistenceService : BackgroundService
 {
-    private readonly ChannelReader<OrderEvent> _fillReader;
-    private readonly ChannelWriter<OrderEvent> _outboxWriter;
+    private readonly ChannelReader<OrderEvent> _outboxReader;
     private readonly IBarStore _store;
     private readonly Serilog.ILogger _log;
     private readonly List<OrderEvent> _batch = new(64);
@@ -24,8 +26,7 @@ public class OrderPersistenceService : BackgroundService
         IBarStore store,
         Serilog.ILogger log)
     {
-        _fillReader = execution.FillChannel.Reader;
-        _outboxWriter = execution.OrderOutbox.Writer;
+        _outboxReader = execution.OrderOutbox.Reader;
         _store = store;
         _log = log.ForContext<OrderPersistenceService>();
     }
@@ -44,10 +45,9 @@ public class OrderPersistenceService : BackgroundService
                     await FlushAsync();
             }, ct);
 
-            await foreach (var evt in _fillReader.ReadAllAsync(ct))
+            await foreach (var evt in _outboxReader.ReadAllAsync(ct))
             {
                 lock (_lock) _batch.Add(evt);
-                _outboxWriter.TryWrite(evt); // 转发到 OrderOutbox（SignalR）
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }

@@ -1,0 +1,24 @@
+{
+  "StrategyId": "Live-Composite-IM",
+  "StrategyType": "IntradaySignalExecutor",
+  "Description": "Live ML复合因子(IC_Weighted)日内横截面 — 09:30入场14:45出场, 流动性过滤",
+  "Version": 1,
+  "Instruments": [
+    "rb000", "i000", "hc000", "cu000", "al000",
+    "ag000", "au000", "MA000", "TA000", "FG000",
+    "SA000", "ru000", "sc000", "fu000", "m000",
+    "y000", "p000", "zn000", "CF000", "SR000"
+  ],
+  "PrimaryBarType": "bars_15min",
+  "BarPeriodMinutes": 1,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.35,
+  "MaxPositionPerInstrument": 3,
+  "SkipAuction": true,
+  "Parameters": {
+    "SignalCsvPath": "C:\\Works\\ClaudeCode\\TradingStudio\\scripts\\factor_research\\output\\composite_intraday_signals.csv",
+    "MaxPosition": 2,
+    "RiskPerTrade": 0.01,
+    "MinDailyVolume": 3000
+  }
+}
