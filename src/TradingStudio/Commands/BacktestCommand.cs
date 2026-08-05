@@ -198,6 +198,14 @@ public class BacktestCommand
                 Console.WriteLine($"    Avg Loss:      {sr.AverageLoss,12:C}");
                 Console.WriteLine($"    Total Fees:    {sr.TotalFees,12:C}");
                 Console.WriteLine($"    Max Drawdown:  {sr.MaxDrawdown,12:P2}");
+
+                // 退出原因统计
+                if (sr.ExitReasonBreakdown.Count > 0)
+                {
+                    Console.WriteLine($"    ── Exit Reasons ──");
+                    foreach (var (reason, stats) in sr.ExitReasonBreakdown.OrderByDescending(x => x.Value.Count))
+                        Console.WriteLine($"    {reason}: {stats.Count}T  WinRate={stats.WinRate:P1}  PnL={stats.TotalPnL:C}");
+                }
             }
             Console.WriteLine($"  ── Monitor ──");
             Console.WriteLine($"    Total Slippage:{report.MonitorSummary.TotalSlippage,10:F2}");

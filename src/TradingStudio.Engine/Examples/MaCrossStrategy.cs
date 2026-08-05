@@ -152,7 +152,8 @@ public class MaCrossStrategy : IStrategy
 
             if (exit)
             {
-                var ticket = _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"多头出场: {bar.InstrumentId} {reason}");
+                var exitCode = ExitCode(reason);
+                var ticket = _ctx.ClosePosition(bar.InstrumentId, exitCode); _ctx.Log($"多头出场: {bar.InstrumentId} {reason}");
                 s.ResetTrade();
                 if (reverse)
                 {
@@ -182,7 +183,8 @@ public class MaCrossStrategy : IStrategy
 
             if (exit)
             {
-                var ticket = _ctx.ClosePosition(bar.InstrumentId); _ctx.Log($"空头出场: {bar.InstrumentId} {reason}");
+                var exitCode = ExitCode(reason);
+                var ticket = _ctx.ClosePosition(bar.InstrumentId, exitCode); _ctx.Log($"空头出场: {bar.InstrumentId} {reason}");
                 s.ResetTrade();
                 if (reverse)
                 {
@@ -393,5 +395,14 @@ public class MaCrossStrategy : IStrategy
         public long CloseOrderId;
         public double SignalPrice;
         public string Direction = "";  // "Long" or "Short"
+    }
+
+    /// <summary>从描述性退出原因提取标准化退出代码: SL/TP/Signal</summary>
+    private static string ExitCode(string reason)
+    {
+        if (reason.Contains("止盈")) return "TP";
+        if (reason.Contains("止损")) return "SL";
+        if (reason.Contains("死叉") || reason.Contains("金叉")) return "Signal";
+        return reason;
     }
 }

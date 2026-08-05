@@ -65,6 +65,36 @@ public class PortfolioManager : IPortfolioState
         _equityAtDayStart = totalCapital;
     }
 
+    /// <summary>
+    /// 从 CTP 恢复已有持仓（引擎启动/重连后调用）。
+    /// 仅在 _positions 中不存在该合约时才注入，避免覆盖引擎已管理的仓位。
+    /// 线程安全。
+    /// </summary>
+    public bool RestorePosition(string instrumentId, string strategyId, int quantity,
+        decimal avgPrice, decimal margin, DateTime createdTime)
+    {
+        lock (_sync)
+        {
+            if (_positions.ContainsKey(instrumentId)) return false;
+
+            var pos = new Position
+            {
+                InstrumentId = instrumentId,
+                Quantity = quantity,
+                AvgPrice = avgPrice,
+                Margin = margin,
+                Commission = 0,
+                CreatedTime = new DateTimeOffset(createdTime, TimeSpan.FromHours(8)),
+                StrategyId = strategyId,
+            };
+            _positions[instrumentId] = pos;
+            MarginUsed += margin;
+            Cash -= margin;
+            Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
+            return true;
+        }
+    }
+
     public SubPortfolio GetSubPortfolio(string strategyId) =>
         _subPortfolios.TryGetValue(strategyId, out var sp) ? sp :
         throw new InvalidOperationException($"Strategy not found: {strategyId}");
@@ -339,6 +369,7 @@ public class PortfolioManager : IPortfolioState
                         EntryTime = pos.CreatedTime.DateTime,
                         ExitTime = fill.Time.DateTime,
                         StrategyId = fill.StrategyId,
+                        ExitReason = fill.ExitReason,
                     };
                     Cash += pnl - closeFee + pos.Margin;
                     MarginUsed -= pos.Margin;
@@ -389,6 +420,7 @@ public class PortfolioManager : IPortfolioState
                     EntryTime = pos.CreatedTime.DateTime,
                     ExitTime = fill.Time.DateTime,
                     StrategyId = fill.StrategyId,
+                    ExitReason = fill.ExitReason,
                 };
                 Cash += pnl - exitFee + pos.Margin;
                 MarginUsed -= pos.Margin;

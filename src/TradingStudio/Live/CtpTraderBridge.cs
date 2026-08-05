@@ -26,6 +26,9 @@ public class CtpTraderBridge : IDisposable
     public bool IsReady { get { lock (_sync) return _isReady; } private set { lock (_sync) _isReady = value; } }
     private bool _isReady;
 
+    /// <summary>CTP 持仓查询回调：每次扫描到一个品种的持仓时触发。</summary>
+    public event Action<CtpPositionInfo>? OnPositionReceived;
+
     /// <summary>
     /// SHFE (上期所) 和 INE (上能所) 不接受泛型 Close ('1'), 必须区分 CloseToday / CloseYesterday。
     /// </summary>
@@ -101,11 +104,42 @@ public class CtpTraderBridge : IDisposable
                 {
                     IsReady = true;
                     _reconnectDelay = 0;  // 登录成功，复位退避
+                    _reconnectAttempts = 0;  // 复位重连计数
+                    _pendingReconnect = false;
                     _log.Information("CTP Trader login OK → ConfirmSettlement");
                     _api.ReqSettlementInfoConfirm(new CTP.ThostFtdcSettlementInfoConfirmField
                     { BrokerID = _opts.BrokerId, InvestorID = _opts.UserId }, ++_requestId);
+                    // 登录后查询所有持仓（启动 + 重连均触发）
+                    QueryPositions();
                 }
                 else _log.Error("CTP Trader login failed [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
+            }
+            else if (e.EventType == CTP.EnumOnRspType.OnRspQryInvestorPosition && e.Param != IntPtr.Zero)
+            {
+                try
+                {
+                    var pf = CTP.Conv.P2S<CTP.ThostFtdcInvestorPositionField>(e.Param);
+                    int total = pf.Position + pf.YdPosition;
+                    if (total != 0 && !string.IsNullOrEmpty(pf.InstrumentID))
+                    {
+                        // 使用持仓均价 = OpenAmount / (总手数 × 合约乘数) 的近似
+                        // 这里简单用 OpenAmount 除以 Position 作为 avgPrice（等待品种注册表确认乘数后修正）
+                        var info = new CtpPositionInfo
+                        {
+                            InstrumentId = pf.InstrumentID,
+                            NetPosition = total,
+                            OpenCost = total != 0 ? pf.OpenAmount / total : 0,
+                            UseMargin = pf.UseMargin,
+                        };
+                        _log.Information("[CTP-Position] {Inst} Net={Net} OpenCost={Cost:F4} Margin={Margin:F2}",
+                            info.InstrumentId, info.NetPosition, info.OpenCost, info.UseMargin);
+                        OnPositionReceived?.Invoke(info);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log.Error(ex, "CTP position mapping error");
+                }
             }
         };
 
@@ -237,20 +271,50 @@ public class CtpTraderBridge : IDisposable
         return new OrderEvent { OrderId = ParseOrderRef(t.OrderRef), InstrumentId = t.InstrumentID ?? "", Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, Time = DateTimeOffset.UtcNow };
     }
 
+    /// <summary>查询 CTP 所有持仓（启动登录后 / 重连登录后调用）。</summary>
+    private void QueryPositions()
+    {
+        var api = _api;
+        if (api == null) return;
+
+        try
+        {
+            _log.Information("CTP QueryPositions: requesting all positions...");
+            api.ReqQryInvestorPosition(new CTP.ThostFtdcQryInvestorPositionField
+            {
+                BrokerID = _opts.BrokerId,
+                InvestorID = _opts.UserId,
+                // InstrumentID 留空 = 查询所有品种
+            }, ++_requestId);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "CTP QueryPositions failed");
+        }
+    }
+
     private static long ParseOrderRef(string? r)
     {
         if (string.IsNullOrEmpty(r) || r == "0") return -1;
         return long.TryParse(r, out var id) ? id : -1;
     }
 
+    private int _reconnectAttempts;
+
     private async void ScheduleReconnect()
     {
-        if (_reconnecting) return;  // 已有重连任务在执行
+        if (_reconnecting)
+        {
+            _log.Debug("CTP Trader reconnect already in progress, will retry after current attempt");
+            _pendingReconnect = true;  // 标记: 当前重连完成后需要再次重连
+            return;
+        }
         _reconnecting = true;
+        _reconnectAttempts++;
         try { _api?.Release(); } catch { }
         _api = null;
         _reconnectDelay = Math.Min(300, _reconnectDelay == 0 ? 5 : _reconnectDelay * 2);
-        _log.Information("CTP Trader reconnecting in {Delay}s...", _reconnectDelay);
+        _log.Information("CTP Trader reconnecting in {Delay}s (attempt #{Attempt})...", _reconnectDelay, _reconnectAttempts);
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(_reconnectDelay), _reconnectCts?.Token ?? CancellationToken.None);
@@ -262,8 +326,19 @@ public class CtpTraderBridge : IDisposable
         {
             _log.Error(ex, "CTP Trader reconnect error");
         }
-        finally { _reconnecting = false; }
+        finally
+        {
+            _reconnecting = false;
+            // 如果重连后仍未就绪(OnFrontDisconnected再次触发或被守卫阻塞), 继续重连
+            if (!_disposed && (_pendingReconnect || !IsReady))
+            {
+                _pendingReconnect = false;
+                ScheduleReconnect();
+            }
+        }
     }
+
+    private bool _pendingReconnect;
 
     public void Dispose()
     {

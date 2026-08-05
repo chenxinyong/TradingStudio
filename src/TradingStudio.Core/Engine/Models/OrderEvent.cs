@@ -15,6 +15,7 @@ public class OrderEvent
     public decimal Fee { get; set; }
     public decimal Slippage { get; set; }
     public string? Message { get; init; }
+    public string ExitReason { get; init; } = "";
     public DateTimeOffset Time { get; init; }
 }
 

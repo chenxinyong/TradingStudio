@@ -41,6 +41,8 @@ public class StrategyContext
     public virtual OrderTicket MarketSell(string instrumentId, int quantity, string? tag = null) =>
         throw new NotImplementedException();
     public virtual OrderTicket ClosePosition(string instrumentId) =>
+        ClosePosition(instrumentId, "");
+    public virtual OrderTicket ClosePosition(string instrumentId, string exitReason) =>
         throw new NotImplementedException();
     public virtual OrderTicket LimitBuy(string instrumentId, int quantity, decimal limitPrice) =>
         throw new NotImplementedException();

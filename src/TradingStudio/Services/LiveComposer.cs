@@ -85,6 +85,8 @@ public static class LiveComposer
         services.AddSingleton(portfolio);
 
         // ── CTP 交易桥接 ──
+        // 策略ID在下面加载，但bridge回调异步触发（登录后），故用闭包捕获
+        string? liveStrategyId = null;
         if (!string.IsNullOrEmpty(config["Live:TraderFront"]))
         {
             var traderOpts = new CtpTraderOptions
@@ -99,6 +101,30 @@ public static class LiveComposer
             var bridgeLogger = builder.Services.BuildServiceProvider().GetRequiredService<Serilog.ILogger>();
             var tickSnapshot = builder.Services.BuildServiceProvider().GetRequiredService<TickSnapshot>();
             var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts, bridgeLogger, registry, tickSnapshot);
+
+            // 订阅 CTP 持仓查询结果 → 恢复到 PortfolioManager（异步，登录完成后触发）
+            bridge.OnPositionReceived += info =>
+            {
+                try
+                {
+                    // 仅恢复策略品种（非策略品种无需跟踪）
+                    if (_pendingStrategyInstruments.Count > 0 &&
+                        !_pendingStrategyInstruments.Contains(info.InstrumentId, StringComparer.OrdinalIgnoreCase))
+                        return;
+
+                    var sid = liveStrategyId ?? "live-test";
+                    var restored = portfolio.RestorePosition(info.InstrumentId, sid,
+                        info.NetPosition, (decimal)info.OpenCost, (decimal)info.UseMargin,
+                        DateTime.Today);
+                    if (restored)
+                        Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {info.InstrumentId} x{info.NetPosition} @{info.OpenCost:F4} Margin={info.UseMargin:F2}");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[LiveComposer] CTP持仓恢复失败: {info.InstrumentId}: {ex.Message}");
+                }
+            };
+
             services.AddSingleton(bridge);
             try
             {
@@ -145,6 +171,7 @@ public static class LiveComposer
             }
             if (sc != null)
             {
+                liveStrategyId = sc.StrategyId;
                 var warmupDays = config.GetValue("Live:WarmupDays", 5);
                 IBarStore? warmupStore = null;
                 if (warmupDays > 0)

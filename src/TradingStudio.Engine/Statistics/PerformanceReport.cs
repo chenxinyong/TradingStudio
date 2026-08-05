@@ -23,6 +23,8 @@ public class PerformanceReport
     public decimal TotalSlippage { get; init; }
     public List<(DateTimeOffset Time, decimal Equity)> EquityCurve { get; init; } = [];
     public List<Trade> Trades { get; init; } = [];
+    /// <summary>退出原因统计: {reason: (tradeCount, totalPnL, winRate)}</summary>
+    public Dictionary<string, ExitReasonStats> ExitReasonBreakdown { get; init; } = [];
 
     public static PerformanceReport Generate(
         string strategyId,
@@ -60,7 +62,37 @@ public class PerformanceReport
             TotalSlippage = trades.Sum(t => t.Slippage),
             EquityCurve = equityCurve.ToList(),
             Trades = trades.ToList(),
+            ExitReasonBreakdown = BuildExitReasonBreakdown(trades),
         };
+    }
+
+    private static Dictionary<string, ExitReasonStats> BuildExitReasonBreakdown(IReadOnlyList<Trade> trades)
+    {
+        var dict = new Dictionary<string, ExitReasonStats>();
+        foreach (var t in trades)
+        {
+            var reason = string.IsNullOrEmpty(t.ExitReason) ? "Unknown" : t.ExitReason;
+            if (!dict.TryGetValue(reason, out var s))
+            {
+                s = new ExitReasonStats { Reason = reason };
+                dict[reason] = s;
+            }
+            s.Count++;
+            s.TotalPnL += t.PnL;
+            if (t.IsWin) s.Wins++;
+        }
+        foreach (var s in dict.Values)
+            s.WinRate = s.Count > 0 ? (decimal)s.Wins / s.Count : 0;
+        return dict;
+    }
+
+    public class ExitReasonStats
+    {
+        public string Reason { get; set; } = "";
+        public int Count { get; set; }
+        public int Wins { get; set; }
+        public decimal WinRate { get; set; }
+        public decimal TotalPnL { get; set; }
     }
 
     /// <summary>计算年化复合收益率 (CAGR)</summary>

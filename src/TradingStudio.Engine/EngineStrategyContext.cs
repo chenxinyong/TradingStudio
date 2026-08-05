@@ -99,6 +99,9 @@ internal class EngineStrategyContext : StrategyContext
     }
 
     public override OrderTicket ClosePosition(string instrumentId)
+        => ClosePosition(instrumentId, "");
+
+    public override OrderTicket ClosePosition(string instrumentId, string exitReason)
     {
         if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
         var pos = _portfolio.GetPosition(instrumentId);
@@ -112,9 +115,10 @@ internal class EngineStrategyContext : StrategyContext
             Type = OrderType.Market, Quantity = quantity,
             Tag = pos.Quantity > 0 ? "平多" : "平空",
             IsCloseOrder = true,
+            ExitReason = exitReason,
         }, StrategyId, _portfolio);
-        _log.LogInformation("[{Strategy}] ClosePosition {Inst} x{Qty} → {Status}",
-            StrategyId, instrumentId, quantity, ticket.Status);
+        _log.LogInformation("[{Strategy}] ClosePosition {Inst} x{Qty} {Reason} → {Status}",
+            StrategyId, instrumentId, quantity, exitReason, ticket.Status);
         return ticket;
     }
 

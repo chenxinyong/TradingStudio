@@ -18,6 +18,8 @@ public class Order
     public decimal AvgFillPrice { get; set; }
     /// <summary>是否为平仓单。false=开仓(默认), true=平仓。</summary>
     public bool IsCloseOrder { get; init; }
+    /// <summary>退出原因(平仓单专用): SL/TP/Signal/EOD/Manual</summary>
+    public string ExitReason { get; init; } = "";
 }
 
 /// <summary>

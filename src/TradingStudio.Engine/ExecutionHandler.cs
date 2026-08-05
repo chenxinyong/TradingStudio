@@ -81,6 +81,7 @@ public class ExecutionHandler : IExecutionHandler
             Status = OrderStatus.Submitted,
             CreatedTime = DateTimeOffset.UtcNow,
             IsCloseOrder = order.IsCloseOrder,
+            ExitReason = order.ExitReason,
         };
 
         // 风控检查
@@ -101,6 +102,33 @@ public class ExecutionHandler : IExecutionHandler
                 _log.LogWarning("[Order] #{Id} {Dir} {Inst} x{Qty} → REJECTED: {Reason}",
                     id, order.Direction, order.InstrumentId, order.Quantity, riskResult.Reason);
                 return new OrderTicket { OrderId = id, Status = OrderStatus.Rejected };
+            }
+
+            // 反向开仓拦截：已有多头时不能开空，已有空头时不能开多。
+            if (!order.IsCloseOrder)
+            {
+                var existing = portfolio.GetPosition(order.InstrumentId);
+                if (existing != null && existing.Quantity != 0)
+                {
+                    var curSign = Math.Sign(existing.Quantity);
+                    var ordSign = order.Direction == OrderDirection.Buy ? 1 : -1;
+                    if (curSign != ordSign)
+                    {
+                        order.Status = OrderStatus.Rejected;
+                        lock (_sync) { _orderHistory.Add(new OrderEvent
+                        {
+                            OrderId = id, InstrumentId = order.InstrumentId,
+                            StrategyId = strategyId, Direction = order.Direction,
+                            Quantity = order.Quantity, OrderQty = order.Quantity,
+                            FilledQty = 0, Type = OrderEventType.Rejected,
+                            Message = $"反向开仓被拒: 当前持{existing.Quantity}手(方向{curSign:+0;-#}), 订单方向{ordSign:+0;-#}。请先平仓再反向。",
+                            Time = DateTimeOffset.UtcNow,
+                        }); }
+                        _log.LogWarning("[Order] #{Id} {Dir} {Inst} x{Qty} → REJECTED: 反向开仓 (持{Exist})",
+                            id, order.Direction, order.InstrumentId, order.Quantity, existing.Quantity);
+                        return new OrderTicket { OrderId = id, Status = OrderStatus.Rejected };
+                    }
+                }
             }
 
             // 购买力硬闸门（与风控同层，任何经 Submit 的开仓单都无法绕过）：
@@ -507,6 +535,7 @@ public class ExecutionHandler : IExecutionHandler
             FillPrice = fillPrice,
             Fee = fee,
             Slippage = slippage,
+            ExitReason = order.ExitReason,
             Time = new DateTimeOffset(bar.BarTime, TimeSpan.FromHours(8)),
         };
     }
