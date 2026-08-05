@@ -31,7 +31,8 @@ public static class EngineMonitorApi
             });
         });
 
-        api.MapGet("/portfolio", ([FromServices] PortfolioManager portfolio) =>
+        api.MapGet("/portfolio", ([FromServices] PortfolioManager portfolio,
+            [FromServices] HealthMonitor? health) =>
         {
             return Results.Ok(new
             {
@@ -42,6 +43,8 @@ public static class EngineMonitorApi
                 TotalPnL = portfolio.TotalPnL,
                 Positions = portfolio.AllPositions,
                 TradeCount = portfolio.TradeHistory.Count,
+                DailyPnL = health?.DailyPnL ?? 0,
+                EquityCurve = health?.EquityCurve.Select(p => new { t = p.Time.ToString("HH:mm:ss"), e = p.Equity }).ToList() ?? [],
             });
         });
 
