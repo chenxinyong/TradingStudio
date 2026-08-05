@@ -300,26 +300,36 @@ public class CtpTraderBridge : IDisposable
     }
 
     private int _reconnectAttempts;
+    private bool _pendingReconnect;
 
     private async void ScheduleReconnect()
     {
         if (_reconnecting)
         {
             _log.Debug("CTP Trader reconnect already in progress, will retry after current attempt");
-            _pendingReconnect = true;  // 标记: 当前重连完成后需要再次重连
+            _pendingReconnect = true;
             return;
         }
         _reconnecting = true;
         _reconnectAttempts++;
+
+        // Release old API BEFORE creating new one (avoid double-init)
         try { _api?.Release(); } catch { }
         _api = null;
+
         _reconnectDelay = Math.Min(300, _reconnectDelay == 0 ? 5 : _reconnectDelay * 2);
         _log.Information("CTP Trader reconnecting in {Delay}s (attempt #{Attempt})...", _reconnectDelay, _reconnectAttempts);
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(_reconnectDelay), _reconnectCts?.Token ?? CancellationToken.None);
             if (!_disposed)
+            {
                 ConnectInternal();
+                // 等待连接结果：最多 30s，超时或 IsReady 后继续
+                var deadline = DateTime.UtcNow.AddSeconds(30);
+                while (!_disposed && !IsReady && DateTime.UtcNow < deadline && !_pendingReconnect)
+                    await Task.Delay(500, _reconnectCts?.Token ?? CancellationToken.None);
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -329,7 +339,7 @@ public class CtpTraderBridge : IDisposable
         finally
         {
             _reconnecting = false;
-            // 如果重连后仍未就绪(OnFrontDisconnected再次触发或被守卫阻塞), 继续重连
+            // 仍未就绪或被请求重新连接 → 继续循环
             if (!_disposed && (_pendingReconnect || !IsReady))
             {
                 _pendingReconnect = false;
@@ -337,8 +347,6 @@ public class CtpTraderBridge : IDisposable
             }
         }
     }
-
-    private bool _pendingReconnect;
 
     public void Dispose()
     {

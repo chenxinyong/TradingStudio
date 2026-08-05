@@ -51,7 +51,10 @@ public class MaCrossStrategy : IStrategy
     [StrategyParameter(Description = "日线趋势MA周期", DefaultValue = 50, Min = 20, Max = 200, Category = "Filter")]
     public int DailyTrendPeriod { get; set; } = 50;
 
-    public string Name => "双均线趋势跟踪(ATR风控)";
+    [StrategyParameter(Description = "仅做多（不做空、死叉只平不反手）", DefaultValue = false, Category = "Direction")]
+    public bool LongOnly { get; set; } = false;
+
+    public string Name => LongOnly ? "双均线趋势跟踪(仅做多)" : "双均线趋势跟踪(ATR风控)";
 
     private StrategyContext _ctx = null!;
     private readonly Dictionary<string, InstrumentState> _state = new();
@@ -137,6 +140,24 @@ public class MaCrossStrategy : IStrategy
         var hasLong = pos is not null && pos.Quantity > 0;
         var hasShort = pos is not null && pos.Quantity < 0;
 
+        // ── 仓位恢复后初始化止损（引擎重启 / CTP持仓同步后 Direction 为空）──
+        if ((hasLong || hasShort) && s.Direction == null)
+        {
+            s.Direction = hasLong ? "Long" : "Short";
+            s.EntryPrice = (double)pos!.AvgPrice;
+            // ATR未就绪时用价格百分比作为回退止损 (2.5% = 极端波动保护)
+            var atrStop = s.Atr > 0 ? StopAtrMult * s.Atr : bar.CloseDouble * 0.025;
+            s.Trail = hasLong
+                ? bar.CloseDouble - atrStop
+                : bar.CloseDouble + atrStop;
+            s.TakeProfit = TakeProfitAtrMult > 0
+                ? (hasLong ? s.EntryPrice + TakeProfitAtrMult * (s.Atr > 0 ? s.Atr : bar.CloseDouble * 0.01)
+                           : s.EntryPrice - TakeProfitAtrMult * (s.Atr > 0 ? s.Atr : bar.CloseDouble * 0.01))
+                : 0;
+            s.PositionRecovered = true; // 跳过本Bar的止损检查
+            _ctx.Log($"{bar.InstrumentId}: 仓位恢复 {s.Direction}@{s.EntryPrice:F0} SL={s.Trail:F0} (ATR={s.Atr:F2})");
+        }
+
         // ── 出场 + 反手 ──
         if (hasLong)
         {
@@ -144,11 +165,13 @@ public class MaCrossStrategy : IStrategy
             if (TakeProfitAtrMult > 0 && bar.HighDouble >= s.TakeProfit)
                 { exit = true; reverse = false; reason = $"止盈 TP@{s.TakeProfit:F0} (+{bar.CloseDouble-s.EntryPrice:F0}pts, {s.BarsHeld}bars)"; }
             else if (curFast < curSlow && prevFast >= prevSlow)
-                { exit = true; reverse = true; reason = "死叉反手"; }
-            else if (bar.LowDouble <= s.Trail)
-                { exit = true; reverse = curFast < curSlow; reason = $"止损 SL@{s.Trail:F0} (-{s.EntryPrice-bar.LowDouble:F0}pts, {s.BarsHeld}bars)"; }
+                { exit = true; reverse = !LongOnly; reason = LongOnly ? "死叉平多" : "死叉反手"; }
+            else if (bar.LowDouble <= s.Trail && !s.PositionRecovered)
+                { exit = true; reverse = !LongOnly && curFast < curSlow; reason = $"止损 SL@{s.Trail:F0} (-{s.EntryPrice-bar.LowDouble:F0}pts, {s.BarsHeld}bars)"; }
             else
                 { var t = bar.CloseDouble - StopAtrMult * s.Atr; if (t > s.Trail) s.Trail = t; }
+
+            s.PositionRecovered = false;
 
             if (exit)
             {
@@ -157,8 +180,6 @@ public class MaCrossStrategy : IStrategy
                 s.ResetTrade();
                 if (reverse)
                 {
-                    // 延迟反手：平仓成交确认后 OnOrderEvent 再开反向仓
-                    // 修复原 ClosePosition→立即 MarketSell 的双倍仓位 Bug
                     s.PendingReverse = new PendingReverseInfo
                     {
                         CloseOrderId = ticket.OrderId,
@@ -175,11 +196,13 @@ public class MaCrossStrategy : IStrategy
             if (TakeProfitAtrMult > 0 && bar.LowDouble <= s.TakeProfit)
                 { exit = true; reverse = false; reason = $"止盈 TP@{s.TakeProfit:F0} (+{s.EntryPrice-bar.CloseDouble:F0}pts, {s.BarsHeld}bars)"; }
             else if (curFast > curSlow && prevFast <= prevSlow)
-                { exit = true; reverse = true; reason = "金叉反手"; }
-            else if (bar.HighDouble >= s.Trail)
-                { exit = true; reverse = curFast > curSlow; reason = $"止损 SL@{s.Trail:F0} (-{bar.HighDouble-s.EntryPrice:F0}pts, {s.BarsHeld}bars)"; }
+                { exit = true; reverse = !LongOnly; reason = LongOnly ? "金叉平空" : "金叉反手"; }
+            else if (bar.HighDouble >= s.Trail && !s.PositionRecovered)
+                { exit = true; reverse = !LongOnly && curFast > curSlow; reason = $"止损 SL@{s.Trail:F0} (-{bar.HighDouble-s.EntryPrice:F0}pts, {s.BarsHeld}bars)"; }
             else
                 { var t = bar.CloseDouble + StopAtrMult * s.Atr; if (t < s.Trail) s.Trail = t; }
+
+            s.PositionRecovered = false;
 
             if (exit)
             {
@@ -188,7 +211,6 @@ public class MaCrossStrategy : IStrategy
                 s.ResetTrade();
                 if (reverse)
                 {
-                    // 延迟反手：平仓成交确认后 OnOrderEvent 再开反向仓
                     s.PendingReverse = new PendingReverseInfo
                     {
                         CloseOrderId = ticket.OrderId,
@@ -232,7 +254,7 @@ public class MaCrossStrategy : IStrategy
                 }
             }
             // 死叉做空
-            else if (prevFast >= prevSlow && curFast < curSlow)
+            else if (!LongOnly && prevFast >= prevSlow && curFast < curSlow)
             {
                 // 已有入场/持仓则跳过
                 if (s.Direction != null) return;
@@ -332,6 +354,7 @@ public class MaCrossStrategy : IStrategy
         public double Adx;              // 当前ADX值
         public double TrendSma;         // 日线趋势代理SMA
         public PendingReverseInfo? PendingReverse; // 平仓确认后延迟反手
+        public bool PositionRecovered;          // 仓位恢复标记: 跳过本Bar止损检查
 
         public InstrumentState(int atrPeriod, int adxPeriod = 0, int trendPeriod = 0)
         {

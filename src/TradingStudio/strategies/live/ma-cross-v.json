@@ -1,9 +1,9 @@
 {
-  "StrategyId": "ma-cross-ag-live",
+  "StrategyId": "ma-cross-v",
   "StrategyType": "MaCross",
-  "Instruments": ["ag2612"],
+  "Instruments": ["v701"],
   "PrimaryBarType": "bars_1min",
-  "AllocatedCapital": 400000,
+  "AllocatedCapital": 200000,
   "MaxPositionPerInstrument": 2,
   "Parameters": {
     "FastPeriod": 5,

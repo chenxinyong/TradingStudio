@@ -47,10 +47,17 @@ public static class LiveComposer
         services.AddSingleton(sp => (CtpLiveFeed)sp.GetRequiredService<IDataFeed>());
 
         // ── 风控 ──
+        var dailyTracker = new TradingStudio.Core.Risk.DailyRiskTracker(new TradingStudio.Core.Risk.RiskTrackerConfig
+        {
+            DailyLossLimit = config.GetValue("Risk:DailyLossLimit", 0.05),
+            MonthlyLossLimit = config.GetValue("Risk:MonthlyLossLimit", 0.15),
+            MaxConsecutiveLossDays = config.GetValue("Risk:MaxConsecutiveLossDays", 5),
+        });
         var risk = new RiskController(
             maxPosition: config.GetValue("Risk:MaxPositionPerInstrument", 5),
             maxOrderQty: config.GetValue("Risk:MaxOrderQuantity", 100),
-            maxDrawdown: config.GetValue<decimal>("Risk:MaxDrawdownPct", 0.25m));
+            maxDrawdown: config.GetValue<decimal>("Risk:MaxDrawdownPct", 0.25m),
+            dailyTracker: dailyTracker);
         services.AddSingleton(risk);
         var execution = new ExecutionHandler(risk, registry);
         services.AddSingleton<IExecutionHandler>(execution);
@@ -85,8 +92,8 @@ public static class LiveComposer
         services.AddSingleton(portfolio);
 
         // ── CTP 交易桥接 ──
-        // 策略ID在下面加载，但bridge回调异步触发（登录后），故用闭包捕获
-        string? liveStrategyId = null;
+        // 策略ID映射在下面加载，但bridge回调异步触发（登录后），故用闭包捕获
+        var instrumentStrategyMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(config["Live:TraderFront"]))
         {
             var traderOpts = new CtpTraderOptions
@@ -103,16 +110,27 @@ public static class LiveComposer
             var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts, bridgeLogger, registry, tickSnapshot);
 
             // 订阅 CTP 持仓查询结果 → 恢复到 PortfolioManager（异步，登录完成后触发）
+            // CTP 对同一品种返回多条记录（按PositionDate分今仓/昨仓），需去重取max
+            var ctpPosBuffer = new Dictionary<string, CtpPositionInfo>(StringComparer.OrdinalIgnoreCase);
             bridge.OnPositionReceived += info =>
             {
                 try
                 {
-                    // 仅恢复策略品种（非策略品种无需跟踪）
+                    // 仅跟踪策略品种
                     if (_pendingStrategyInstruments.Count > 0 &&
                         !_pendingStrategyInstruments.Contains(info.InstrumentId, StringComparer.OrdinalIgnoreCase))
                         return;
 
-                    var sid = liveStrategyId ?? "live-test";
+                    // 去重：同品种多条记录取净持仓绝对值最大的
+                    if (ctpPosBuffer.TryGetValue(info.InstrumentId, out var prev))
+                    {
+                        if (Math.Abs(info.NetPosition) > Math.Abs(prev.NetPosition))
+                            ctpPosBuffer[info.InstrumentId] = info;
+                    }
+                    else ctpPosBuffer[info.InstrumentId] = info;
+
+                    // 直接恢复（取max后每条记录都是该品种的最大净持仓，重复调用含ContainsKey保护）
+                    var sid = instrumentStrategyMap.TryGetValue(info.InstrumentId, out var m) ? m : "live-test";
                     var restored = portfolio.RestorePosition(info.InstrumentId, sid,
                         info.NetPosition, (decimal)info.OpenCost, (decimal)info.UseMargin,
                         DateTime.Today);
@@ -148,49 +166,68 @@ public static class LiveComposer
             Instruments = allInstruments, StartingCapital = startCapital, IsLive = true,
         };
 
+        // ── 策略配置加载（支持单文件 或 目录批量加载）──
         var strategyConfigPath = config["Live:StrategyConfig"];
-        // 相对路径 → 从 EXE 目录解析（CWD 可能不是 EXE 目录）
         if (!string.IsNullOrEmpty(strategyConfigPath))
         {
             if (!Path.IsPathRooted(strategyConfigPath))
                 strategyConfigPath = Path.Combine(AppContext.BaseDirectory, strategyConfigPath);
-            Console.Error.WriteLine($"[LiveComposer] Strategy config path: {strategyConfigPath}  exists={File.Exists(strategyConfigPath)}");
         }
-        if (!string.IsNullOrEmpty(strategyConfigPath) && File.Exists(strategyConfigPath))
+
+        var strategyConfigs = new List<TradingStudio.Core.Strategy.StrategyConfig>();
+        if (!string.IsNullOrEmpty(strategyConfigPath))
         {
-            var json = File.ReadAllText(strategyConfigPath);
-            TradingStudio.Core.Strategy.StrategyConfig? sc = null;
-            try
+            if (Directory.Exists(strategyConfigPath))
             {
-                sc = System.Text.Json.JsonSerializer.Deserialize<TradingStudio.Core.Strategy.StrategyConfig>(
-                    json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[LiveComposer] 策略 JSON 解析失败: {ex.Message}");
-            }
-            if (sc != null)
-            {
-                liveStrategyId = sc.StrategyId;
-                var warmupDays = config.GetValue("Live:WarmupDays", 5);
-                IBarStore? warmupStore = null;
-                if (warmupDays > 0)
+                // 目录模式：加载所有 .json 文件，每个品种独立配置
+                foreach (var file in Directory.GetFiles(strategyConfigPath, "*.json").OrderBy(f => f))
                 {
-                    var warmupDb = Path.Combine(dataPath, config["Live:WarmupDatabase"] ?? "bars_history.duckdb");
-                    if (File.Exists(warmupDb)) warmupStore = new DuckDBStore(warmupDb, readOnly: true);
+                    var sc = TryLoadConfig(file);
+                    if (sc != null) strategyConfigs.Add(sc);
                 }
-                engineOptions = new EngineOptions
-                {
-                    StartTime = DateTime.Today, EndTime = DateTime.Today.AddDays(1),
-                    Instruments = allInstruments, StrategyConfigs = [sc],
-                    StartingCapital = sc.AllocatedCapital > 0 ? sc.AllocatedCapital : startCapital,
-                    IsLive = true, WarmupDays = warmupDays, WarmupStore = warmupStore,
-                };
-                StrategyFactory.DiscoverFromAssembly(typeof(TradingEngine).Assembly);
-                // 策略品种强制加入 CtpLiveFeed 的 Activity Filter 活跃集
-                foreach (var inst in sc.Instruments) _pendingStrategyInstruments.Add(inst);
-                Console.Error.WriteLine($"[LiveComposer] Strategy instruments: {string.Join(",", sc.Instruments)}");
+                Console.Error.WriteLine($"[LiveComposer] Directory mode: {strategyConfigs.Count} configs from {strategyConfigPath}");
             }
+            else if (File.Exists(strategyConfigPath))
+            {
+                // 单文件模式（向后兼容）
+                var sc = TryLoadConfig(strategyConfigPath);
+                if (sc != null) strategyConfigs.Add(sc);
+            }
+        }
+
+        if (strategyConfigs.Count > 0)
+        {
+            // 构建品种→策略ID映射（供CTP持仓恢复用）
+            foreach (var sc in strategyConfigs)
+            foreach (var inst in sc.Instruments)
+                instrumentStrategyMap[inst] = sc.StrategyId;
+
+            var totalCapital = strategyConfigs.Sum(c => c.AllocatedCapital);
+            var engineStartingCapital = totalCapital > 0 ? totalCapital : startCapital;
+
+            var warmupDays = config.GetValue("Live:WarmupDays", 5);
+            IBarStore? warmupStore = null;
+            if (warmupDays > 0)
+            {
+                var warmupDb = Path.Combine(dataPath, config["Live:WarmupDatabase"] ?? "bars_history.duckdb");
+                if (File.Exists(warmupDb)) warmupStore = new DuckDBStore(warmupDb, readOnly: true);
+            }
+
+            engineOptions = new EngineOptions
+            {
+                StartTime = DateTime.Today, EndTime = DateTime.Today.AddDays(1),
+                Instruments = allInstruments, StrategyConfigs = strategyConfigs,
+                StartingCapital = engineStartingCapital,
+                IsLive = true, WarmupDays = warmupDays, WarmupStore = warmupStore,
+            };
+            StrategyFactory.DiscoverFromAssembly(typeof(TradingEngine).Assembly);
+
+            foreach (var sc in strategyConfigs)
+            foreach (var inst in sc.Instruments)
+                _pendingStrategyInstruments.Add(inst);
+
+            var allInst = strategyConfigs.SelectMany(c => c.Instruments);
+            Console.Error.WriteLine($"[LiveComposer] {strategyConfigs.Count} strategies, {allInst.Count()} instruments: {string.Join(", ", allInst)}");
         }
         services.AddSingleton(engineOptions);
 
@@ -207,5 +244,23 @@ public static class LiveComposer
         services.AddHostedService<LiveDataCollector>();
         services.AddHostedService<PeriodMaintainer>();
         services.AddHostedService<OrderPersistenceService>();
+    }
+
+    private static TradingStudio.Core.Strategy.StrategyConfig? TryLoadConfig(string path)
+    {
+        try
+        {
+            var json = File.ReadAllText(path);
+            var sc = System.Text.Json.JsonSerializer.Deserialize<TradingStudio.Core.Strategy.StrategyConfig>(
+                json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (sc != null)
+                Console.Error.WriteLine($"[LiveComposer] Loaded: {Path.GetFileName(path)} → {sc.StrategyId} [{string.Join(",", sc.Instruments)}] Capital={sc.AllocatedCapital}");
+            return sc;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[LiveComposer] Config parse error: {Path.GetFileName(path)}: {ex.Message}");
+            return null;
+        }
     }
 }
