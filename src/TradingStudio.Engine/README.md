@@ -54,14 +54,16 @@ PortfolioManager (总账)
 4. **交割月强平** — 到期前 2 月自动平仓，模拟真实规则（连续合约 v000 跳过）
 5. **平今手续费** — 当天开当天平使用 `CloseTodayFeeRate`（平今免/平今加倍）
 
-## 线程模型
+## 线程模型 (v3: OrderEventPump)
 
 ```
-主循环线程:              FillChannel 消费线程:
-  ProcessBar/ProcessTick   CTP 成交回报 →
-    → UpdateMarketPrice      → ProcessFill
-    → ForceCloseNearDelivery   (lock _sync)
-    (lock _sync)
+主循环线程:              FillChannel 消费线程:        OrderEventPump 线程:
+  ProcessBar/ProcessTick   CTP 成交回报 →              OrderOutbox 唯一消费者 →
+    → UpdateMarketPrice      → ProcessFill               → PushService.Sink (SignalR)
+    → ForceCloseNearDelivery   → outboxWriter.TryWrite     → Persistence.Sink (DuckDB)
+    (lock _sync)               (lock _sync)                 (串行, 无竞态)
 ```
 
-可重入锁：`Equity` getter 内部有锁，但在 `ProcessFillLocked` 中持有同一锁时调用不会死锁。
+- FillChannel: 单一消费者 (TradingEngine), 无竞态
+- OrderOutbox → OrderEventPump: 单消费者泵, 串行分发 IOrderEventSink (借鉴 StockSharp CTP)
+- 可重入锁：`Equity` getter 内部有锁, 在 `ProcessFillLocked` 中持同一锁时不会死锁

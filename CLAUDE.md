@@ -81,7 +81,7 @@ src/
 ├── TradingStudio/           引擎主程序 (.NET Host + DI + Serilog)
 │   ├── Program.cs           入口（live / collect / backtest）
 │   ├── Live/                CtpLiveFeed (FtdcNet.CTP P/Invoke), CtpTraderBridge (FtdcNet.CTP P/Invoke), ContractActivityTracker, CtpOptions
-│   ├── Services/            CollectService, LiveDataCollector, QuotePipeline, EngineHost, SessionScheduler, HealthMonitor
+│   ├── Services/            CollectService, LiveDataCollector, QuotePipeline, EngineHost, SessionScheduler, HealthMonitor, OrderEventPump, OrderPersistenceService, EngineHubPushService
 │   ├── Commands/            BacktestCommand
 │   ├── Options/             CollectOptions
 │   ├── appsettings.json     Serilog + CTP + DuckDB 默认配置
@@ -90,9 +90,9 @@ src/
 └── test/
     ├── TradingStudio.Core.Tests/   88 tests — TickRecord, Bar, CsvTickRecord, 技术指标数学, 手续费, 保证金动态调整
     ├── TradingStudio.Data.Tests/   28 tests — BarAggregator, MultiBarAggregator, CsvTickImporter, K线一致性, 垃圾bar过滤
-    ├── TradingStudio.Engine.Tests/ 150 tests — 引擎(端到端黄金验证+每日盯市结算+基准回测+Live模式), 风控/撮合(涨跌停/滑点/爆仓/购买力+DailyRiskTracker), 事件持久化, Portfolio
+    ├── TradingStudio.Engine.Tests/ 151 tests — 引擎(端到端黄金验证+每日盯市结算+基准回测+Live模式), 风控/撮合(涨跌停/滑点/爆仓/购买力+DailyRiskTracker), 事件持久化, Portfolio
     ├── TradingStudio.Strategy.Tests/ 14 tests — 缠论 包含/分型/笔/中枢
-    ├── ChanLunTest/                手动 demo (Program.cs，非自动化，不计入 280)
+    ├── ChanLunTest/                手动 demo (Program.cs，非自动化，不计入 281)
     └── TradingStudio.SignalRContractTest/  手动 demo (SignalR 连通性，非自动化)
 ```
 
@@ -159,7 +159,7 @@ PeriodMaintainer (每 5min / 收盘):
 |------|------|------|
 | 运行时 | .NET 10 | VS 2026 (v18), x64 |
 | CTP 封装 | **FtdcNet.CTP P/Invoke** | NuGet 包 `FtdcNet.CTP 1.4.0`，纯托管调用 `ftdc2c_ctp.dll` 原生桥接 |
-| 时序数据 | **DuckDB** (Phase 2) | 列存 OLAP，bars_1min/5min/15min/day/week，历史库 8.4 GB / 8100 万 Bar |
+| 时序数据 | **DuckDB** | 列存 OLAP，bars_1min/5min/15min/day/week |
 | 关系数据 | SQLite (Phase 1) → PostgreSQL (Phase 3) | 品种配置、订单记录 |
 | 回测框架 | 自研 | 通用回测框架不适合期货特性 |
 | 研究环境 | Python + Jupyter（可选） | pandas/numpy 做策略探索 |
@@ -208,7 +208,7 @@ PeriodMaintainer (每 5min / 收盘):
 > `src/CTP/` 目录已删除（Wrapper + SDK），`CtpLiveFeed`/`CtpTraderBridge` 直接调用 `FtdcNet.CTP.dll`。
 
 ### 第二阶段：回测基础 ✅ 基本完成
-历史数据回放 → 模拟撮合 → 仓位资金管理 → 绩效指标。Engine 150 测试覆盖核心链路。
+历史数据回放 → 模拟撮合 → 仓位资金管理 → 绩效指标。Engine 151 测试覆盖核心链路。
 > 设计文档：[phase2-backtest-design-v2.md](docs/design/phase2-backtest-design-v2.md)
 > 数据就绪：DuckDB 8.42 GB，8100 万 Bar，2020-2026 全周期，0 硬伤
 > ⚠️ 待做：与文华/博易 K线交叉验证
@@ -222,8 +222,8 @@ PeriodMaintainer (每 5min / 收盘):
 >   - **传统趋势因子全部失效**: TSMOM, MA偏差, HV 在中国期货上无预测力
 >   - **截面优于时序**: 横截面排名才是因子的α来源
 >   - **IntradayMom 是同日内因子**: 预测盘中走势(O2C Sharpe 1.79)，非隔夜(C2C Sharpe -0.90)
-> ✅ **C#横截面+日内策略**: CrossSectionalIntradayMomStrategy + IntradaySignalExecutor (15min bars)
-> ✅ **Python→C#因子管线**: factor_compute→CSV→C#策略加载→回测 全链路
+> ✅ **C#横截面+日内策略**: CrossSectionalIntradayMomStrategy (v2: C# Factor 直连, 无 Python 依赖)
+> ✅ **因子管线 C# 化** (2026-08-07): IntradayMomFactor+VwapDevFactor 直连策略, 消除 Python→CSV 中转
 > ⚠️ IntradayMom执行质量敏感: Python Sharpe 1.16 vs C# 含成本≈0
 
 ### 第四阶段：实盘对接
@@ -234,7 +234,7 @@ TraderApi 风控规则引擎 → simnow 模拟盘 → 小合约实盘验证。
 > ✅ **ATR 止损/止盈触发率统计** — ExitReason全链路 (Trade←Order←Strategy, 2026-08-05)
 > ✅ **CtpTraderBridge 自动重连修复** — _pendingReconnect竞态修复 (2026-08-05)
 > ✅ **OrderEvent 持久化** — bars_live.duckdb order_events 表写入确认 (5条, 8/4-8/5)
-> ⚠️ FillChannel 双消费者竞态 (TradingEngine+OrderPersistenceService 分流)
+> ✅ **FillChannel 竞态根治** (2026-08-07) — OrderEventPump (借鉴StockSharp回调泵) 单消费者→串行Sink
 > ⚠️ simnow 拒单"平昨仓位不足" — 账户权限问题
 
 ---
