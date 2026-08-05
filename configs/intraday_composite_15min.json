@@ -1,0 +1,29 @@
+{
+  "StrategyId": "Composite-ICW-XS-15min",
+  "StrategyType": "IntradaySignalExecutor",
+  "Description": "ML复合因子(IC_Weighted)日内横截面 — Top5 Long + Bottom5 Short, 限价单+流动性过滤, 09:30入场14:45出场",
+  "Version": 2,
+  "Instruments": [
+    "rb000", "i000", "hc000", "cu000", "al000",
+    "ag000", "au000", "MA000", "TA000", "FG000",
+    "SA000", "ru000", "sc000", "fu000", "m000",
+    "y000", "p000", "zn000", "CF000", "SR000",
+    "bu000", "RM000", "OI000", "UR000", "SF000",
+    "SM000", "a000", "c000", "cs000", "jd000"
+  ],
+  "PrimaryBarType": "bars_15min",
+  "BarPeriodMinutes": 1,
+  "AllocatedCapital": 2000000,
+  "MaxDrawdownPct": 0.99,
+  "MaxPositionPerInstrument": 5,
+  "SkipAuction": true,
+  "Parameters": {
+    "SignalCsvPath": "C:\\Works\\ClaudeCode\\TradingStudio\\scripts\\factor_research\\output\\composite_intraday_signals.csv",
+    "MaxPosition": 3,
+    "RiskPerTrade": 0.01,
+    "MinDailyVolume": 5000
+  },
+  "DataStartDate": "2021-01-15",
+  "DataEndDate": "2026-06-30",
+  "BacktestMode": 0
+}

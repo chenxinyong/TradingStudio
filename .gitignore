@@ -466,5 +466,8 @@ configs/batch/
 configs/grid/
 **/TickData/
 
+# 因子研究输出（大文件，不提交）
+scripts/factor_research/output/
+
 # Local dev certificates
 **/certs/
