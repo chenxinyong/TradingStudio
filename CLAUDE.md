@@ -127,7 +127,7 @@ PeriodMaintainer (每 5min / 收盘):
 
 ### 历史数据库
 
-`data/bars_history.duckdb` — 8.42 GB，2020-01-02 ~ 2026-06-22，覆盖 50+ 品种连续合约，全周期（1min/5min/15min/day/week）。Backtest 模式默认使用。
+`C:\Works\Datas\bars_history.duckdb` — **~30 GB，3.6 亿 Bar** (2026-08-05 实测)，2020-01-02 ~ 2026-06-30，覆盖 80 品种连续合约 + 5363 单月合约，全周期（1min/5min/15min/day/week）。Backtest 模式默认使用。
 
 ### 调度逻辑
 
@@ -199,8 +199,8 @@ PeriodMaintainer (每 5min / 收盘):
 | 5min/15min/Week 多周期表 | ✅ PeriodMaintainer 自动维护 |
 | 连续合约 (xxx000) 自动生成 | ✅ BuildContinuousContracts |
 | 7×24 自动重连 + 健康日志 | ✅ 指数退避 5s→300s |
-| 金数源历史数据导入 2020-2026 | ✅ 8100 万 Bar, DuckDB 8.4 GB |
-| 全量数据验证 (6 维度, 0 硬伤) | ✅ |
+| 金数源历史数据导入 2020-2026 | ✅ 3.6 亿 Bar (360M), DuckDB ~30 GB |
+| 全量数据验证 (6 维度, 0 硬伤) | ✅ 0倒挂/0负价/0重复; ⚠️ Day vs 1min聚合有差异 |
 | 三种运行模式: Live / Collect / Backtest | ✅ |
 | 每日导入管线: 下载→追加→多周期→验证 | ✅ daily_import.ps1 |
 
@@ -214,17 +214,28 @@ PeriodMaintainer (每 5min / 收盘):
 > ⚠️ 待做：与文华/博易 K线交叉验证
 
 ### 第三阶段：策略研发（进行中）
-趋势跟踪（海龟/均线）→ 均值回归（布林带/RSI）→ 套利 → 组合优化。目标：2-3个正期望值策略雏形。
+趋势跟踪（海龟/均线）→ 均值回归（布林带/RSI）→ 因子挖掘 → 横截面策略。目标：2-3个正期望值策略雏形。
 > ✅ MaCross、BollingerReversion、DonchianTrend 已实现
-> ⚠️ simnow 账户开仓权限阻塞 Live 验证
+> ✅ **MaCross+ADX 120组合参数扫描** → 全品种亏损~-20%，趋势策略无正期望 (2026-08-04)
+> ✅ **因子挖掘 Phase 1** — 16因子×72品种 IC+Quantile+回测 (2026-08-05)
+>   - **有效因子**: IntradayMom (IC_IR=+0.96), VWAP_Dev (IC_IR=-2.08)
+>   - **传统趋势因子全部失效**: TSMOM, MA偏差, HV 在中国期货上无预测力
+>   - **截面优于时序**: 横截面排名才是因子的α来源
+>   - **IntradayMom 是同日内因子**: 预测盘中走势(O2C Sharpe 1.79)，非隔夜(C2C Sharpe -0.90)
+> ✅ **C#横截面+日内策略**: CrossSectionalIntradayMomStrategy + IntradaySignalExecutor (15min bars)
+> ✅ **Python→C#因子管线**: factor_compute→CSV→C#策略加载→回测 全链路
+> ⚠️ IntradayMom执行质量敏感: Python Sharpe 1.16 vs C# 含成本≈0
 
-### 第四阶段：实盘对接 ← 当前冲刺
+### 第四阶段：实盘对接
 TraderApi 风控规则引擎 → simnow 模拟盘 → 小合约实盘验证。
 > ✅ CtpTraderBridge 下单链路（认证→登录→InsertOrder result=0）
 > ✅ RiskController + ExecutionHandler Live 模式
 > ✅ Live 模式 Tick→Bar→策略→订单 全链路跑通
+> ✅ **ATR 止损/止盈触发率统计** — ExitReason全链路 (Trade←Order←Strategy, 2026-08-05)
+> ✅ **CtpTraderBridge 自动重连修复** — _pendingReconnect竞态修复 (2026-08-05)
+> ✅ **OrderEvent 持久化** — bars_live.duckdb order_events 表写入确认 (5条, 8/4-8/5)
+> ⚠️ FillChannel 双消费者竞态 (TradingEngine+OrderPersistenceService 分流)
 > ⚠️ simnow 拒单"平昨仓位不足" — 账户权限问题
-> ❌ 订单事件持久化未实现
 
 ---
 
