@@ -35,8 +35,12 @@ public class ExecutionHandler : IExecutionHandler
     public bool IsLive { get; set; }
     public Action<Order>? SendToExchange { get; set; }
 
-    /// <summary>Bar 模式滑点因子：市价单滑点 = max(1 跳, 因子 × ATR)。默认 0.5；设 0 退回固定 1 跳。</summary>
-    public decimal SlippageAtrFactor { get; set; } = 0.5m;
+    /// <summary>Bar 模式滑点模型 — 市价单滑点 = max(1 tick, 因子 × ATR)。
+    /// v2: 默认1 tick (0.0=纯tick模式), 保留ATR因子兼容旧配置。推荐0.0以使用tick-based滑点。</summary>
+    public decimal SlippageAtrFactor { get; set; } = 0.0m;
+
+    /// <summary>基础滑点跳数 (tick-based模型, 默认1跳)</summary>
+    public int SlippageTicks { get; set; } = 1;
 
     public System.Threading.Channels.Channel<OrderEvent> FillChannel { get; }
         = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
@@ -428,12 +432,13 @@ public class ExecutionHandler : IExecutionHandler
     /// <summary>单笔订单最大成交量占 Bar 成交量的比例（防止吃光整根 Bar）</summary>
     private const double MaxVolumeParticipation = 0.10;
 
-    /// <summary>Bar 模式市价单滑点：max(1 跳, SlippageAtrFactor × ATR)。ATR 未就绪 → 1 跳。</summary>
+    /// <summary>Bar 模式市价单滑点 — v2 tick-based: SlippageTicks × TickSize, ATR因子为可选叠加</summary>
     private decimal MarketSlippage(Future future, double atr)
     {
         var tick = future.TickSize > 0 ? future.TickSize : 1m;
-        if (SlippageAtrFactor <= 0 || double.IsNaN(atr) || atr <= 0) return tick;
-        return Math.Max(tick, SlippageAtrFactor * (decimal)atr);
+        var baseSlip = tick * SlippageTicks;
+        if (SlippageAtrFactor <= 0 || double.IsNaN(atr) || atr <= 0) return baseSlip;
+        return Math.Max(baseSlip, SlippageAtrFactor * (decimal)atr);
     }
 
     /// <summary>用 Bar 撮合一个订单。前进偏差防护：用本 Bar Open 成交市价单。</summary>
