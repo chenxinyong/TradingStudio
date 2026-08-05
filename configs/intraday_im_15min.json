@@ -1,0 +1,26 @@
+{
+  "StrategyId": "Intraday-IM-XS-15min",
+  "StrategyType": "IntradaySignalExecutor",
+  "Description": "日内横截面IntradayMom — Python预计算信号, 09:30入场 14:45出场, 80品种选Top10",
+  "Version": 1,
+  "Instruments": [
+    "rb000", "i000", "hc000", "cu000", "al000",
+    "ag000", "au000", "MA000", "TA000", "FG000",
+    "SA000", "ru000", "sc000", "fu000", "m000",
+    "y000", "p000", "zn000", "CF000", "SR000",
+    "bu000", "RM000", "OI000", "UR000", "SF000",
+    "SM000", "a000", "c000", "cs000", "jd000"
+  ],
+  "PrimaryBarType": "bars_15min",
+  "BarPeriodMinutes": 1,
+  "AllocatedCapital": 2000000,
+  "MaxDrawdownPct": 0.99,
+  "MaxPositionPerInstrument": 3,
+  "SkipAuction": true,
+  "Parameters": {
+    "SignalCsvPath": "C:\\Works\\ClaudeCode\\TradingStudio\\scripts\\factor_research\\output\\intraday_signals.csv"
+  },
+  "DataStartDate": "2021-01-01",
+  "DataEndDate": "2026-06-30",
+  "BacktestMode": 0
+}

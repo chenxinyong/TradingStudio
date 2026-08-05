@@ -107,13 +107,22 @@ dotnet test test/TradingStudio.Strategy.Tests/TradingStudio.Strategy.Tests.cspro
 ### 运行
 
 ```powershell
-# 启动实时数据采集（日盘 8:30-15:30，夜盘 20:30-03:00）
-./release/collect/TradingStudio.exe live
+# 三种运行模式（从 src/TradingStudio/ 目录执行）
+dotnet run -- live       # 实盘交易（CTP 行情+交易，Simnow 模拟）
+dotnet run -- collect    # 纯行情采集（交易时段自动启停）
+dotnet run -- backtest --config strategies/backtest/ma-cross-ag-1h-adx.json
+
+# 发布后运行
+./release/live/start.bat        # Live 引擎（HTTP :59661）
+./release/collect/start.bat     # 采集引擎
+./release/backtest/start-bar.bat strategies/backtest/ma-cross-ag-1h-adx.json
 
 # ToolBox 数据工具
-./release/collect/TradingStudio.ToolBox.exe verify --db bars_2025.db
-./release/collect/TradingStudio.ToolBox.exe import-jinshuyuan --rar-dir D:\期货数据\
+dotnet run --project src/TradingStudio.ToolBox -- verify --db data/bars_history.duckdb
+dotnet run --project src/TradingStudio.ToolBox -- import-jinshuyuan --rar-dir D:\期货数据\
 ```
+
+> 历史数据库 `bars_history.duckdb` (8.42 GB, 2020-2026) 位于 `C:\Works\Datas\`，回测时通过 `--db` 参数指定。
 
 ---
 
@@ -148,9 +157,9 @@ TradingStudio/
 │   ├── design/                设计文档（26 篇，架构/数据/UI/部署）
 │   └── README.md             文档索引
 │
-├── configs/                   配置（网格搜索、批量回测、部署示例）
-├── scripts/                   运维脚本（每日数据导入等）
-├── data/                      持久化数据（SQLite 库、Tick CSV）
+├── configs/                   策略配置 + 批量回测 + 参数扫描
+├── scripts/                   运维脚本（每日数据导入、交叉验证、因子研究）
+├── data/                      本地数据（bars_live.duckdb、Tick CSV；历史库见 C:\Works\Datas\）
 ├── release/                   发布输出（分 collect/live/backtest 三模式）
 └── memory/                    AI 助手持久化记忆
 ```

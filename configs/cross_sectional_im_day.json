@@ -1,0 +1,31 @@
+{
+  "StrategyId": "CrossSectional-IM-Top5-Day",
+  "StrategyType": "CrossSectionalIntradayMom",
+  "Description": "横截面日内动量 — 每日按IntradayMom Z-score排名Top20品种, 做多Top5, 做空Bottom5, 日频调仓",
+  "Version": 1,
+  "Instruments": [
+    "rb000", "i000", "hc000", "cu000", "al000",
+    "ag000", "au000", "MA000", "TA000", "FG000",
+    "SA000", "ru000", "sc000", "fu000", "m000",
+    "y000", "p000", "zn000", "CF000", "SR000"
+  ],
+  "PrimaryBarType": "bars_day",
+  "BarPeriodMinutes": 1,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.99,
+  "MaxPositionPerInstrument": 3,
+  "SkipAuction": true,
+  "Parameters": {
+    "TopN": 5,
+    "ZWindowDays": 252,
+    "AtrPeriod": 20,
+    "StopAtrMult": 5.0,
+    "TakeProfitAtrMult": 10.0,
+    "RiskPerTrade": 0.02,
+    "MaxMarginRatio": 0.50,
+    "FactorCsvPath": "C:\\Works\\ClaudeCode\\TradingStudio\\scripts\\factor_research\\output\\intraday_mom_z.csv"
+  },
+  "DataStartDate": "2020-01-02",
+  "DataEndDate": "2026-06-30",
+  "BacktestMode": 0
+}
