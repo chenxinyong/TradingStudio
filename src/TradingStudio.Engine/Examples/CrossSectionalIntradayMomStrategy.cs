@@ -1,5 +1,5 @@
-using System.Globalization;
 using TradingStudio.Core.Engine;
+using TradingStudio.Core.Factors;
 using TradingStudio.Core.Indicators;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Sizing;
@@ -8,57 +8,53 @@ using TradingStudio.Core.Strategy;
 namespace TradingStudio.Engine.Examples;
 
 /// <summary>
-/// 日内动量因子 — 横截面多品种策略。
+/// 日内动量因子 — 横截面多品种策略 (v2: C# Factor 直连，无 Python CSV 依赖)。
 ///
-/// 核心逻辑（Python IC分析验证）：
-///   IntradayMom = (Close_30min - Open) / Open 在 72品种横截面上 IC_IR=0.96。
-///   每天按 IntradayMom Z-score 排名，做多 TopN，做空 BottomN。
+/// 核心逻辑:
+///   IntradayMomFactor 在每个品种上独立运行，实时计算 IntradayMom Z-score。
+///   每天收盘前按 Z-score 排名，做多 TopN，做空 BottomN。
+///   因子内置 Z-score 标准化工序（滑动窗口均值/std），策略无需自行计算。
 ///
-/// 交易规则：
-///   1. 每日收盘前，按前日 IntradayMom Z-score 对所有品种排名
-///   2. 做多 Z-score 最高的 TopN 个品种（等权）
-///   3. 做空 Z-score 最低的 TopN 个品种（等权）
-///   4. 次日收盘平仓，循环
-///
-/// 风险控制：
-///   - 单品种 ATR 止损/止盈
-///   - 总保证金上限控制
-///   - 最多同时持仓 2×TopN 个品种
+/// Python验证: IntradayMom IC_IR=+0.96, OOS IC_IR=+1.05
 /// </summary>
 public class CrossSectionalIntradayMomStrategy : IStrategy
 {
-    [StrategyParameter(Description = "做多/做空品种数", DefaultValue = 5, Min = 1, Max = 20, Category = "Portfolio")]
-    public int TopN { get; set; } = 5;
+    // ── 策略参数 ──
 
-    [StrategyParameter(Description = "Z-score 滚动窗口天数", DefaultValue = 252, Min = 60, Max = 504, Category = "Entry")]
-    public int ZWindowDays { get; set; } = 252;
+    public StrategyParam<int> TopN { get; } = new("TopN", 5)
+        { Group = "Portfolio", Description = "做多/做空品种数", OptimizeRange = (1, 20, 1) };
 
-    [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 10, Max = 40, Category = "Risk")]
-    public int AtrPeriod { get; set; } = 20;
+    public StrategyParam<int> FactorWindow { get; } = new("FactorWindow", 252)
+        { Group = "Entry", Description = "因子滚动窗口天数", OptimizeRange = (60, 504, 20) };
 
-    [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2.0, Min = 1.0, Max = 5.0, Category = "Risk")]
-    public double StopAtrMult { get; set; } = 2.0;
+    public StrategyParam<int> BarPeriodMinutes { get; } = new("BarPeriodMinutes", 5)
+        { Group = "Data", Description = "Bar周期(分钟), 用于因子判断30min触发" };
 
-    [StrategyParameter(Description = "止盈ATR倍数 (0=关闭)", DefaultValue = 3.0, Min = 0, Max = 10.0, Category = "Risk")]
-    public double TakeProfitAtrMult { get; set; } = 3.0;
+    public StrategyParam<int> AtrPeriod { get; } = new("AtrPeriod", 20)
+        { Group = "Risk", Description = "ATR周期", OptimizeRange = (10, 40, 5) };
 
-    [StrategyParameter(Description = "单品种单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.05, Category = "Position")]
-    public double RiskPerTrade { get; set; } = 0.02;
+    public StrategyParam<double> StopAtrMult { get; } = new("StopAtrMult", 2.0)
+        { Group = "Risk", Description = "止损ATR倍数", OptimizeRange = (1.0, 5.0, 0.5) };
 
-    [StrategyParameter(Description = "最大保证金占比", DefaultValue = 0.50, Min = 0.20, Max = 0.80, Category = "Position")]
-    public double MaxMarginRatio { get; set; } = 0.50;
+    public StrategyParam<double> TakeProfitAtrMult { get; } = new("TakeProfitAtrMult", 3.0)
+        { Group = "Risk", Description = "止盈ATR倍数 (0=关闭)", OptimizeRange = (0, 10.0, 0.5) };
 
-    [StrategyParameter(Description = "单品种最大手数", DefaultValue = 2, Min = 1, Max = 10, Category = "Position")]
-    public int MaxPosition { get; set; } = 2;
+    public StrategyParam<double> RiskPerTrade { get; } = new("RiskPerTrade", 0.02)
+        { Group = "Position", Description = "单品种单笔风险占比", OptimizeRange = (0.005, 0.05, 0.005) };
 
-    [StrategyParameter(Description = "因子CSV路径", DefaultValue = "", Category = "Data")]
-    public string FactorCsvPath { get; set; } = "";
+    public StrategyParam<double> MaxMarginRatio { get; } = new("MaxMarginRatio", 0.50)
+        { Group = "Position", Description = "最大保证金占比", OptimizeRange = (0.20, 0.80, 0.05) };
+
+    public StrategyParam<int> MaxPosition { get; } = new("MaxPosition", 2)
+        { Group = "Position", Description = "单品种最大手数", OptimizeRange = (1, 10, 1) };
 
     public string Name => "横截面日内动量(TopN)";
 
     private StrategyContext _ctx = null!;
     private readonly Dictionary<string, InstrumentState> _state = new();
-    private readonly Dictionary<string, SortedDictionary<DateOnly, double>> _factorCache = new();
+
+    // ── v2: C# Factor 直连，替代 Python CSV ──
+    private readonly Dictionary<string, IntradayMomFactor> _factors = new();
 
     // 日切跟踪
     private DateOnly _lastTradingDay;
@@ -68,28 +64,26 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
     {
         _ctx = context;
 
-        var csvPath = ResolveCsvPath();
-        if (!File.Exists(csvPath))
-        {
-            context.LogError($"因子CSV不存在: {csvPath}");
-            return;
-        }
-        LoadFactorCsv(csvPath);
-        context.Log($"横截面策略: {_factorCache.Count} 品种因子, TopN={TopN}");
-
         foreach (var inst in context.SubscribedInstruments)
         {
+            var factor = new IntradayMomFactor(FactorWindow);
+            var s = new InstrumentState(AtrPeriod);
+
+            // 预热: 遍历历史 Bar, 喂给因子
             var history = context.GetBarHistory(inst);
-            var s = new InstrumentState(AtrPeriod, ZWindowDays);
+            DateOnly? prevDay = null;
             foreach (var bar in history)
             {
                 s.UpdateAtr(bar);
-                if (_factorCache.TryGetValue(inst, out var dict) && dict.TryGetValue(bar.TradingDay, out var im))
-                    s.PushIntradayMom(im);
+                var isNewDay = prevDay.HasValue && bar.TradingDay != prevDay.Value;
+                factor.Update(bar.CloseDouble, bar.BarTime, isNewDay, BarPeriodMinutes);
+                prevDay = bar.TradingDay;
             }
+
+            _factors[inst] = factor;
             _state[inst] = s;
         }
-        context.Log($"初始化: {_state.Count} 品种, 历史预热完成");
+        context.Log($"v2 初始化: {_state.Count} 品种, 因子窗口={FactorWindow}, TopN={TopN}, BarPeriod={BarPeriodMinutes}min");
     }
 
     public void OnTick(TickRecord tick, string instrumentId) { }
@@ -97,24 +91,19 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
     public void OnBar(Bar bar)
     {
         if (!_state.TryGetValue(bar.InstrumentId, out var s)) return;
+        if (!_factors.TryGetValue(bar.InstrumentId, out var factor)) return;
 
         s.UpdateAtr(bar);
 
-        if (_ctx.IsWarmup)
-        {
-            // 预热期: 只推进因子窗口, 不交易
-            if (_factorCache.TryGetValue(bar.InstrumentId, out var facDictW) &&
-                facDictW.TryGetValue(bar.TradingDay, out var imW))
-            {
-                s.PushIntradayMom(imW);
-            }
-            return;
-        }
+        // ── Feed 因子 (实时计算 Z-score) ──
+        var isNewDay = bar.TradingDay != _lastTradingDay;
+        factor.Update(bar.CloseDouble, bar.BarTime, isNewDay, BarPeriodMinutes);
 
-        // ── 日切检测：新交易日到来 → 平昨仓 + 开今仓 ──
-        //    注意: RebalancePortfolio 必须在 PushIntradayMom 之前执行,
-        //    因为 Rebalance 使用前一天已保存的 PrevZScore。
-        if (bar.TradingDay != _lastTradingDay)
+        if (_ctx.IsWarmup)
+            return;
+
+        // ── 日切检测：新交易日 → 平昨仓 + 开今仓 ──
+        if (isNewDay)
         {
             if (!_firstDay)
             {
@@ -125,14 +114,7 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
             _lastTradingDay = bar.TradingDay;
         }
 
-        // Feed 当日的 IntradayMom → 更新 LastZScore/PrevZScore (用于下一个交易日)
-        if (_factorCache.TryGetValue(bar.InstrumentId, out var facDict) &&
-            facDict.TryGetValue(bar.TradingDay, out var im))
-        {
-            s.PushIntradayMom(im);
-        }
-
-        // ── 止损/止盈检查 (日内退出, 仅当 StopAtrMult>0 时启用) ──
+        // ── 止损/止盈检查 ──
         var pos = _ctx.GetPosition(bar.InstrumentId);
         if (pos is not null && pos.Quantity != 0 && s.EntryPrice > 0)
         {
@@ -175,7 +157,7 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
     public void OnEndOfAlgorithm() { }
 
     // ═══════════════════════════════════════════════════════════════
-    // 核心逻辑
+    // 核心调仓逻辑
     // ═══════════════════════════════════════════════════════════════
 
     private void CloseAllPositions()
@@ -193,13 +175,15 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
 
     private void RebalancePortfolio()
     {
-        // 收集所有品种的 IntradayMom Z-score
-        var rankings = new List<(string Inst, double Z, double Raw, double Atr, double Price)>();
+        // 从各品种因子获取最新 Z-score，排名
+        var rankings = new List<(string Inst, double Z, double Atr, double Price)>();
         foreach (var (inst, s) in _state)
         {
-            if (!s.IsZReady || s.Atr <= 0) continue;
-            // 排除持仓中品种（已被止损/盈平掉的会在此处再次入选）
-            rankings.Add((inst, s.LastZScore, s.LastRaw, s.Atr, s.LastPrice));
+            if (!_factors.TryGetValue(inst, out var factor) || !factor.IsReady) continue;
+            if (s.Atr <= 0) continue;
+
+            var z = factor.LastValue.ZScore;
+            rankings.Add((inst, z, s.Atr, s.LastPrice));
         }
 
         if (rankings.Count < TopN * 2) return;
@@ -213,7 +197,7 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
         // 做多 TopN (Z-score 最高)
         for (int i = 0; i < Math.Min(TopN, rankings.Count); i++)
         {
-            var (inst, z, raw, atr, price) = rankings[i];
+            var (inst, z, atr, price) = rankings[i];
             if (atr / price < 0.001) continue; // 波动率过低
 
             var future = _ctx.GetFuture(inst);
@@ -230,12 +214,10 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
             opened++;
         }
 
-        int longCount = 0, shortCount = 0;
-
         // 做空 BottomN (Z-score 最低)
         for (int i = rankings.Count - 1; i >= Math.Max(0, rankings.Count - TopN); i--)
         {
-            var (inst, z, raw, atr, price) = rankings[i];
+            var (inst, z, atr, price) = rankings[i];
             if (atr / price < 0.001) continue;
 
             var future = _ctx.GetFuture(inst);
@@ -244,7 +226,6 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
             if (q <= 0) continue;
 
             _ctx.MarketSell(inst, q, $"S_Z={z:F2}");
-            Console.Error.WriteLine($"[XS-SHORT] {inst} Z={z:F2} q={q} price={price:F2}");
             var s = _state[inst];
             s.EntryPrice = price;
             s.StopLoss = price + StopAtrMult * atr;
@@ -254,73 +235,23 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
         }
 
         if (opened > 0)
-            _ctx.Log($"调仓: {rankings.Count}品种 → Long x{Math.Min(TopN, rankings.Count)} Short x{Math.Min(TopN, rankings.Count)} → 实际开仓 {opened}");
-        else
-            Console.Error.WriteLine($"[XS-DIAG] NO_TRADES: rankings={rankings.Count} topN={TopN}");
+            _ctx.Log($"调仓: {rankings.Count}品种 → Long/Short x{Math.Min(TopN, rankings.Count)} → 开仓 {opened}");
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // CSV 加载 (与 IntradayMomentumStrategy 相同)
-    // ═══════════════════════════════════════════════════════════════
-
-    private string ResolveCsvPath()
-    {
-        if (!string.IsNullOrEmpty(FactorCsvPath) && File.Exists(FactorCsvPath))
-            return FactorCsvPath;
-        var candidates = new[] {
-            "scripts/factor_research/output/intraday_mom_z.csv",
-            "../scripts/factor_research/output/intraday_mom_z.csv",
-        };
-        foreach (var c in candidates)
-            if (File.Exists(c)) return Path.GetFullPath(c);
-        return FactorCsvPath;
-    }
-
-    private void LoadFactorCsv(string path)
-    {
-        var lines = File.ReadAllLines(path);
-        if (lines.Length < 2) return;
-        var header = lines[0].Split(',');
-        int iInst = Array.IndexOf(header, "instrument_id");
-        int iDate = Array.IndexOf(header, "trading_day");
-        int iIM = Array.IndexOf(header, "IntradayMom");
-        if (iInst < 0 || iDate < 0 || iIM < 0) return;
-
-        for (int i = 1; i < lines.Length; i++)
-        {
-            var parts = lines[i].Split(',');
-            if (parts.Length <= Math.Max(iInst, Math.Max(iDate, iIM))) continue;
-            var inst = parts[iInst].Trim('"');
-            if (!DateOnly.TryParse(parts[iDate].Trim('"'), out var date)) continue;
-            if (!double.TryParse(parts[iIM].Trim('"'), NumberStyles.Float, CultureInfo.InvariantCulture, out var im)) continue;
-            if (!_factorCache.TryGetValue(inst, out var dict))
-            {
-                dict = new SortedDictionary<DateOnly, double>();
-                _factorCache[inst] = dict;
-            }
-            dict[date] = im;
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // InstrumentState
+    // InstrumentState (v2: 精简 — Z-score 由 IntradayMomFactor 管理)
     // ═══════════════════════════════════════════════════════════════
 
     private sealed class InstrumentState
     {
         private readonly AtrIndicator _atr;
-        private readonly int _zWindow;
-        private readonly List<double> _imHistory = new();
 
         public double Atr, EntryPrice, StopLoss, TakeProfit, LastPrice;
         public string? Direction;
-        public double LastRaw, LastZScore;
-        public bool IsZReady => _imHistory.Count >= Math.Min(60, _zWindow);
 
-        public InstrumentState(int atrPeriod, int zWindow)
+        public InstrumentState(int atrPeriod)
         {
             _atr = new AtrIndicator(atrPeriod);
-            _zWindow = zWindow;
         }
 
         public void UpdateAtr(Bar bar)
@@ -328,22 +259,6 @@ public class CrossSectionalIntradayMomStrategy : IStrategy
             _atr.Update(bar);
             if (_atr.IsReady) Atr = _atr.CurrentValue;
             LastPrice = bar.CloseDouble;
-        }
-
-        public void PushIntradayMom(double value)
-        {
-            _imHistory.Add(value);
-            while (_imHistory.Count > _zWindow + 10)
-                _imHistory.RemoveAt(0);
-            if (_imHistory.Count >= Math.Min(60, _zWindow))
-            {
-                var recent = _imHistory.TakeLast(_zWindow).ToList();
-                double mean = recent.Average();
-                double sumSq = recent.Sum(x => (x - mean) * (x - mean));
-                double std = Math.Sqrt(sumSq / recent.Count);
-                LastRaw = value;
-                LastZScore = std > 1e-10 ? (value - mean) / std : 0;
-            }
         }
 
         public void ResetTrade()

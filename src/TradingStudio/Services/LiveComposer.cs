@@ -239,11 +239,26 @@ public static class LiveComposer
             engineOptions, registry,
             sp.GetService<Microsoft.Extensions.Logging.ILogger<TradingStudio.Engine.TradingEngine>>()));
 
+        // ── OrderEventPump（v3: 单消费者泵，消除 OrderOutbox 双消费者竞态）──
+        // EngineHubPushService + OrderPersistenceService 作为 IOrderEventSink 注入
+        // 借鉴 StockSharp CtpMessageAdapter 回调泵模式
+        services.AddSingleton<EngineHubPushService>();
+        services.AddSingleton<IOrderEventSink>(sp => sp.GetRequiredService<EngineHubPushService>());
+        services.AddHostedService(sp => sp.GetRequiredService<EngineHubPushService>());
+
+        services.AddSingleton<OrderPersistenceService>();
+        services.AddSingleton<IOrderEventSink>(sp => sp.GetRequiredService<OrderPersistenceService>());
+        services.AddHostedService(sp => sp.GetRequiredService<OrderPersistenceService>());
+
+        services.AddSingleton(sp => new OrderEventPump(
+            sp.GetRequiredService<ExecutionHandler>().OrderOutbox.Reader,
+            sp.GetServices<IOrderEventSink>(),
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<OrderEventPump>>()));
+        services.AddHostedService(sp => sp.GetRequiredService<OrderEventPump>());
+
         services.AddHostedService<EngineHost>();
-        services.AddHostedService<EngineHubPushService>();
         services.AddHostedService<LiveDataCollector>();
         services.AddHostedService<PeriodMaintainer>();
-        services.AddHostedService<OrderPersistenceService>();
     }
 
     private static TradingStudio.Core.Strategy.StrategyConfig? TryLoadConfig(string path)

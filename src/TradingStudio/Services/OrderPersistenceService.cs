@@ -1,4 +1,3 @@
-using System.Threading.Channels;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Storage;
 using TradingStudio.Data.Storage;
@@ -7,48 +6,48 @@ using TradingStudio.Engine;
 namespace TradingStudio.Services;
 
 /// <summary>
-/// 订单事件持久化 — 消费 OrderOutbox (TradingEngine 处理完毕的 Fill)，写入 DuckDB。
+/// 订单事件持久化 — 作为 IOrderEventSink 由 OrderEventPump 串行调用。
 /// 5 秒定时刷盘，确保订单事件及时落库。
 ///
-/// 架构: CtpTraderBridge → FillChannel → TradingEngine(唯一消费者, portfolio处理)
-///         → OrderOutbox → [SignalR推送, 本服务持久化]
+/// v3: 不再直接读 OrderOutbox.Reader，改为实现 IOrderEventSink。
+///     OrderEventPump 是唯一消费者，PushService 和本服务均为 Sink。
+///     架构: TradingEngine → OrderOutbox → OrderEventPump(唯一消费者)
+///             → [EngineHubPushService.Sink, OrderPersistenceService.Sink]
 /// </summary>
-public class OrderPersistenceService : BackgroundService
+public class OrderPersistenceService : BackgroundService, IOrderEventSink
 {
-    private readonly ChannelReader<OrderEvent> _outboxReader;
     private readonly IBarStore _store;
     private readonly Serilog.ILogger _log;
     private readonly List<OrderEvent> _batch = new(64);
     private readonly object _lock = new();
 
     public OrderPersistenceService(
-        ExecutionHandler execution,
         IBarStore store,
         Serilog.ILogger log)
     {
-        _outboxReader = execution.OrderOutbox.Reader;
         _store = store;
         _log = log.ForContext<OrderPersistenceService>();
     }
 
+    // ─── IOrderEventSink ───
+    // 由 OrderEventPump 在单消费者线程中串行调用，不再与 PushService 竞争 OrderOutbox.Reader。
+
+    /// <inheritdoc/>
+    public Task HandleAsync(OrderEvent e, CancellationToken ct)
+    {
+        lock (_lock) _batch.Add(e);
+        return Task.CompletedTask;
+    }
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        _log.Information("OrderPersistenceService started");
+        _log.Information("OrderPersistenceService started (Sink mode)");
         using var flushTimer = new PeriodicTimer(TimeSpan.FromSeconds(5));
 
         try
         {
-            // 定时刷盘 + 事件消费并发
-            var flushTask = Task.Run(async () =>
-            {
-                while (await flushTimer.WaitForNextTickAsync(ct))
-                    await FlushAsync();
-            }, ct);
-
-            await foreach (var evt in _outboxReader.ReadAllAsync(ct))
-            {
-                lock (_lock) _batch.Add(evt);
-            }
+            while (await flushTimer.WaitForNextTickAsync(ct))
+                await FlushAsync();
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception ex)

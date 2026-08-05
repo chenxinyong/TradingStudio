@@ -15,44 +15,46 @@ namespace TradingStudio.Engine.Examples;
 /// </summary>
 public class MaCrossStrategy : IStrategy
 {
-    [StrategyParameter(Description = "快线周期", DefaultValue = 10, Min = 2, Max = 60, Category = "Entry")]
-    public int FastPeriod { get; set; } = 10;
+    // ── 策略参数 (v2: StrategyParam<T> 强类型，借鉴 StockSharp) ──
 
-    [StrategyParameter(Description = "慢线周期", DefaultValue = 30, Min = 5, Max = 200, Category = "Entry")]
-    public int SlowPeriod { get; set; } = 30;
+    public StrategyParam<int> FastPeriod { get; } = new("FastPeriod", 10)
+        { Group = "Entry", Description = "快线周期", OptimizeRange = (2, 60, 1) };
 
-    [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 10, Max = 40, Category = "Risk")]
-    public int AtrPeriod { get; set; } = 20;
+    public StrategyParam<int> SlowPeriod { get; } = new("SlowPeriod", 30)
+        { Group = "Entry", Description = "慢线周期", OptimizeRange = (5, 200, 5) };
 
-    [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2.0, Min = 1.0, Max = 5.0, Category = "Risk")]
-    public double StopAtrMult { get; set; } = 2.0;
+    public StrategyParam<int> AtrPeriod { get; } = new("AtrPeriod", 20)
+        { Group = "Risk", Description = "ATR周期", OptimizeRange = (10, 40, 5), Validator = v => v > 0 };
 
-    [StrategyParameter(Description = "止盈ATR倍数 (0=关闭止盈, 建议2.5)", DefaultValue = 2.5, Min = 0, Max = 10.0, Category = "Risk")]
-    public double TakeProfitAtrMult { get; set; } = 2.5;
+    public StrategyParam<double> StopAtrMult { get; } = new("StopAtrMult", 2.0)
+        { Group = "Risk", Description = "止损ATR倍数", OptimizeRange = (1.0, 5.0, 0.5) };
 
-    [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.05, Category = "Position")]
-    public double RiskPerTrade { get; set; } = 0.02;
+    public StrategyParam<double> TakeProfitAtrMult { get; } = new("TakeProfitAtrMult", 2.5)
+        { Group = "Risk", Description = "止盈ATR倍数 (0=关闭)", OptimizeRange = (0, 10.0, 0.5) };
 
-    [StrategyParameter(Description = "最大保证金占比", DefaultValue = 0.25, Min = 0.10, Max = 0.50, Category = "Position")]
-    public double MaxMarginRatio { get; set; } = 0.25;
+    public StrategyParam<double> RiskPerTrade { get; } = new("RiskPerTrade", 0.02)
+        { Group = "Position", Description = "单笔风险占比", OptimizeRange = (0.005, 0.05, 0.005) };
 
-    [StrategyParameter(Description = "最大持仓手数", DefaultValue = 2, Min = 1, Max = 20, Category = "Position")]
-    public int MaxPosition { get; set; } = 2;
+    public StrategyParam<double> MaxMarginRatio { get; } = new("MaxMarginRatio", 0.25)
+        { Group = "Position", Description = "最大保证金占比", OptimizeRange = (0.10, 0.50, 0.05) };
 
-    [StrategyParameter(Description = "ADX趋势过滤周期 (0=关闭)", DefaultValue = 14, Min = 0, Max = 30, Category = "Filter")]
-    public int AdxPeriod { get; set; } = 14;
+    public StrategyParam<int> MaxPosition { get; } = new("MaxPosition", 2)
+        { Group = "Position", Description = "最大持仓手数", OptimizeRange = (1, 20, 1), Validator = v => v > 0 };
 
-    [StrategyParameter(Description = "最低ADX (ADX<此值不交易, 0=关闭)", DefaultValue = 20, Min = 0, Max = 50, Category = "Filter")]
-    public int MinAdx { get; set; } = 20;
+    public StrategyParam<int> AdxPeriod { get; } = new("AdxPeriod", 14)
+        { Group = "Filter", Description = "ADX趋势过滤周期 (0=关闭)", OptimizeRange = (0, 30, 2) };
 
-    [StrategyParameter(Description = "日线趋势过滤 (仅日线MA向上做多)", DefaultValue = false, Category = "Filter")]
-    public bool DailyTrendFilter { get; set; } = false;
+    public StrategyParam<int> MinAdx { get; } = new("MinAdx", 20)
+        { Group = "Filter", Description = "最低ADX (ADX<此值不交易, 0=关闭)", OptimizeRange = (0, 50, 5) };
 
-    [StrategyParameter(Description = "日线趋势MA周期", DefaultValue = 50, Min = 20, Max = 200, Category = "Filter")]
-    public int DailyTrendPeriod { get; set; } = 50;
+    public StrategyParam<bool> DailyTrendFilter { get; } = new("DailyTrendFilter", false)
+        { Group = "Filter", Description = "日线趋势过滤 (仅日线MA向上做多)" };
 
-    [StrategyParameter(Description = "仅做多（不做空、死叉只平不反手）", DefaultValue = false, Category = "Direction")]
-    public bool LongOnly { get; set; } = false;
+    public StrategyParam<int> DailyTrendPeriod { get; } = new("DailyTrendPeriod", 50)
+        { Group = "Filter", Description = "日线趋势MA周期", OptimizeRange = (20, 200, 10) };
+
+    public StrategyParam<bool> LongOnly { get; } = new("LongOnly", false)
+        { Group = "Direction", Description = "仅做多（不做空、死叉只平不反手）" };
 
     public string Name => LongOnly ? "双均线趋势跟踪(仅做多)" : "双均线趋势跟踪(ATR风控)";
 

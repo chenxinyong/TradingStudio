@@ -1,34 +1,51 @@
 using Microsoft.AspNetCore.SignalR;
+using TradingStudio.Core.Engine;
 using TradingStudio.Engine;
 
 namespace TradingStudio.Services;
 
 /// <summary>
-/// SignalR 推送后台服务 — 监控引擎组件，实时推送到客户端。
+/// SignalR 推送服务 — 监控引擎组件，实时推送到客户端。
+///
+/// v3: 作为 IOrderEventSink 由 OrderEventPump 串行调用，不再直读 OrderOutbox.Reader。
+///     借鉴 StockSharp CtpMessageAdapter 回调泵模式 —— 消除双消费者竞态。
 /// </summary>
-public class EngineHubPushService : BackgroundService
+public class EngineHubPushService : BackgroundService, IOrderEventSink
 {
     private readonly IHubContext<EngineHub> _hub;
     private readonly PortfolioManager? _portfolio;
     private readonly TickSnapshot? _ticks;
     private readonly FeedbackMonitor? _feedback;
-    private readonly ExecutionHandler? _execution;
     private readonly StrategyContainer? _strategies;
+
+    private readonly System.Threading.Channels.Channel<OrderEvent> _orderChannel
+        = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
 
     public EngineHubPushService(
         IHubContext<EngineHub> hub,
         PortfolioManager? portfolio = null,
         TickSnapshot? ticks = null,
         FeedbackMonitor? feedback = null,
-        ExecutionHandler? execution = null,
         StrategyContainer? strategies = null)
     {
         _hub = hub;
         _portfolio = portfolio;
         _ticks = ticks;
         _feedback = feedback;
-        _execution = execution;
         _strategies = strategies;
+    }
+
+    // ─── IOrderEventSink ───
+    // 由 OrderEventPump 在单消费者线程中调用，不再与 PersistenceService 竞争 OrderOutbox.Reader。
+
+    /// <inheritdoc/>
+    public async Task HandleAsync(OrderEvent e, CancellationToken ct)
+    {
+        // 写入内部 Channel，解耦 Pump 线程和 SignalR 推送线程
+        if (!_orderChannel.Writer.TryWrite(e))
+        {
+            // Channel 满时丢弃（256 已足够大，正常不应满）
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -36,25 +53,21 @@ public class EngineHubPushService : BackgroundService
         var lastPortfolio = DateTimeOffset.UtcNow;
         var lastAlerts = DateTimeOffset.UtcNow;
 
-        // 从引擎的 OrderOutbox 读取已处理的成交（引擎独占 FillChannel，
-        // 处理完后写入 OrderOutbox，我们只读 OrderOutbox——避免双消费者竞态）
-        if (_execution != null)
+        // OrderEvent → SignalR 推送（从内部 Channel 消费，不再直读 OrderOutbox）
+        var reader = _orderChannel.Reader;
+        _ = Task.Run(async () =>
         {
-            _ = Task.Run(async () =>
+            while (!ct.IsCancellationRequested && await reader.WaitToReadAsync(ct))
             {
-                var reader = _execution.OrderOutbox.Reader;
-                while (!ct.IsCancellationRequested && await reader.WaitToReadAsync(ct))
+                while (reader.TryRead(out var fill))
                 {
-                    while (reader.TryRead(out var fill))
-                    {
-                        await _hub.Clients.Group(fill.StrategyId ?? "")
-                            .SendAsync("OrderUpdated", fill, ct);
-                        await _hub.Clients.All
-                            .SendAsync("OrderFlowUpdated", fill, ct);
-                    }
+                    await _hub.Clients.Group(fill.StrategyId ?? "")
+                        .SendAsync("OrderUpdated", fill, ct);
+                    await _hub.Clients.All
+                        .SendAsync("OrderFlowUpdated", fill, ct);
                 }
-            }, ct);
-        }
+            }
+        }, ct);
 
         while (!ct.IsCancellationRequested)
         {
