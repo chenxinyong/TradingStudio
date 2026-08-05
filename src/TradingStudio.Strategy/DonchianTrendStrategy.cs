@@ -24,37 +24,37 @@ namespace TradingStudio.Strategy;
 /// </summary>
 public class DonchianTrendStrategy : IStrategy
 {
-    // ═══ 策略参数 ═══
+    // ── 策略参数 (v2: StrategyParam<T>, 借鉴 StockSharp) ──
 
-    [StrategyParameter(Description = "通道周期(K线数)", DefaultValue = 20, Min = 10, Max = 60, Category = "Entry")]
-    public int ChannelPeriod { get; set; } = 20;
+    public StrategyParam<int> ChannelPeriod { get; } = new("ChannelPeriod", 20)
+        { Group = "Entry", Description = "通道周期(K线数)", OptimizeRange = (10, 60, 5) };
 
-    [StrategyParameter(Description = "出场通道周期(K线数)", DefaultValue = 10, Min = 5, Max = 30, Category = "Exit")]
-    public int ExitPeriod { get; set; } = 10;
+    public StrategyParam<int> ExitPeriod { get; } = new("ExitPeriod", 10)
+        { Group = "Exit", Description = "出场通道周期(K线数)", OptimizeRange = (5, 30, 5) };
 
-    [StrategyParameter(Description = "趋势MA周期 (0=关闭趋势过滤)", DefaultValue = 50, Min = 0, Max = 200, Category = "Filter")]
-    public int TrendMAPeriod { get; set; } = 50;
+    public StrategyParam<int> TrendMAPeriod { get; } = new("TrendMAPeriod", 50)
+        { Group = "Filter", Description = "趋势MA周期 (0=关闭)", OptimizeRange = (0, 200, 20) };
 
-    [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 10, Max = 40, Category = "Risk")]
-    public int AtrPeriod { get; set; } = 20;
+    public StrategyParam<int> AtrPeriod { get; } = new("AtrPeriod", 20)
+        { Group = "Risk", Description = "ATR周期", OptimizeRange = (10, 40, 5) };
 
-    [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2.0, Min = 1.0, Max = 4.0, Category = "Risk")]
-    public double StopAtrMult { get; set; } = 2.0;
+    public StrategyParam<double> StopAtrMult { get; } = new("StopAtrMult", 2.0)
+        { Group = "Risk", Description = "止损ATR倍数", OptimizeRange = (1.0, 4.0, 0.5) };
 
-    [StrategyParameter(Description = "止盈ATR倍数 (0=关闭止盈, 建议3.0)", DefaultValue = 3.0, Min = 0, Max = 10.0, Category = "Risk")]
-    public double TakeProfitAtrMult { get; set; } = 3.0;
+    public StrategyParam<double> TakeProfitAtrMult { get; } = new("TakeProfitAtrMult", 3.0)
+        { Group = "Risk", Description = "止盈ATR倍数 (0=关闭)", OptimizeRange = (0, 10.0, 1.0) };
 
-    [StrategyParameter(Description = "最低波动率(ATR/Close) — 15min建议0.001-0.005", DefaultValue = 0.003, Min = 0.001, Max = 0.03, Category = "Filter")]
-    public double MinVolatility { get; set; } = 0.003;
+    public StrategyParam<double> MinVolatility { get; } = new("MinVolatility", 0.003)
+        { Group = "Filter", Description = "最低波动率(ATR/Close)", OptimizeRange = (0.001, 0.03, 0.002) };
 
-    [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.05, Category = "Position")]
-    public double RiskPerTrade { get; set; } = 0.02;
+    public StrategyParam<double> RiskPerTrade { get; } = new("RiskPerTrade", 0.02)
+        { Group = "Position", Description = "单笔风险占比", OptimizeRange = (0.005, 0.05, 0.005) };
 
-    [StrategyParameter(Description = "最大持仓K线数(0=不限)", DefaultValue = 0, Min = 0, Max = 500, Category = "Exit")]
-    public int MaxBarsInTrade { get; set; } = 0;
+    public StrategyParam<int> MaxBarsInTrade { get; } = new("MaxBarsInTrade", 0)
+        { Group = "Exit", Description = "最大持仓K线数(0=不限)", OptimizeRange = (0, 500, 50) };
 
-    [StrategyParameter(Description = "重新入场冷却期(K线数, 0=允许立即重新入场)", DefaultValue = 5, Min = 0, Max = 50, Category = "Entry")]
-    public int ReentryCooldown { get; set; } = 5;
+    public StrategyParam<int> ReentryCooldown { get; } = new("ReentryCooldown", 5)
+        { Group = "Entry", Description = "重新入场冷却期(K线数)", OptimizeRange = (0, 50, 5) };
 
     public string Name => "Donchian通道趋势跟踪(ATR动态仓位)";
 

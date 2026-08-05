@@ -19,44 +19,46 @@ namespace TradingStudio.Engine.Examples;
 /// </summary>
 public class BollingerReversionStrategy : IStrategy
 {
-    [StrategyParameter(Description = "布林带周期", DefaultValue = 20, Min = 10, Max = 50, Category = "Entry")]
-    public int Period { get; set; } = 20;
+    // ── 策略参数 (v2: StrategyParam<T>, 借鉴 StockSharp) ──
 
-    [StrategyParameter(Description = "布林带标准差倍数", DefaultValue = 2.0, Min = 1.0, Max = 3.0, Category = "Entry")]
-    public double StdDevMult { get; set; } = 2.0;
+    public StrategyParam<int> Period { get; } = new("Period", 20)
+        { Group = "Entry", Description = "布林带周期", OptimizeRange = (10, 50, 5) };
 
-    [StrategyParameter(Description = "硬止损比例", DefaultValue = 0.015, Min = 0.005, Max = 0.05, Category = "Risk")]
-    public double StopLossPct { get; set; } = 0.015;
+    public StrategyParam<double> StdDevMult { get; } = new("StdDevMult", 2.0)
+        { Group = "Entry", Description = "布林带标准差倍数", OptimizeRange = (1.0, 3.0, 0.5) };
 
-    [StrategyParameter(Description = "止盈: 回到中轨(1.0=中轨, 0=关闭)", DefaultValue = 1.0, Min = 0, Max = 1.5, Category = "Risk")]
-    public double TakeProfitBand { get; set; } = 1.0;
+    public StrategyParam<double> StopLossPct { get; } = new("StopLossPct", 0.015)
+        { Group = "Risk", Description = "硬止损比例", OptimizeRange = (0.005, 0.05, 0.005) };
 
-    [StrategyParameter(Description = "ATR周期(跟踪止损)", DefaultValue = 14, Min = 10, Max = 30, Category = "Risk")]
-    public int AtrPeriod { get; set; } = 14;
+    public StrategyParam<double> TakeProfitBand { get; } = new("TakeProfitBand", 1.0)
+        { Group = "Risk", Description = "止盈: 回到中轨(1.0=中轨, 0=关闭)", OptimizeRange = (0, 1.5, 0.25) };
 
-    [StrategyParameter(Description = "跟踪止损ATR倍数", DefaultValue = 1.5, Min = 1.0, Max = 3.0, Category = "Risk")]
-    public double TrailAtrMult { get; set; } = 1.5;
+    public StrategyParam<int> AtrPeriod { get; } = new("AtrPeriod", 14)
+        { Group = "Risk", Description = "ATR周期(跟踪止损)", OptimizeRange = (10, 30, 5) };
 
-    [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.015, Min = 0.005, Max = 0.05, Category = "Position")]
-    public double RiskPerTrade { get; set; } = 0.015;
+    public StrategyParam<double> TrailAtrMult { get; } = new("TrailAtrMult", 1.5)
+        { Group = "Risk", Description = "跟踪止损ATR倍数", OptimizeRange = (1.0, 3.0, 0.5) };
 
-    [StrategyParameter(Description = "最大持仓手数", DefaultValue = 2, Min = 1, Max = 10, Category = "Position")]
-    public int MaxPosition { get; set; } = 2;
+    public StrategyParam<double> RiskPerTrade { get; } = new("RiskPerTrade", 0.015)
+        { Group = "Position", Description = "单笔风险占比", OptimizeRange = (0.005, 0.05, 0.005) };
 
-    [StrategyParameter(Description = "ADX上限(>此值不交易, 0=关闭)", DefaultValue = 25, Min = 0, Max = 60, Category = "Filter")]
-    public int MaxAdx { get; set; } = 25;
+    public StrategyParam<int> MaxPosition { get; } = new("MaxPosition", 2)
+        { Group = "Position", Description = "最大持仓手数", OptimizeRange = (1, 10, 1) };
 
-    [StrategyParameter(Description = "ADX周期", DefaultValue = 14, Min = 7, Max = 30, Category = "Filter")]
-    public int AdxPeriod { get; set; } = 14;
+    public StrategyParam<int> MaxAdx { get; } = new("MaxAdx", 25)
+        { Group = "Filter", Description = "ADX上限(>此值不交易)", OptimizeRange = (0, 60, 10) };
 
-    [StrategyParameter(Description = "最低带宽%(布林带宽度/Mid, 0=关闭)", DefaultValue = 0.02, Min = 0, Max = 0.10, Category = "Filter")]
-    public double MinBandWidth { get; set; } = 0.02;
+    public StrategyParam<int> AdxPeriod { get; } = new("AdxPeriod", 14)
+        { Group = "Filter", Description = "ADX周期", OptimizeRange = (7, 30, 3) };
 
-    [StrategyParameter(Description = "入场冷却期(K线数)", DefaultValue = 10, Min = 0, Max = 50, Category = "Filter")]
-    public int EntryCooldown { get; set; } = 10;
+    public StrategyParam<double> MinBandWidth { get; } = new("MinBandWidth", 0.02)
+        { Group = "Filter", Description = "最低带宽%(布林带宽度/Mid)", OptimizeRange = (0, 0.10, 0.01) };
 
-    [StrategyParameter(Description = "入场区域比例(0-0.5, 越小越严格)", DefaultValue = 0.20, Min = 0.05, Max = 0.50, Category = "Entry")]
-    public double EntryZoneRatio { get; set; } = 0.20;
+    public StrategyParam<int> EntryCooldown { get; } = new("EntryCooldown", 10)
+        { Group = "Filter", Description = "入场冷却期(K线数)", OptimizeRange = (0, 50, 5) };
+
+    public StrategyParam<double> EntryZoneRatio { get; } = new("EntryZoneRatio", 0.20)
+        { Group = "Entry", Description = "入场区域比例(越小越严格)", OptimizeRange = (0.05, 0.50, 0.05) };
 
     public string Name => "布林带均值回归";
 
