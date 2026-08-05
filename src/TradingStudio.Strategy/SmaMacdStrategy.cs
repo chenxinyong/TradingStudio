@@ -22,77 +22,75 @@ namespace TradingStudio.Strategy;
 /// </summary>
 public class SmaMacdStrategy : IStrategy
 {
-    // ═══ 参数 ═══
+    // ── 策略参数 (v2: StrategyParam<T>, 借鉴 StockSharp) ──
 
-    [StrategyParameter(Description = "SMA周期列表(逗号分隔)", DefaultValue = "5,13,34,89,233", Category = "Signal")]
-    public string SmaPeriodsStr { get; set; } = "5,13,34,89,233";
+    public StrategyParam<string> SmaPeriodsStr { get; } = new("SmaPeriodsStr", "5,13,34,89,233")
+        { Group = "Signal", Description = "SMA周期列表(逗号分隔)" };
 
-    [StrategyParameter(Description = "MACD快线周期", DefaultValue = 12, Min = 5, Max = 50, Category = "Signal")]
-    public int MacdFast { get; set; } = 12;
+    public StrategyParam<int> MacdFast { get; } = new("MacdFast", 12)
+        { Group = "Signal", Description = "MACD快线周期", OptimizeRange = (5, 50, 5) };
 
-    [StrategyParameter(Description = "MACD慢线周期", DefaultValue = 26, Min = 10, Max = 100, Category = "Signal")]
-    public int MacdSlow { get; set; } = 26;
+    public StrategyParam<int> MacdSlow { get; } = new("MacdSlow", 26)
+        { Group = "Signal", Description = "MACD慢线周期", OptimizeRange = (10, 100, 10) };
 
-    [StrategyParameter(Description = "MACD信号线周期", DefaultValue = 9, Min = 3, Max = 30, Category = "Signal")]
-    public int MacdSignal { get; set; } = 9;
+    public StrategyParam<int> MacdSignal { get; } = new("MacdSignal", 9)
+        { Group = "Signal", Description = "MACD信号线周期", OptimizeRange = (3, 30, 3) };
 
-    [StrategyParameter(Description = "最大仓位占比", DefaultValue = 0.25, Min = 0.05, Max = 0.50, Category = "Position")]
-    public double MaxPositionRatio { get; set; } = 0.25;
+    public StrategyParam<double> MaxPositionRatio { get; } = new("MaxPositionRatio", 0.25)
+        { Group = "Position", Description = "最大仓位占比", OptimizeRange = (0.05, 0.50, 0.05) };
 
-    [StrategyParameter(Description = "单笔止损比例", DefaultValue = 0.02, Min = 0.005, Max = 0.10, Category = "Risk")]
-    public double StopLossPct { get; set; } = 0.02;
+    public StrategyParam<double> StopLossPct { get; } = new("StopLossPct", 0.02)
+        { Group = "Risk", Description = "单笔止损比例", OptimizeRange = (0.005, 0.10, 0.01) };
 
-    [StrategyParameter(Description = "单笔止盈比例 (0=关闭止盈, 建议0.04)", DefaultValue = 0.04, Min = 0, Max = 0.20, Category = "Risk")]
-    public double TakeProfitPct { get; set; } = 0.04;
+    public StrategyParam<double> TakeProfitPct { get; } = new("TakeProfitPct", 0.04)
+        { Group = "Risk", Description = "单笔止盈比例 (0=关闭)", OptimizeRange = (0, 0.20, 0.02) };
 
-    [StrategyParameter(Description = "最大开仓手数", DefaultValue = 20, Min = 1, Max = 100, Category = "Position")]
-    public int MaxLots { get; set; } = 20;
+    public StrategyParam<int> MaxLots { get; } = new("MaxLots", 20)
+        { Group = "Position", Description = "最大开仓手数", OptimizeRange = (1, 100, 10) };
 
-    [StrategyParameter(Description = "要求SMA多头排列(SMA5>13>34)", DefaultValue = true, Category = "Entry")]
-    public bool RequireSmaAlignment { get; set; } = true;
+    public StrategyParam<bool> RequireSmaAlignment { get; } = new("RequireSmaAlignment", true)
+        { Group = "Entry", Description = "要求SMA多头排列(SMA5>13>34)" };
 
-    [StrategyParameter(Description = "要求MACD方向确认(DIF>DEA)", DefaultValue = true, Category = "Entry")]
-    public bool RequireMacdConfirm { get; set; } = true;
+    public StrategyParam<bool> RequireMacdConfirm { get; } = new("RequireMacdConfirm", true)
+        { Group = "Entry", Description = "要求MACD方向确认(DIF>DEA)" };
 
-    [StrategyParameter(Description = "要求日线趋势向上(日线SMA5>SMA34)", DefaultValue = false, Category = "Entry")]
-    public bool RequireDailyTrend { get; set; } = false;
+    public StrategyParam<bool> RequireDailyTrend { get; } = new("RequireDailyTrend", false)
+        { Group = "Entry", Description = "要求日线趋势向上(日线SMA5>SMA34)" };
 
-    [StrategyParameter(Description = "要求1min MACD确认(DIF>DEA)", DefaultValue = false, Category = "Entry")]
-    public bool Require1minConfirm { get; set; } = false;
+    public StrategyParam<bool> Require1minConfirm { get; } = new("Require1minConfirm", false)
+        { Group = "Entry", Description = "要求1min MACD确认(DIF>DEA)" };
 
-    [StrategyParameter(Description = "允许做空(关闭则仅做多)", DefaultValue = true, Category = "Entry")]
-    public bool AllowShort { get; set; } = true;
+    public StrategyParam<bool> AllowShort { get; } = new("AllowShort", true)
+        { Group = "Entry", Description = "允许做空(关闭则仅做多)" };
 
-    // ── ATR 移动止损（价格创新高/低自动跟随，默认启用）──
+    // ── ATR 移动止损 ──
+    public StrategyParam<bool> UseAtrTrail { get; } = new("UseAtrTrail", true)
+        { Group = "Exit", Description = "ATR移动止损: 启用" };
 
-    [StrategyParameter(Description = "ATR移动止损: 启用", DefaultValue = true, Category = "Exit")]
-    public bool UseAtrTrail { get; set; } = true;
+    public StrategyParam<int> TrailAtrPeriod { get; } = new("TrailAtrPeriod", 20)
+        { Group = "Exit", Description = "ATR移动止损: ATR周期", OptimizeRange = (10, 40, 5) };
 
-    [StrategyParameter(Description = "ATR移动止损: ATR周期", DefaultValue = 20, Min = 10, Max = 40, Category = "Exit")]
-    public int TrailAtrPeriod { get; set; } = 20;
+    public StrategyParam<double> TrailAtrMult { get; } = new("TrailAtrMult", 2.0)
+        { Group = "Exit", Description = "ATR移动止损: ATR倍数", OptimizeRange = (1.0, 5.0, 0.5) };
 
-    [StrategyParameter(Description = "ATR移动止损: ATR倍数(止损距离=ATR×倍数)", DefaultValue = 2.0, Min = 1.0, Max = 5.0, Category = "Exit")]
-    public double TrailAtrMult { get; set; } = 2.0;
+    // ── SMA 移动止损 ──
+    public StrategyParam<bool> UseSmaTrail { get; } = new("UseSmaTrail", false)
+        { Group = "Exit", Description = "SMA移动止损: 启用(盈利达标后跟踪SMA线)" };
 
-    // ── SMA 移动止损（盈利激活后跟踪 SMA 线，可选）──
+    public StrategyParam<int> TrailSmaPeriod { get; } = new("TrailSmaPeriod", 89)
+        { Group = "Exit", Description = "SMA移动止损: 跟踪SMA(13/34/89)", OptimizeRange = (13, 233, 20) };
 
-    [StrategyParameter(Description = "SMA移动止损: 启用(盈利达标后跟踪SMA线)", DefaultValue = false, Category = "Exit")]
-    public bool UseSmaTrail { get; set; } = false;
+    public StrategyParam<double> TrailActivationPct { get; } = new("TrailActivationPct", 0.03)
+        { Group = "Exit", Description = "SMA移动止损: 盈利阈值(激活跟踪)", OptimizeRange = (0.01, 0.10, 0.01) };
 
-    [StrategyParameter(Description = "SMA移动止损: 跟踪SMA(13/34/89)", DefaultValue = 89, Min = 13, Max = 233, Category = "Exit")]
-    public int TrailSmaPeriod { get; set; } = 89;
+    public StrategyParam<double> MinVolatilityPct { get; } = new("MinVolatilityPct", 0)
+        { Group = "Filter", Description = "波动率过滤: 最低ATR/Price(0=关闭)", OptimizeRange = (0, 0.02, 0.002) };
 
-    [StrategyParameter(Description = "SMA移动止损: 盈利阈值(激活跟踪)", DefaultValue = 0.03, Min = 0.01, Max = 0.10, Category = "Exit")]
-    public double TrailActivationPct { get; set; } = 0.03;
+    public StrategyParam<int> CooldownBars { get; } = new("CooldownBars", 0)
+        { Group = "Filter", Description = "冷却期: 止损出场后禁止入场K线数", OptimizeRange = (0, 50, 5) };
 
-    [StrategyParameter(Description = "波动率过滤: 最低ATR/Price(0=关闭)", DefaultValue = 0, Min = 0, Max = 0.02, Category = "Filter")]
-    public double MinVolatilityPct { get; set; } = 0;
-
-    [StrategyParameter(Description = "冷却期: 止损出场后禁止入场的K线数(0=关闭)", DefaultValue = 0, Min = 0, Max = 50, Category = "Filter")]
-    public int CooldownBars { get; set; } = 0;
-
-    [StrategyParameter(Description = "等回调入场: 穿越后等价格回踩此SMA(0=关闭,13/34)", DefaultValue = 0, Min = 0, Max = 233, Category = "Entry")]
-    public int EntryPullbackSma { get; set; } = 0;
+    public StrategyParam<int> EntryPullbackSma { get; } = new("EntryPullbackSma", 0)
+        { Group = "Entry", Description = "等回调入场: 回踩此SMA(0=关闭)", OptimizeRange = (0, 233, 20) };
 
     public string Name => "SMA233+MACD多时间框架";
 
