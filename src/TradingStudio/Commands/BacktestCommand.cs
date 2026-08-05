@@ -83,6 +83,9 @@ public class BacktestCommand
         var feedback = new FeedbackMonitor();
         var tickSnapshot = new TickSnapshot();
         var execution = new ExecutionHandler(risk, registry);
+        // 日内/横截面策略用更低的滑点因子(近似limit order)
+        if (strategyConfig.PrimaryBarType is "bars_day" or "bars_15min")
+            execution.SlippageAtrFactor = 0.02m;
         var indicators = new IndicatorManager();
         var strategies = new StrategyContainer();
 

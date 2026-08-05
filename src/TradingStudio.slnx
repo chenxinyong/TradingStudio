@@ -5,6 +5,7 @@
   <Project Path="TradingStudio.Core/TradingStudio.Core.csproj" />
   <Project Path="TradingStudio.Data/TradingStudio.Data.csproj" />
   <Project Path="TradingStudio.Engine/TradingStudio.Engine.csproj" />
+  <Project Path="TradingStudio.Mind/TradingStudio.Mind.csproj" />
   <Project Path="TradingStudio.Research/TradingStudio.Research.csproj" />
   <Project Path="TradingStudio.Terminal/TradingStudio.Terminal.csproj" />
   <Project Path="TradingStudio.ToolBox/TradingStudio.ToolBox.csproj" />
