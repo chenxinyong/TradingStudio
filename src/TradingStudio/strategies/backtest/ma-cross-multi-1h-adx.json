@@ -1,5 +1,5 @@
 {
-  "StrategyId": "backtest-macross-multi",
+  "StrategyId": "ma-cross-multi-1h-adx",
   "StrategyType": "MaCross",
   "Instruments": ["ag000", "rb000", "MA000", "FG000", "SA000"],
   "PrimaryBarType": "bars_1min",

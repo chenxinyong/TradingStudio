@@ -27,7 +27,7 @@
     },
     "▶ Backtest (K线回测)": {
       "commandName": "Project",
-      "commandLineArgs": "backtest --config strategies/live-test.json --db bars.db",
+      "commandLineArgs": "backtest --config strategies/backtest/ma-cross-ag-1h-adx.json --db bars.db",
       "workingDirectory": "$(ProjectDir)",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"

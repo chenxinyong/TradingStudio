@@ -23,9 +23,9 @@ echo [4/5] symbols.json + strategy examples...
 python "%ROOT%src\Scripts\gen_symbols_json.py" >nul 2>&1
 copy /Y "%ROOT%src\TradingStudio\symbols.json" "%RELEASE%\" >nul 2>&1
 
-mkdir "%RELEASE%\strategies" 2>nul
-if exist "%ROOT%deploy\configs\strategies\*.json" (
-    copy /Y "%ROOT%deploy\configs\strategies\*.json" "%RELEASE%\strategies\" >nul 2>&1
+mkdir "%RELEASE%\strategies\backtest" 2>nul
+if exist "%ROOT%src\TradingStudio\strategies\backtest\*.json" (
+    copy /Y "%ROOT%src\TradingStudio\strategies\backtest\*.json" "%RELEASE%\strategies\backtest\" >nul 2>&1
 )
 echo   OK
 
@@ -45,8 +45,8 @@ echo if "%%1"=="" ^(
 echo     echo Usage: start-bar.bat ^<strategy.json^> [--db path] [--start yyyy-MM-dd] [--end yyyy-MM-dd]
 echo     echo.
 echo     echo Examples:
-echo     echo   start-bar.bat strategies\live-test.json
-echo     echo   start-bar.bat strategies\live-test.json --db bars.db --start 2025-01-01 --end 2025-06-01
+echo     echo   start-bar.bat strategies\backtest\ma-cross-ag-1h-adx.json
+echo     echo   start-bar.bat strategies\backtest\ma-cross-ag-1h-adx.json --db bars.db --start 2025-01-01 --end 2025-06-01
 echo     pause
 echo     exit /b 1
 echo ^)
@@ -72,7 +72,7 @@ echo if "%%1"=="" ^(
 echo     echo Usage: start-tick.bat ^<strategy.json^> --data-dir ^<csv_dir^> [--start yyyy-MM-dd] [--end yyyy-MM-dd]
 echo     echo.
 echo     echo Example:
-echo     echo   start-tick.bat strategies\live-test.json --data-dir TickData --start 2025-01-01 --end 2025-01-31
+echo     echo   start-tick.bat strategies\backtest\ma-cross-ag-1h-adx.json --data-dir TickData --start 2025-01-01 --end 2025-01-31
 echo     pause
 echo     exit /b 1
 echo ^)
@@ -96,10 +96,10 @@ echo .NET 10 ^(SelfContained^)
 echo.
 echo --- Quick Start ---
 echo   1. Copy bars.db ^(or TickData/^) to this directory
-echo   2. Edit strategies\live-test.json ^(or use as-is^)
+echo   2. Edit strategies\backtest\ma-cross-ag-1h-adx.json ^(or use as-is^)
 echo   3. Run:
-echo      start-bar.bat strategies\live-test.json --db bars.db --start 2025-01-01 --end 2025-06-01
-echo      start-tick.bat strategies\live-test.json --data-dir TickData --start 2025-01-01 --end 2025-01-31
+echo      start-bar.bat strategies\backtest\ma-cross-ag-1h-adx.json --db bars.db --start 2025-01-01 --end 2025-06-01
+echo      start-tick.bat strategies\backtest\ma-cross-ag-1h-adx.json --data-dir TickData --start 2025-01-01 --end 2025-01-31
 echo.
 echo --- CLI Options ---
 echo   --config, -c   Strategy JSON file ^(required^)
@@ -118,6 +118,6 @@ echo.
 echo ========================================
 echo   BUILD COMPLETE - release/backtest/
 echo ========================================
-echo   Bar:   start-bar.bat strategies\live-test.json --db bars.db
-echo   Tick:  start-tick.bat strategies\live-test.json --data-dir TickData
+echo   Bar:   start-bar.bat strategies\backtest\ma-cross-ag-1h-adx.json --db bars.db
+echo   Tick:  start-tick.bat strategies\backtest\ma-cross-ag-1h-adx.json --data-dir TickData
 echo.

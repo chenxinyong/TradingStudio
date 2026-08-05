@@ -1,5 +1,5 @@
 {
-  "StrategyId": "backtest-macross-adx",
+  "StrategyId": "ma-cross-ag-1h",
   "StrategyType": "MaCross",
   "Instruments": ["ag000"],
   "PrimaryBarType": "bars_1min",
@@ -9,8 +9,8 @@
   "Parameters": {
     "FastPeriod": 5,
     "SlowPeriod": 34,
-    "AdxPeriod": 14,
-    "MinAdx": 20,
+    "AdxPeriod": 0,
+    "MinAdx": 0,
     "RiskPerTrade": 0.02,
     "MaxMarginRatio": 0.50,
     "StopAtrMult": 2.0,

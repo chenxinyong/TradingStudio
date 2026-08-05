@@ -1,5 +1,5 @@
 {
-  "StrategyId": "live-test",
+  "StrategyId": "ma-cross-ag-live",
   "StrategyType": "MaCross",
   "Instruments": ["ag2612"],
   "PrimaryBarType": "bars_1min",

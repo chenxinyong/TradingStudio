@@ -28,20 +28,20 @@ if not exist "%RELEASE%\appsettings.json" (
     copy /Y "%ROOT%deploy\configs\appsettings.live.json" "%RELEASE%\appsettings.json" >nul 2>&1
 )
 REM Copy strategy configs
-mkdir "%RELEASE%\configs\strategies" 2>nul
-if exist "%ROOT%deploy\configs\strategies\*.json" (
-    copy /Y "%ROOT%deploy\configs\strategies\*.json" "%RELEASE%\configs\strategies\" >nul 2>&1
+mkdir "%RELEASE%\strategies\live" 2>nul
+if exist "%ROOT%src\TradingStudio\strategies\live\*.json" (
+    copy /Y "%ROOT%src\TradingStudio\strategies\live\*.json" "%RELEASE%\strategies\live\" >nul 2>&1
 )
 REM Copy HTTPS cert
 mkdir "%RELEASE%\certs" 2>nul
 if exist "%ROOT%src\TradingStudio\certs\tradingstudio.pfx" (
     copy /Y "%ROOT%src\TradingStudio\certs\tradingstudio.pfx" "%RELEASE%\certs\" >nul 2>&1
 )
-REM Copy local config template (first build only â€” don't overwrite user's credentials)
+REM Copy local config template (first build only â€?don't overwrite user's credentials)
 if not exist "%RELEASE%\appsettings.local.json" (
     if exist "%ROOT%deploy\configs\appsettings.live.local.json" (
         copy /Y "%ROOT%deploy\configs\appsettings.live.local.json" "%RELEASE%\appsettings.local.json" >nul 2>&1
-        echo   [INFO] appsettings.local.json created from template â€” edit with your credentials
+        echo   [INFO] appsettings.local.json created from template â€?edit with your credentials
     )
 )
 echo   OK
@@ -92,7 +92,7 @@ echo.
 echo --- Quick Start ---
 echo   1. Edit appsettings.local.json ^(Live section^):
 echo      MdFront, TraderFront, UserId, Password, StrategyConfig
-echo   2. Edit configs\strategies\live-test.json
+echo   2. Edit strategies\live\ma-cross-ag.json
 echo   3. Run: start.bat
 echo   4. Open http://localhost:59661/api/health for health check
 echo.
@@ -116,6 +116,6 @@ echo ========================================
 echo   BUILD COMPLETE - release/live/
 echo ========================================
 echo   1. Edit release\live\appsettings.local.json
-echo   2. Edit release\live\configs\strategies\live-test.json
+echo   2. Edit release\live\strategies\live\ma-cross-ag.json
 echo   3. Run  release\live\start.bat
 echo.
