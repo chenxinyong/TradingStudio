@@ -1,3 +1,4 @@
+using System.Text;
 using DuckDB.NET.Data;
 using Microsoft.AspNetCore.Mvc;
 using TradingStudio.Core.Engine;
@@ -196,12 +197,85 @@ public static class EngineMonitorApi
             return Results.Ok(new { req.InstrumentId, Phase = 3 });
         });
 
-        api.MapPost("/config/reload", () =>
+        // ═══ 策略热切换 ═══
+        api.MapPost("/strategy/reload", async ([FromBody] StrategyConfig config,
+            [FromServices] StrategyContainer strategies,
+            [FromServices] ExecutionHandler execution,
+            [FromServices] PortfolioManager portfolio,
+            [FromServices] IServiceProvider sp) =>
         {
-            // Phase 3: 重新加载策略配置
-            return Results.Ok(new { Action = "reload", Phase = 3 });
+            try
+            {
+                // 1. 平掉所有现有持仓
+                foreach (var pos in portfolio.AllPositions.ToList())
+                {
+                    if (pos.Quantity != 0)
+                        execution.Submit(new Order
+                        {
+                            InstrumentId = pos.InstrumentId,
+                            Direction = pos.Quantity > 0 ? OrderDirection.Sell : OrderDirection.Buy,
+                            Type = OrderType.Market,
+                            Quantity = Math.Abs(pos.Quantity),
+                            IsCloseOrder = true,
+                            Tag = "热切换平仓",
+                        }, config.StrategyId, portfolio);
+                }
+
+                // 2. 注销旧策略, 注册新策略
+                var oldIds = strategies.GetAllSnapshots().Select(s => s.StrategyId).ToList();
+                foreach (var id in oldIds)
+                    strategies.Unregister(id);
+
+                // 3. 创建并注册新策略
+                var strategy = StrategyFactory.Create(config);
+                strategies.Register(strategy, config, null!); // Context will be re-bound by engine
+
+                return Results.Ok(new { Action = "reload", StrategyId = config.StrategyId,
+                    ClosedPositions = portfolio.TradeHistory.Count });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { Error = ex.Message });
+            }
         });
+
+        // ═══ Dashboard ═══
+        app.MapGet("/dashboard", () => Results.Content(DashboardHtml, "text/html; charset=utf-8"));
     }
+
+    private static readonly string DashboardHtml = BuildDashboardHtml();
+
+    private static string BuildDashboardHtml()
+{
+    var sb = new StringBuilder();
+    sb.Append("<!DOCTYPE html><html lang=zh><head><meta charset=UTF-8><title>TradingStudio</title>");
+    sb.Append("<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:monospace;background:#1a1a2e;color:#e0e0e0;padding:20px}");
+    sb.Append("h1{color:#00d4ff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}");
+    sb.Append(".card{background:#16213e;border-radius:8px;padding:16px;border:1px solid #0f3460}");
+    sb.Append(".card h3{color:#00d4ff;font-size:14px}.stat{font-size:24px;font-weight:bold;color:#fff}");
+    sb.Append(".green{color:#00ff88}.red{color:#ff4444}table{width:100%;border-collapse:collapse;font-size:12px}");
+    sb.Append("th{text-align:left;color:#888;padding:4px 8px}td{padding:4px 8px;border-top:1px solid #0f3460}");
+    sb.Append(".refresh{position:fixed;top:16px;right:16px;background:#00d4ff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer}");
+    sb.Append("</style></head><body><h1>TradingStudio Live</h1><button class=refresh onclick=load()>Refresh</button><div class=grid>");
+    sb.Append("<div class=card><h3>Portfolio</h3><div id=p>Loading...</div></div>");
+    sb.Append("<div class=card><h3>Strategies</h3><div id=s>Loading...</div></div>");
+    sb.Append("<div class=card><h3>Recent Trades</h3><div id=t>Loading...</div></div>");
+    sb.Append("<div class=card><h3>Orders</h3><div id=o>Loading...</div></div></div><script>");
+    sb.Append("async function load(){try{");
+    sb.Append("let p=await fetch('/api/portfolio').then(r=>r.json());");
+    sb.Append("document.getElementById('p').innerHTML='<div class=stat>'+(p.totalEquity||0).toLocaleString()+' CNY</div>';");
+    sb.Append("let s=await fetch('/api/strategies').then(r=>r.json());");
+    sb.Append("document.getElementById('s').innerHTML=(s||[]).map(x=>'<div>'+x.strategyId+': '+(x.status||'active')+'</div>').join('');");
+    sb.Append("let t=await fetch('/api/trades').then(r=>r.json());");
+    sb.Append("document.getElementById('t').innerHTML='<table><tr><th>Inst</th><th>PnL</th></tr>'+");
+    sb.Append("(t||[]).slice(-10).reverse().map(x=>'<tr><td>'+x.instrumentId+'</td><td class='+(x.pnL>0?'green':'red')+'>'+(x.pnL||0).toFixed(0)+'</td></tr>').join('')+'</table>';");
+    sb.Append("let o=await fetch('/api/orders').then(r=>r.json());");
+    sb.Append("document.getElementById('o').innerHTML='<table><tr><th>ID</th><th>Inst</th></tr>'+");
+    sb.Append("(o?.active||[]).slice(0,10).map(x=>'<tr><td>'+x.orderId+'</td><td>'+x.instrumentId+'</td></tr>').join('')+'</table>';");
+    sb.Append("}catch(e){console.error(e)}}load();setInterval(load,5000);");
+    sb.Append("</script></body></html>");
+    return sb.ToString();
+}
 }
 
 public record TightenRiskRequest(string RuleName, string NewValue);

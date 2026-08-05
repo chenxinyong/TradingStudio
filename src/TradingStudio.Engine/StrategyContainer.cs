@@ -25,6 +25,16 @@ public class StrategyContainer
         }
     }
 
+    public void Unregister(string strategyId)
+    {
+        var slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == strategyId);
+        if (slot == null) return;
+        _allSlots.Remove(slot);
+        foreach (var inst in slot.Config.Instruments)
+            if (_subscriptions.TryGetValue(inst, out var list))
+                list.Remove(slot);
+    }
+
     public void Pause(string strategyId)
     {
         var slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == strategyId);
