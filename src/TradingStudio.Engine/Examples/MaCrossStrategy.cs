@@ -160,11 +160,16 @@ public class MaCrossStrategy : IStrategy
             _ctx.Log($"{bar.InstrumentId}: 仓位恢复 {s.Direction}@{s.EntryPrice:F0} SL={s.Trail:F0} (ATR={s.Atr:F2})");
         }
 
+        // ── 冷却递减 ──
+        if (s.CloseRejectedCooldown > 0) s.CloseRejectedCooldown--;
+
         // ── 出场 + 反手 ──
         if (hasLong)
         {
             var exit = false; var reverse = false; string reason = "";
-            if (TakeProfitAtrMult > 0 && bar.HighDouble >= s.TakeProfit)
+            // 冷却期内跳过出场（上次平仓被拒，等冷却结束再试）
+            if (s.CloseRejectedCooldown > 0) exit = false;
+            else if (TakeProfitAtrMult > 0 && bar.HighDouble >= s.TakeProfit)
                 { exit = true; reverse = false; reason = $"止盈 TP@{s.TakeProfit:F0} (+{bar.CloseDouble-s.EntryPrice:F0}pts, {s.BarsHeld}bars)"; }
             else if (curFast < curSlow && prevFast >= prevSlow)
                 { exit = true; reverse = !LongOnly; reason = LongOnly ? "死叉平多" : "死叉反手"; }
@@ -195,7 +200,8 @@ public class MaCrossStrategy : IStrategy
         else if (hasShort)
         {
             var exit = false; var reverse = false; string reason = "";
-            if (TakeProfitAtrMult > 0 && bar.LowDouble <= s.TakeProfit)
+            if (s.CloseRejectedCooldown > 0) exit = false;
+            else if (TakeProfitAtrMult > 0 && bar.LowDouble <= s.TakeProfit)
                 { exit = true; reverse = false; reason = $"止盈 TP@{s.TakeProfit:F0} (+{s.EntryPrice-bar.CloseDouble:F0}pts, {s.BarsHeld}bars)"; }
             else if (curFast > curSlow && prevFast <= prevSlow)
                 { exit = true; reverse = !LongOnly; reason = LongOnly ? "金叉平空" : "金叉反手"; }
@@ -288,14 +294,14 @@ public class MaCrossStrategy : IStrategy
     {
         if (!_state.TryGetValue(evt.InstrumentId, out var s)) return;
 
-        // 订单被拒：复位入场状态，允许下一根 Bar 重新发单
+        // 订单被拒：加冷却期防重复发单（如平今仓位不足 → 下一根K线不再重试）
         if (evt.Type == OrderEventType.Rejected)
         {
             if (s.PendingReverse != null && s.PendingReverse.CloseOrderId == evt.OrderId)
-                s.PendingReverse = null;
+            { s.PendingReverse = null; }
             else
-                s.ResetTrade();
-            _ctx.Log($"订单被拒 #{evt.OrderId} {evt.Message} → 状态复位");
+            { s.CloseRejectedCooldown = 10; } // 10根K线冷却期（约10分钟）
+            _ctx.Log($"订单被拒 #{evt.OrderId} {evt.Message} → 冷却{s.CloseRejectedCooldown}bar");
             return;
         }
 
@@ -356,6 +362,7 @@ public class MaCrossStrategy : IStrategy
         public double Adx;              // 当前ADX值
         public double TrendSma;         // 日线趋势代理SMA
         public PendingReverseInfo? PendingReverse; // 平仓确认后延迟反手
+        public int CloseRejectedCooldown; // 平仓被拒冷却期(bar数)，防重复发单死循环
         public bool PositionRecovered;          // 仓位恢复标记: 跳过本Bar止损检查
 
         public InstrumentState(int atrPeriod, int adxPeriod = 0, int trendPeriod = 0)

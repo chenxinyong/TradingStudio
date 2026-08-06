@@ -115,6 +115,7 @@ internal class EngineStrategyContext : StrategyContext
             Type = OrderType.Market, Quantity = quantity,
             Tag = pos.Quantity > 0 ? "平多" : "平空",
             IsCloseOrder = true,
+            PositionCreatedDate = DateOnly.FromDateTime(pos.CreatedTime.DateTime),
             ExitReason = exitReason,
         }, StrategyId, _portfolio);
         _log.LogInformation("[{Strategy}] ClosePosition {Inst} x{Qty} {Reason} → {Status}",

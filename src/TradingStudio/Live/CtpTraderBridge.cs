@@ -102,6 +102,20 @@ public class CtpTraderBridge : IDisposable
             {
                 if (e.RspInfo == null || e.RspInfo.ErrorID == 0)
                 {
+                    // 提取 CTP 交易日（用于平今/平昨判断）
+                    if (e.Param != IntPtr.Zero)
+                    {
+                        try
+                        {
+                            var login = CTP.Conv.P2S<CTP.ThostFtdcRspUserLoginField>(e.Param);
+                            if (!string.IsNullOrEmpty(login.TradingDay) && login.TradingDay.Length >= 8)
+                                _tradingDay = new DateOnly(
+                                    int.Parse(login.TradingDay[..4]),
+                                    int.Parse(login.TradingDay[4..6]),
+                                    int.Parse(login.TradingDay[6..8]));
+                        }
+                        catch { }
+                    }
                     IsReady = true;
                     _reconnectDelay = 0;  // 登录成功，复位退避
                     _reconnectAttempts = 0;  // 复位重连计数
@@ -122,17 +136,26 @@ public class CtpTraderBridge : IDisposable
                     int total = pf.Position + pf.YdPosition;
                     if (total != 0 && !string.IsNullOrEmpty(pf.InstrumentID))
                     {
-                        // 使用持仓均价 = OpenAmount / (总手数 × 合约乘数) 的近似
-                        // 这里简单用 OpenAmount 除以 Position 作为 avgPrice（等待品种注册表确认乘数后修正）
+                        // 均价优先级: PositionCost/Volume → OpenAmount/Volume → OpenCost → SettlementPrice → 0
+                        double avgPrice = 0;
+                        if (total != 0 && pf.PositionCost > 0)
+                            avgPrice = pf.PositionCost / total;       // 持仓成本÷手数
+                        else if (total != 0 && pf.OpenAmount > 0)
+                            avgPrice = pf.OpenAmount / total;         // 开仓金额÷手数
+                        else if (pf.OpenCost > 0)
+                            avgPrice = pf.OpenCost;                   // 开仓单价(CTP新版字段)
+                        else if (pf.SettlementPrice > 0)
+                            avgPrice = pf.SettlementPrice;            // 昨结算价(最后手段)
                         var info = new CtpPositionInfo
                         {
                             InstrumentId = pf.InstrumentID,
                             NetPosition = total,
-                            OpenCost = total != 0 ? pf.OpenAmount / total : 0,
+                            OpenCost = avgPrice,
                             UseMargin = pf.UseMargin,
                         };
-                        _log.Information("[CTP-Position] {Inst} Net={Net} OpenCost={Cost:F4} Margin={Margin:F2}",
-                            info.InstrumentId, info.NetPosition, info.OpenCost, info.UseMargin);
+                        _log.Information("[CTP-Position] {Inst} Net={Net} AvgPx={Cost:F4} Margin={Margin:F2} (PosCost={PC} OpenAmt={OA} OpenCost={OC})",
+                            info.InstrumentId, info.NetPosition, info.OpenCost, info.UseMargin,
+                            pf.PositionCost, pf.OpenAmount, pf.OpenCost);
                         OnPositionReceived?.Invoke(info);
                     }
                 }
@@ -232,22 +255,26 @@ public class CtpTraderBridge : IDisposable
     /// <summary>
     /// 根据订单方向和品种所属交易所，选择合适的开平标志。
     /// 上期所/上能所平仓必须明确区分 CloseToday / CloseYesterday，不能使用泛型 Close。
-    /// 由于当前 CTP 会话内的所有开仓均为"今仓"，平仓统一使用 CloseToday。
-    /// TODO: 实盘需根据持仓日期区分平今/平昨。
+    /// 通过 Order.PositionCreatedDate 与 CTP 交易日比较判断平今/平昨。
     /// </summary>
     private CTP.EnumOffsetFlagType ResolveOffsetFlag(Order order)
     {
         if (!order.IsCloseOrder)
             return CTP.EnumOffsetFlagType.Open;
 
-        // 平仓：根据交易所选择正确的 OffsetFlag
         if (_registry != null)
         {
             var future = _registry.Resolve(order.InstrumentId);
             if (future != null && RequiresExplicitClose(future.Exchange))
-                return CTP.EnumOffsetFlagType.CloseToday;
+            {
+                // 比较建仓日期与CTP交易日：同一天→平今，不同→平昨
+                var td = _tradingDay;
+                if (td != default && order.PositionCreatedDate != default
+                    && order.PositionCreatedDate == td)
+                    return CTP.EnumOffsetFlagType.CloseToday;
+                return CTP.EnumOffsetFlagType.CloseYesterday;
+            }
         }
-
         return CTP.EnumOffsetFlagType.Close;
     }
 
@@ -301,6 +328,7 @@ public class CtpTraderBridge : IDisposable
 
     private int _reconnectAttempts;
     private bool _pendingReconnect;
+    private DateOnly _tradingDay;  // CTP 交易日，用于区分平今/平昨
 
     private async void ScheduleReconnect()
     {
