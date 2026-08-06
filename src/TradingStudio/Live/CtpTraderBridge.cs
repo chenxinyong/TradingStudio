@@ -133,15 +133,19 @@ public class CtpTraderBridge : IDisposable
                 try
                 {
                     var pf = CTP.Conv.P2S<CTP.ThostFtdcInvestorPositionField>(e.Param);
-                    int total = pf.Position + pf.YdPosition;
-                    if (total != 0 && !string.IsNullOrEmpty(pf.InstrumentID))
+                    // Position 已表示该日期下的净持仓（今仓=今日净持仓, 昨仓=昨日净持仓）。
+                    // YdPosition 是昨仓参考值，勿加总否则同批持仓被 double-count。
+                    // 正确做法：仅取 Position，LiveComposer 侧按品种累加今仓+昨仓。
+                    int datePosition = pf.Position;
+                    if (datePosition != 0 && !string.IsNullOrEmpty(pf.InstrumentID))
                     {
-                        // 均价优先级: PositionCost/Volume → OpenAmount/Volume → OpenCost → SettlementPrice → 0
+                        // 均价优先级: PositionCost/datePosition → OpenAmount/datePosition → OpenCost → SettlementPrice → 0
                         double avgPrice = 0;
-                        if (total != 0 && pf.PositionCost > 0)
-                            avgPrice = pf.PositionCost / total;       // 持仓成本÷手数
-                        else if (total != 0 && pf.OpenAmount > 0)
-                            avgPrice = pf.OpenAmount / total;         // 开仓金额÷手数
+                        int absPos = Math.Abs(datePosition);
+                        if (absPos != 0 && pf.PositionCost > 0)
+                            avgPrice = pf.PositionCost / absPos;       // 持仓成本÷手数
+                        else if (absPos != 0 && pf.OpenAmount > 0)
+                            avgPrice = pf.OpenAmount / absPos;         // 开仓金额÷手数
                         else if (pf.OpenCost > 0)
                             avgPrice = pf.OpenCost;                   // 开仓单价(CTP新版字段)
                         else if (pf.SettlementPrice > 0)
@@ -149,7 +153,7 @@ public class CtpTraderBridge : IDisposable
                         var info = new CtpPositionInfo
                         {
                             InstrumentId = pf.InstrumentID,
-                            NetPosition = total,
+                            NetPosition = datePosition,
                             OpenCost = avgPrice,
                             UseMargin = pf.UseMargin,
                         };

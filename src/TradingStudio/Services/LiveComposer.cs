@@ -110,8 +110,10 @@ public static class LiveComposer
             var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts, bridgeLogger, registry, tickSnapshot);
 
             // 订阅 CTP 持仓查询结果 → 恢复到 PortfolioManager（异步，登录完成后触发）
-            // CTP 对同一品种返回多条记录（按PositionDate分今仓/昨仓），需去重取max
+            // CTP 对同一品种返回两条记录（PositionDate='1'今仓 + '2'昨仓），Position 分别是各自日期的净持仓。
+            // 正确做法：累加两条记录的 NetPosition 得到总净持仓，然后一次性恢复。
             var ctpPosBuffer = new Dictionary<string, CtpPositionInfo>(StringComparer.OrdinalIgnoreCase);
+            var ctpPosFlushCts = new CancellationTokenSource();
             bridge.OnPositionReceived += info =>
             {
                 try
@@ -121,21 +123,38 @@ public static class LiveComposer
                         !_pendingStrategyInstruments.Contains(info.InstrumentId, StringComparer.OrdinalIgnoreCase))
                         return;
 
-                    // 去重：同品种多条记录取净持仓绝对值最大的
+                    // 累加同品种多条记录（今仓+昨仓的 Position 各自独立）
                     if (ctpPosBuffer.TryGetValue(info.InstrumentId, out var prev))
                     {
-                        if (Math.Abs(info.NetPosition) > Math.Abs(prev.NetPosition))
-                            ctpPosBuffer[info.InstrumentId] = info;
+                        var sumPos = prev.NetPosition + info.NetPosition;
+                        // 均价加权平均
+                        var totalAbs = Math.Abs(prev.NetPosition) + Math.Abs(info.NetPosition);
+                        var weightedCost = totalAbs > 0
+                            ? (Math.Abs(prev.NetPosition) * prev.OpenCost + Math.Abs(info.NetPosition) * info.OpenCost) / totalAbs
+                            : info.OpenCost;
+                        ctpPosBuffer[info.InstrumentId] = new CtpPositionInfo
+                        {
+                            InstrumentId = info.InstrumentId,
+                            NetPosition = sumPos,
+                            OpenCost = weightedCost,
+                            UseMargin = prev.UseMargin + info.UseMargin,
+                        };
                     }
                     else ctpPosBuffer[info.InstrumentId] = info;
 
-                    // 直接恢复（取max后每条记录都是该品种的最大净持仓，重复调用含ContainsKey保护）
-                    var sid = instrumentStrategyMap.TryGetValue(info.InstrumentId, out var m) ? m : "live-test";
-                    var restored = portfolio.RestorePosition(info.InstrumentId, sid,
-                        info.NetPosition, (decimal)info.OpenCost, (decimal)info.UseMargin,
-                        DateTime.Today);
-                    if (restored)
-                        Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {info.InstrumentId} x{info.NetPosition} @{info.OpenCost:F4} Margin={info.UseMargin:F2}");
+                    // 延迟刷入：CTP 查询回调同步快速返回，2秒后所有记录到齐再一次性恢复
+                    ctpPosFlushCts.Cancel();
+                    ctpPosFlushCts = new CancellationTokenSource();
+                    var flushToken = ctpPosFlushCts.Token;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await Task.Delay(2000, flushToken);
+                            FlushCtpPositions(ctpPosBuffer, portfolio, instrumentStrategyMap);
+                        }
+                        catch (OperationCanceledException) { }
+                    }, flushToken);
                 }
                 catch (Exception ex)
                 {
@@ -259,6 +278,31 @@ public static class LiveComposer
         services.AddHostedService<EngineHost>();
         services.AddHostedService<LiveDataCollector>();
         services.AddHostedService<PeriodMaintainer>();
+    }
+
+    private static void FlushCtpPositions(Dictionary<string, CtpPositionInfo> buffer,
+        PortfolioManager portfolio, Dictionary<string, string> instrumentStrategyMap)
+    {
+        foreach (var (instId, info) in buffer)
+        {
+            try
+            {
+                if (info.NetPosition == 0) continue;
+                var sid = instrumentStrategyMap.TryGetValue(instId, out var m) ? m : "live-test";
+                var restored = portfolio.RestorePosition(instId, sid,
+                    info.NetPosition, (decimal)info.OpenCost, (decimal)info.UseMargin,
+                    DateTime.Today);
+                if (restored)
+                    Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {instId} x{info.NetPosition} @{info.OpenCost:F4} Margin={info.UseMargin:F2}");
+                else
+                    Console.Error.WriteLine($"[LiveComposer] CTP持仓恢复跳过(已存在): {instId}");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[LiveComposer] CTP持仓恢复失败: {instId}: {ex.Message}");
+            }
+        }
+        buffer.Clear();
     }
 
     private static TradingStudio.Core.Strategy.StrategyConfig? TryLoadConfig(string path)
