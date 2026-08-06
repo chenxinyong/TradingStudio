@@ -46,8 +46,8 @@ public static class StrategyFactory
 
         foreach (var (key, value) in config.Parameters)
         {
-            if (paramFields.TryGetValue(key, out var fi))
-                ApplyParamField(strategy, fi, value);
+            if (paramFields.TryGetValue(key, out var entry))
+                ApplyParamField(strategy, entry, value);
             else if (paramProps.TryGetValue(key, out var pi))
                 pi.SetValue(strategy, Convert.ChangeType(value, pi.PropertyType));
             else
@@ -65,41 +65,54 @@ public static class StrategyFactory
 
     // ─── StrategyParam<T> 字段扫描 ───
 
-    private static Dictionary<string, FieldInfo> ScanParamFields(IStrategy strategy)
+    // StrategyParam<T> 支持字段 + 属性, 用统一的 MemberInfo 处理
+    private static Dictionary<string, (MemberInfo Member, object Instance)> ScanParamFields(IStrategy strategy)
     {
-        var result = new Dictionary<string, FieldInfo>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, (MemberInfo, object)>(StringComparer.OrdinalIgnoreCase);
+
+        // 扫属性 (get-only auto-property)
+        foreach (var prop in strategy.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (!prop.PropertyType.IsGenericType) continue;
+            if (prop.PropertyType.GetGenericTypeDefinition() != typeof(StrategyParam<>)) continue;
+            var instance = prop.GetValue(strategy);
+            if (instance == null) continue;
+            var name = prop.PropertyType.GetProperty("Name")?.GetValue(instance)?.ToString();
+            if (!string.IsNullOrEmpty(name)) result[name] = (prop, instance);
+        }
+
+        // 扫字段
         foreach (var field in strategy.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance))
         {
             if (!field.FieldType.IsGenericType) continue;
             if (field.FieldType.GetGenericTypeDefinition() != typeof(StrategyParam<>)) continue;
-
             var instance = field.GetValue(strategy);
+            if (instance == null) continue;
             var name = field.FieldType.GetProperty("Name")?.GetValue(instance)?.ToString();
-            if (!string.IsNullOrEmpty(name)) result[name] = field;
+            if (!string.IsNullOrEmpty(name) && !result.ContainsKey(name)) result[name] = (field, instance);
         }
         return result;
     }
 
-    private static void ApplyParamField(IStrategy strategy, FieldInfo field, object value)
+    private static void ApplyParamField(IStrategy strategy, (MemberInfo Member, object Instance) entry, object value)
     {
-        var instance = field.GetValue(strategy);
-        if (instance == null) return;
-        var valueProp = field.FieldType.GetProperty("Value");
-        var targetType = field.FieldType.GetGenericArguments()[0];
+        var (_, instance) = entry;
+        var paramType = instance.GetType();
+        var valueProp = paramType.GetProperty("Value");
+        var targetType = paramType.GetGenericArguments()[0];
         valueProp?.SetValue(instance, Convert.ChangeType(value, targetType));
     }
 
-    private static void ValidateParamFields(IStrategy strategy, Dictionary<string, FieldInfo> fields)
+    private static void ValidateParamFields(IStrategy strategy,
+        Dictionary<string, (MemberInfo Member, object Instance)> fields)
     {
-        foreach (var (name, field) in fields)
+        foreach (var (name, (_, instance)) in fields)
         {
-            var instance = field.GetValue(strategy);
-            if (instance == null) continue;
-
-            var validator = field.FieldType.GetProperty("Validator")?.GetValue(instance) as Delegate;
+            var paramType = instance.GetType();
+            var validator = paramType.GetProperty("Validator")?.GetValue(instance) as Delegate;
             if (validator == null) continue;
 
-            var current = field.FieldType.GetProperty("Value")?.GetValue(instance);
+            var current = paramType.GetProperty("Value")?.GetValue(instance);
             var ok = (bool?)validator.DynamicInvoke(current) ?? true;
             if (!ok)
                 throw new InvalidOperationException(
@@ -114,18 +127,15 @@ public static class StrategyFactory
     public static List<ParamMeta> GetOptimizableParams(IStrategy strategy)
     {
         var result = new List<ParamMeta>();
-        foreach (var (_, field) in ScanParamFields(strategy))
+        foreach (var (_, (_, instance)) in ScanParamFields(strategy))
         {
-            var instance = field.GetValue(strategy);
-            if (instance == null) continue;
-
-            var range = field.FieldType.GetProperty("OptimizeRange")?.GetValue(instance);
+            var paramType = instance.GetType();
+            var range = paramType.GetProperty("OptimizeRange")?.GetValue(instance);
             if (range == null) continue;
 
-            var name = field.FieldType.GetProperty("Name")?.GetValue(instance)?.ToString() ?? "";
-            var group = field.FieldType.GetProperty("Group")?.GetValue(instance)?.ToString() ?? "General";
+            var name = paramType.GetProperty("Name")?.GetValue(instance)?.ToString() ?? "";
+            var group = paramType.GetProperty("Group")?.GetValue(instance)?.ToString() ?? "General";
 
-            // ValueTuple (Min, Max, Step)
             var rt = range.GetType();
             var min = rt.GetProperty("Item1")?.GetValue(range);
             var max = rt.GetProperty("Item2")?.GetValue(range);
@@ -135,10 +145,9 @@ public static class StrategyFactory
                 result.Add(new ParamMeta
                 {
                     Name = name, Group = group,
-                    Min = Convert.ToDouble(min),
-                    Max = Convert.ToDouble(max),
+                    Min = Convert.ToDouble(min), Max = Convert.ToDouble(max),
                     Step = step != null ? Convert.ToDouble(step) : 0,
-                    ValueType = field.FieldType.GetGenericArguments()[0].Name,
+                    ValueType = paramType.GetGenericArguments()[0].Name,
                 });
         }
         return result;
