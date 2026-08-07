@@ -291,7 +291,7 @@ public static class LiveComposer
                 var sid = instrumentStrategyMap.TryGetValue(instId, out var m) ? m : "live-test";
                 var restored = portfolio.RestorePosition(instId, sid,
                     info.NetPosition, (decimal)info.OpenCost, (decimal)info.UseMargin,
-                    DateTime.Today);
+                    DateTime.Today.AddDays(-1));  // 恢复持仓用昨日日期 → 平昨
                 if (restored)
                     Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {instId} x{info.NetPosition} @{info.OpenCost:F4} Margin={info.UseMargin:F2}");
                 else

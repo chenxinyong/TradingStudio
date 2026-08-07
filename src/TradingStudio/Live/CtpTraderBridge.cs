@@ -103,18 +103,28 @@ public class CtpTraderBridge : IDisposable
                 if (e.RspInfo == null || e.RspInfo.ErrorID == 0)
                 {
                     // 提取 CTP 交易日（用于平今/平昨判断）
+                    var parsed = false;
                     if (e.Param != IntPtr.Zero)
                     {
                         try
                         {
                             var login = CTP.Conv.P2S<CTP.ThostFtdcRspUserLoginField>(e.Param);
                             if (!string.IsNullOrEmpty(login.TradingDay) && login.TradingDay.Length >= 8)
+                            {
                                 _tradingDay = new DateOnly(
                                     int.Parse(login.TradingDay[..4]),
                                     int.Parse(login.TradingDay[4..6]),
                                     int.Parse(login.TradingDay[6..8]));
+                                parsed = true;
+                            }
                         }
                         catch { }
+                    }
+                    if (!parsed)
+                    {
+                        // e.Param 为空时回退到本地日期（夜盘 CTP 交易日 = 下一自然日）
+                        _tradingDay = DateOnly.FromDateTime(DateTime.Today);
+                        _log.Warning("CTP TradingDay not available from login, using local date: {Day}", _tradingDay);
                     }
                     IsReady = true;
                     _reconnectDelay = 0;  // 登录成功，复位退避
@@ -140,16 +150,25 @@ public class CtpTraderBridge : IDisposable
                     if (datePosition != 0 && !string.IsNullOrEmpty(pf.InstrumentID))
                     {
                         // 均价优先级: PositionCost/datePosition → OpenAmount/datePosition → OpenCost → SettlementPrice → 0
+                        // SHFE/INE 的 PositionCost = Σ(开仓价×手数×交易单位) 已含合约乘数，
+                        // 需除以 TradingUnit 得到与行情 Bar 同量纲的单位价格。
                         double avgPrice = 0;
                         int absPos = Math.Abs(datePosition);
+                        double unitDiv = 1;
+                        if (_registry != null)
+                        {
+                            var fut = _registry.Resolve(pf.InstrumentID);
+                            if (fut != null && RequiresExplicitClose(fut.Exchange))
+                                unitDiv = (double)fut.TradingUnit;
+                        }
                         if (absPos != 0 && pf.PositionCost > 0)
-                            avgPrice = pf.PositionCost / absPos;       // 持仓成本÷手数
+                            avgPrice = pf.PositionCost / absPos / unitDiv;       // 持仓成本÷手数÷合约乘数
                         else if (absPos != 0 && pf.OpenAmount > 0)
-                            avgPrice = pf.OpenAmount / absPos;         // 开仓金额÷手数
+                            avgPrice = pf.OpenAmount / absPos / unitDiv;         // 开仓金额÷手数÷合约乘数
                         else if (pf.OpenCost > 0)
-                            avgPrice = pf.OpenCost;                   // 开仓单价(CTP新版字段)
+                            avgPrice = pf.OpenCost / unitDiv;                   // 开仓成本÷合约乘数
                         else if (pf.SettlementPrice > 0)
-                            avgPrice = pf.SettlementPrice;            // 昨结算价(最后手段)
+                            avgPrice = pf.SettlementPrice;                      // 昨结算价(已是单位价格)
                         var info = new CtpPositionInfo
                         {
                             InstrumentId = pf.InstrumentID,
@@ -273,8 +292,11 @@ public class CtpTraderBridge : IDisposable
             {
                 // 比较建仓日期与CTP交易日：同一天→平今，不同→平昨
                 var td = _tradingDay;
-                if (td != default && order.PositionCreatedDate != default
-                    && order.PositionCreatedDate == td)
+                var created = order.PositionCreatedDate;
+                var isToday = td != default && created != default && created == td;
+                _log.Debug("ResolveOffset: {Inst} TradingDay={TD} PosCreated={Created} → {Offset}",
+                    order.InstrumentId, td, created, isToday ? "CloseToday" : "CloseYesterday");
+                if (isToday)
                     return CTP.EnumOffsetFlagType.CloseToday;
                 return CTP.EnumOffsetFlagType.CloseYesterday;
             }
