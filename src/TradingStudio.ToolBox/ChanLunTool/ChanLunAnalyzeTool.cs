@@ -123,7 +123,7 @@ public class ChanLunAnalyzeTool : IToolCommand
         {
             bars.Add(new ChanLunBar
             {
-                Dt = reader.GetDateTime(0),
+                Dt = ReadBarTime(reader, 0),
                 Open = reader.GetInt64(1) / 10_000_000.0,
                 High = reader.GetInt64(2) / 10_000_000.0,
                 Low = reader.GetInt64(3) / 10_000_000.0,
@@ -309,6 +309,14 @@ public class ChanLunAnalyzeTool : IToolCommand
     // ═══════════════════════════════════════════
     // Helpers
     // ═══════════════════════════════════════════
+
+    /// <summary>读取 bar_time 列，兼容 TIMESTAMP 和 VARCHAR 两种存储类型</summary>
+    private static DateTime ReadBarTime(System.Data.Common.DbDataReader reader, int ordinal)
+    {
+        if (reader.GetFieldType(ordinal) == typeof(string))
+            return DateTime.Parse(reader.GetString(ordinal));
+        return reader.GetDateTime(ordinal);
+    }
 
     private static string ResolveDbPath(string dbPath)
     {
