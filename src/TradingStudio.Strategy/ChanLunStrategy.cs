@@ -8,26 +8,26 @@ namespace TradingStudio.Strategy;
 
 public class ChanLunStrategy : IStrategy
 {
-    [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 5, Max = 60, Category = "Risk")]
-    public int AtrPeriod { get; set; } = 20;
+    public StrategyParam<int> AtrPeriod { get; } = new("AtrPeriod", 20)
+        { Group = "Risk", Description = "ATR周期", OptimizeRange = (5, 60, 5) };
 
-    [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2, Min = 1, Max = 5, Category = "Risk")]
-    public double StopAtrMult { get; set; } = 2.0;
+    public StrategyParam<double> StopAtrMult { get; } = new("StopAtrMult", 2.0)
+        { Group = "Risk", Description = "止损ATR倍数", OptimizeRange = (1, 5, 0.5) };
 
-    [StrategyParameter(Description = "硬止损比例 (0=关闭)", DefaultValue = 0.05, Min = 0, Max = 0.15, Category = "Risk")]
-    public double HardStopPct { get; set; } = 0.05;
+    public StrategyParam<double> HardStopPct { get; } = new("HardStopPct", 0.05)
+        { Group = "Risk", Description = "硬止损比例 (0=关闭)", OptimizeRange = (0, 0.15, 0.01) };
 
-    [StrategyParameter(Description = "最小笔力度(万分比)", DefaultValue = 200, Min = 10, Max = 500, Category = "Signal")]
-    public double MinBiPower { get; set; } = 200;
+    public StrategyParam<double> MinBiPower { get; } = new("MinBiPower", 200)
+        { Group = "Signal", Description = "最小笔力度(万分比)", OptimizeRange = (10, 500, 10) };
 
-    [StrategyParameter(Description = "最小笔长度(K线数)", DefaultValue = 3, Min = 2, Max = 10, Category = "Signal")]
-    public int MinBiLen { get; set; } = 3;
+    public StrategyParam<int> MinBiLen { get; } = new("MinBiLen", 3)
+        { Group = "Signal", Description = "最小笔长度(K线数)", OptimizeRange = (2, 10, 1) };
 
-    [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.1, Category = "Position")]
-    public double RiskPerTrade { get; set; } = 0.02;
+    public StrategyParam<double> RiskPerTrade { get; } = new("RiskPerTrade", 0.02)
+        { Group = "Position", Description = "单笔风险占比", OptimizeRange = (0.005, 0.1, 0.005) };
 
-    [StrategyParameter(Description = "最大保证金占用比", DefaultValue = 0.6, Min = 0.1, Max = 0.9, Category = "Position")]
-    public double MaxMarginRatio { get; set; } = 0.6;
+    public StrategyParam<double> MaxMarginRatio { get; } = new("MaxMarginRatio", 0.6)
+        { Group = "Position", Description = "最大保证金占用比", OptimizeRange = (0.1, 0.9, 0.05) };
 
     public string Name => "缠论多级别策略(日线+30min)";
 

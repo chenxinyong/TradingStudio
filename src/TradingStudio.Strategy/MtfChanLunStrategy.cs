@@ -13,29 +13,29 @@ namespace TradingStudio.Strategy;
 /// </summary>
 public class MtfChanLunStrategy : IStrategy
 {
-    [StrategyParameter(Description = "日线趋势SMA周期", DefaultValue = 233, Min = 50, Max = 400, Category = "Trend")]
-    public int TrendPeriod { get; set; } = 233;
+    public StrategyParam<int> TrendPeriod { get; } = new("TrendPeriod", 233)
+        { Group = "Trend", Description = "日线趋势SMA周期", OptimizeRange = (50, 400, 10) };
 
-    [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 5, Max = 60, Category = "Risk")]
-    public int AtrPeriod { get; set; } = 20;
+    public StrategyParam<int> AtrPeriod { get; } = new("AtrPeriod", 20)
+        { Group = "Risk", Description = "ATR周期", OptimizeRange = (5, 60, 5) };
 
-    [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2.5, Min = 1.0, Max = 5.0, Category = "Risk")]
-    public double StopAtrMult { get; set; } = 2.5;
+    public StrategyParam<double> StopAtrMult { get; } = new("StopAtrMult", 2.5)
+        { Group = "Risk", Description = "止损ATR倍数", OptimizeRange = (1.0, 5.0, 0.5) };
 
-    [StrategyParameter(Description = "最小笔力度(万分比)", DefaultValue = 50, Min = 10, Max = 500, Category = "Signal")]
-    public double MinBiPower { get; set; } = 50;
+    public StrategyParam<double> MinBiPower { get; } = new("MinBiPower", 50)
+        { Group = "Signal", Description = "最小笔力度(万分比)", OptimizeRange = (10, 500, 10) };
 
-    [StrategyParameter(Description = "最小笔长度(K线数)", DefaultValue = 2, Min = 1, Max = 10, Category = "Signal")]
-    public int MinBiLen { get; set; } = 2;
+    public StrategyParam<int> MinBiLen { get; } = new("MinBiLen", 2)
+        { Group = "Signal", Description = "最小笔长度(K线数)", OptimizeRange = (1, 10, 1) };
 
-    [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.1, Category = "Position")]
-    public double RiskPerTrade { get; set; } = 0.02;
+    public StrategyParam<double> RiskPerTrade { get; } = new("RiskPerTrade", 0.02)
+        { Group = "Position", Description = "单笔风险占比", OptimizeRange = (0.005, 0.1, 0.005) };
 
-    [StrategyParameter(Description = "最大保证金占用比", DefaultValue = 0.6, Min = 0.1, Max = 0.9, Category = "Position")]
-    public double MaxMarginRatio { get; set; } = 0.6;
+    public StrategyParam<double> MaxMarginRatio { get; } = new("MaxMarginRatio", 0.6)
+        { Group = "Position", Description = "最大保证金占用比", OptimizeRange = (0.1, 0.9, 0.05) };
 
-    [StrategyParameter(Description = "要求价格在SMA同侧(1=同侧,-1=反向,0=不要求)", DefaultValue = 0, Min = -1, Max = 1, Category = "Entry")]
-    public int RequirePriceSide { get; set; } = 0;
+    public StrategyParam<int> RequirePriceSide { get; } = new("RequirePriceSide", 0)
+        { Group = "Entry", Description = "要求价格在SMA同侧(1=同侧,-1=反向,0=不要求)", OptimizeRange = (-1, 1, 1) };
 
     public string Name => "MTF缠论融合(日线趋势+30min笔)";
 

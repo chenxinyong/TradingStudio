@@ -17,33 +17,33 @@ namespace TradingStudio.Engine.Examples;
 /// </summary>
 public class CompositeFactorStrategy : IStrategy
 {
-    [StrategyParameter(Description = "做多/做空品种数", DefaultValue = 5, Min = 1, Max = 10, Category = "Portfolio")]
-    public int TopN { get; set; } = 5;
+    public StrategyParam<int> TopN { get; } = new("TopN", 5)
+        { Group = "Portfolio", Description = "做多/做空品种数", OptimizeRange = (1, 10, 1) };
 
-    [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 10, Max = 40, Category = "Risk")]
-    public int AtrPeriod { get; set; } = 20;
+    public StrategyParam<int> AtrPeriod { get; } = new("AtrPeriod", 20)
+        { Group = "Risk", Description = "ATR周期", OptimizeRange = (10, 40, 10) };
 
-    [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 3.0, Min = 1.0, Max = 10.0, Category = "Risk")]
-    public double StopAtrMult { get; set; } = 3.0;
+    public StrategyParam<double> StopAtrMult { get; } = new("StopAtrMult", 3.0)
+        { Group = "Risk", Description = "止损ATR倍数", OptimizeRange = (1.0, 10.0, 1.0) };
 
-    [StrategyParameter(Description = "单品种风险占比", DefaultValue = 0.01, Min = 0.005, Max = 0.03, Category = "Position")]
-    public double RiskPerTrade { get; set; } = 0.01;
+    public StrategyParam<double> RiskPerTrade { get; } = new("RiskPerTrade", 0.01)
+        { Group = "Position", Description = "单品种风险占比", OptimizeRange = (0.005, 0.03, 0.005) };
 
-    [StrategyParameter(Description = "最大持仓手数", DefaultValue = 2, Min = 1, Max = 10, Category = "Position")]
-    public int MaxPosition { get; set; } = 2;
+    public StrategyParam<int> MaxPosition { get; } = new("MaxPosition", 2)
+        { Group = "Position", Description = "最大持仓手数", OptimizeRange = (1, 10, 1) };
 
     // IC_Weighted 权重 (Phase2 ML OOS窗口平均)
-    [StrategyParameter(Description = "IntradayMom权重", DefaultValue = 0.22, Category = "Weights")]
-    public double W_IntradayMom { get; set; } = 0.22;
+    public StrategyParam<double> W_IntradayMom { get; } = new("W_IntradayMom", 0.22)
+        { Group = "Weights", Description = "IntradayMom权重" };
 
-    [StrategyParameter(Description = "VWAP_Dev权重", DefaultValue = -0.27, Category = "Weights")]
-    public double W_VwapDev { get; set; } = -0.27;
+    public StrategyParam<double> W_VwapDev { get; } = new("W_VwapDev", -0.27)
+        { Group = "Weights", Description = "VWAP_Dev权重" };
 
-    [StrategyParameter(Description = "Amihud权重", DefaultValue = 0.33, Category = "Weights")]
-    public double W_Amihud { get; set; } = 0.33;
+    public StrategyParam<double> W_Amihud { get; } = new("W_Amihud", 0.33)
+        { Group = "Weights", Description = "Amihud权重" };
 
-    [StrategyParameter(Description = "VolumeRatio权重", DefaultValue = 0.17, Category = "Weights")]
-    public double W_VolumeRatio { get; set; } = 0.17;
+    public StrategyParam<double> W_VolumeRatio { get; } = new("W_VolumeRatio", 0.17)
+        { Group = "Weights", Description = "VolumeRatio权重" };
 
     public string Name => "ML复合因子(IC_Weighted)";
 

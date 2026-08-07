@@ -132,12 +132,16 @@ public static class LiveComposer
                         var weightedCost = totalAbs > 0
                             ? (Math.Abs(prev.NetPosition) * prev.OpenCost + Math.Abs(info.NetPosition) * info.OpenCost) / totalAbs
                             : info.OpenCost;
+                        // PositionDate: 取持仓量更大的日期（今仓多→用今仓日期，昨仓多→用昨仓日期）
+                        var dominantDate = Math.Abs(info.NetPosition) >= Math.Abs(prev.NetPosition)
+                            ? info.PositionDate : prev.PositionDate;
                         ctpPosBuffer[info.InstrumentId] = new CtpPositionInfo
                         {
                             InstrumentId = info.InstrumentId,
                             NetPosition = sumPos,
                             OpenCost = weightedCost,
                             UseMargin = prev.UseMargin + info.UseMargin,
+                            PositionDate = dominantDate,
                         };
                     }
                     else ctpPosBuffer[info.InstrumentId] = info;
@@ -289,11 +293,15 @@ public static class LiveComposer
             {
                 if (info.NetPosition == 0) continue;
                 var sid = instrumentStrategyMap.TryGetValue(instId, out var m) ? m : "live-test";
+                // 根据 CTP PositionDate 确定建仓日期: '1'=今仓→今天, '2'=昨仓→昨天
+                var createdDate = info.PositionDate == '2'
+                    ? DateTime.Today.AddDays(-1)
+                    : DateTime.Today;
                 var restored = portfolio.RestorePosition(instId, sid,
                     info.NetPosition, (decimal)info.OpenCost, (decimal)info.UseMargin,
-                    DateTime.Today.AddDays(-1));  // 恢复持仓用昨日日期 → 平昨
+                    createdDate);
                 if (restored)
-                    Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {instId} x{info.NetPosition} @{info.OpenCost:F4} Margin={info.UseMargin:F2}");
+                    Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {instId} x{info.NetPosition} @{info.OpenCost:F4} Margin={info.UseMargin:F2} PosDate={info.PositionDate}→Created={createdDate:yyyy-MM-dd}");
                 else
                     Console.Error.WriteLine($"[LiveComposer] CTP持仓恢复跳过(已存在): {instId}");
             }

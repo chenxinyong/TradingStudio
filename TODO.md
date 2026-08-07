@@ -1,0 +1,68 @@
+# TODO — 下周待办 (8/8-8/14)
+
+> 当前: 14 文件待提交, 281/281 测试全绿, 分支 main
+> 主线: Live 验证 → TradeSignal 实现 → WalkForward 实战 → 因子管线
+
+---
+
+## 🔴 P0: Live 交易日验证
+
+- [ ] **PnL 正常**: SHFE/INE 品种不再翻倍 (PositionCost ÷ TradingUnit)
+- [ ] **simnow 拒单**: 不再出现 "平今/平昨仓位不足" (PositionDate 传递)
+- [ ] **OrderEventPump**: 连续运行无竞态/丢事件
+- [ ] **CTP 重连**: 持仓恢复后 PositionDate 正确 (今仓→CloseToday, 昨仓→CloseYesterday)
+- [ ] **health.json**: 无异常指标
+
+> 方法: 日盘 9:00-15:00 全时段跑盘, 收盘后核对 order_events 表
+
+---
+
+## 🟡 P1: TradeSignal/PortfolioTarget v1
+
+- [ ] 新建 `TradeSignal.cs` — 策略→抽象意向 (方向+信心, 不含手数)
+- [ ] 新建 `PortfolioTarget.cs` — 组合层→具体目标 (手数+权重)
+- [ ] 新建 `ITargetCombiner.cs` + `SimpleTargetCombiner.cs` — 信号合并
+- [ ] 新建 `Rebalancer.cs` — 目标 vs 现仓 → delta 订单
+- [ ] 适配 `StrategyContext.cs` — 新增 `EmitSignal(TradeSignal)`
+- [ ] 适配 `EngineStrategyContext.cs` — 实现 SignalChannel
+- [ ] 单元测试: SimpleTargetCombiner + Rebalancer
+- [ ] 现有策略兼容: MarketBuy/ClosePosition 内部路由到新管线
+
+> 设计: [docs/design/18-trade-signal-portfolio-target-decoupling.md](docs/design/18-trade-signal-portfolio-target-decoupling.md)
+
+---
+
+## 🟢 P2: WalkForward 实战
+
+- [ ] 选 1 个策略 (推荐 SmaMacd 或 IntradayMomentum)
+- [ ] 跑 StrategyParam\<T\>.OptimizeRange 自动扫描
+- [ ] IS 参数优化 → OOS 验证
+- [ ] 多周期滚动窗口 (1-3-6月)
+- [ ] 过拟合检测 (IS/OOS IC 比)
+- [ ] 生成参数稳定性报告
+
+---
+
+## 🟢 P2: 因子管线实战
+
+- [ ] FactorEvaluator CLI 接入 bars_history.duckdb
+- [ ] 端到端 IC 分析 (IntradayMom, VWAP_Dev, Amihud, VolumeRatio)
+- [ ] 50+ xxx000 连续合约
+- [ ] 输出 IC 报告 → Obsidian 知识库
+
+---
+
+## 🔵 P3: 可选
+
+- [ ] 日内止损/止盈触发率按品种汇总
+- [ ] ChanLun MinBiPower 参数敏感度分析
+- [ ] Live 策略热加载 (不停机切换参数)
+
+---
+
+## ❌ 本周不做
+
+- 新策略开发 (等 Live 验证通过)
+- WPF 客户端
+- Mind function-calling
+- 连续合约双旋钮

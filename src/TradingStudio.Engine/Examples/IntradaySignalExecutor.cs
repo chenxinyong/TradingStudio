@@ -22,20 +22,20 @@ namespace TradingStudio.Engine.Examples;
 /// </summary>
 public class IntradaySignalExecutor : IStrategy
 {
-    [StrategyParameter(Description = "信号CSV路径", DefaultValue = "", Category = "Data")]
-    public string SignalCsvPath { get; set; } = "";
+    public StrategyParam<string> SignalCsvPath { get; } = new("SignalCsvPath", "")
+        { Group = "Data", Description = "信号CSV路径" };
 
-    [StrategyParameter(Description = "单品种最大手数", DefaultValue = 2, Min = 1, Max = 10, Category = "Position")]
-    public int MaxPosition { get; set; } = 2;
+    public StrategyParam<int> MaxPosition { get; } = new("MaxPosition", 2)
+        { Group = "Position", Description = "单品种最大手数", OptimizeRange = (1, 10, 1) };
 
-    [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.01, Min = 0.005, Max = 0.03, Category = "Position")]
-    public double RiskPerTrade { get; set; } = 0.01;
+    public StrategyParam<double> RiskPerTrade { get; } = new("RiskPerTrade", 0.01)
+        { Group = "Position", Description = "单笔风险占比", OptimizeRange = (0.005, 0.03, 0.005) };
 
-    [StrategyParameter(Description = "最低日均成交量(手)", DefaultValue = 5000, Min = 0, Max = 100000, Category = "Filter")]
-    public int MinDailyVolume { get; set; } = 5000;
+    public StrategyParam<int> MinDailyVolume { get; } = new("MinDailyVolume", 5000)
+        { Group = "Filter", Description = "最低日均成交量(手)", OptimizeRange = (0, 100000, 5000) };
 
-    [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 10, Max = 40, Category = "Risk")]
-    public int AtrPeriod { get; set; } = 20;
+    public StrategyParam<int> AtrPeriod { get; } = new("AtrPeriod", 20)
+        { Group = "Risk", Description = "ATR周期", OptimizeRange = (10, 40, 10) };
 
     public string Name => "日内信号执行器v2(ML复合+流动性)";
 

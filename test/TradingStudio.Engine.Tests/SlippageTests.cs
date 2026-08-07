@@ -57,7 +57,7 @@ public class SlippageTests
     [Fact]
     public void HighVolatility_SlippageScalesWithAtr()
     {
-        var h = new ExecutionHandler(new RiskController());
+        var h = new ExecutionHandler(new RiskController()) { SlippageAtrFactor = 0.5m };
         WarmupAtr(h, range: 20);                       // ATR = 20
         h.Submit(Mkt(OrderDirection.Buy), "s");
         var fills = h.ProcessBar(Bar(20), Rb);
@@ -68,7 +68,7 @@ public class SlippageTests
     [Fact]
     public void HighVolatility_SellSide_Symmetric()
     {
-        var h = new ExecutionHandler(new RiskController());
+        var h = new ExecutionHandler(new RiskController()) { SlippageAtrFactor = 0.5m };
         WarmupAtr(h, range: 20);
         h.Submit(Mkt(OrderDirection.Sell), "s");
         var fills = h.ProcessBar(Bar(20), Rb);

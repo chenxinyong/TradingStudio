@@ -10,17 +10,17 @@ namespace TradingStudio.Engine.Examples;
 /// </summary>
 public class MaCrossMultiTfStrategy : IStrategy
 {
-    [StrategyParameter(Description = "快线周期", DefaultValue = 5, Min = 2, Max = 60, Category = "Entry")]
-    public int FastPeriod { get; set; } = 5;
+    public StrategyParam<int> FastPeriod { get; } = new("FastPeriod", 5)
+        { Group = "Entry", Description = "快线周期", OptimizeRange = (2, 60, 1) };
 
-    [StrategyParameter(Description = "慢线周期", DefaultValue = 20, Min = 5, Max = 200, Category = "Entry")]
-    public int SlowPeriod { get; set; } = 20;
+    public StrategyParam<int> SlowPeriod { get; } = new("SlowPeriod", 20)
+        { Group = "Entry", Description = "慢线周期", OptimizeRange = (5, 200, 5) };
 
-    [StrategyParameter(Description = "日线趋势周期", DefaultValue = 233, Min = 5, Max = 250, Category = "Trend")]
-    public int DayTrendPeriod { get; set; } = 233;
+    public StrategyParam<int> DayTrendPeriod { get; } = new("DayTrendPeriod", 233)
+        { Group = "Trend", Description = "日线趋势周期", OptimizeRange = (5, 250, 5) };
 
-    [StrategyParameter(Description = "每笔交易手数", DefaultValue = 1, Min = 1, Max = 100, Category = "Position")]
-    public int Quantity { get; set; } = 1;
+    public StrategyParam<int> Quantity { get; } = new("Quantity", 1)
+        { Group = "Position", Description = "每笔交易手数", OptimizeRange = (1, 100, 10) };
 
     public string Name => "MA双均线多周期";
 

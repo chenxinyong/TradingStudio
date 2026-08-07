@@ -175,9 +175,10 @@ public class CtpTraderBridge : IDisposable
                             NetPosition = datePosition,
                             OpenCost = avgPrice,
                             UseMargin = pf.UseMargin,
+                            PositionDate = (char)pf.PositionDate,
                         };
-                        _log.Information("[CTP-Position] {Inst} Net={Net} AvgPx={Cost:F4} Margin={Margin:F2} (PosCost={PC} OpenAmt={OA} OpenCost={OC})",
-                            info.InstrumentId, info.NetPosition, info.OpenCost, info.UseMargin,
+                        _log.Information("[CTP-Position] {Inst} Net={Net} AvgPx={Cost:F4} Margin={Margin:F2} Date={PosDate} (PosCost={PC} OpenAmt={OA} OpenCost={OC})",
+                            info.InstrumentId, info.NetPosition, info.OpenCost, info.UseMargin, info.PositionDate,
                             pf.PositionCost, pf.OpenAmount, pf.OpenCost);
                         OnPositionReceived?.Invoke(info);
                     }

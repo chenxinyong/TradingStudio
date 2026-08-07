@@ -22,32 +22,32 @@ namespace TradingStudio.Engine.Examples;
 /// </summary>
 public class IntradayMomentumStrategy : IStrategy
 {
-    [StrategyParameter(Description = "Z-score 入场阈值 (|Z|>此值才开仓)", DefaultValue = 0.0, Min = 0, Max = 3.0, Category = "Entry")]
-    public double ZEntryThreshold { get; set; } = 0.0;
+    public StrategyParam<double> ZEntryThreshold { get; } = new("ZEntryThreshold", 0.0)
+        { Group = "Entry", Description = "Z-score 入场阈值 (|Z|>此值才开仓)", OptimizeRange = (0, 3.0, 0.5) };
 
-    [StrategyParameter(Description = "Z-score 滚动窗口天数", DefaultValue = 252, Min = 60, Max = 504, Category = "Entry")]
-    public int ZWindowDays { get; set; } = 252;
+    public StrategyParam<int> ZWindowDays { get; } = new("ZWindowDays", 252)
+        { Group = "Entry", Description = "Z-score 滚动窗口天数", OptimizeRange = (60, 504, 20) };
 
-    [StrategyParameter(Description = "ATR周期", DefaultValue = 20, Min = 10, Max = 40, Category = "Risk")]
-    public int AtrPeriod { get; set; } = 20;
+    public StrategyParam<int> AtrPeriod { get; } = new("AtrPeriod", 20)
+        { Group = "Risk", Description = "ATR周期", OptimizeRange = (10, 40, 10) };
 
-    [StrategyParameter(Description = "止损ATR倍数", DefaultValue = 2.0, Min = 1.0, Max = 5.0, Category = "Risk")]
-    public double StopAtrMult { get; set; } = 2.0;
+    public StrategyParam<double> StopAtrMult { get; } = new("StopAtrMult", 2.0)
+        { Group = "Risk", Description = "止损ATR倍数", OptimizeRange = (1.0, 5.0, 0.5) };
 
-    [StrategyParameter(Description = "止盈ATR倍数 (0=关闭)", DefaultValue = 3.0, Min = 0, Max = 10.0, Category = "Risk")]
-    public double TakeProfitAtrMult { get; set; } = 3.0;
+    public StrategyParam<double> TakeProfitAtrMult { get; } = new("TakeProfitAtrMult", 3.0)
+        { Group = "Risk", Description = "止盈ATR倍数 (0=关闭)", OptimizeRange = (0, 10.0, 1.0) };
 
-    [StrategyParameter(Description = "单笔风险占比", DefaultValue = 0.02, Min = 0.005, Max = 0.05, Category = "Position")]
-    public double RiskPerTrade { get; set; } = 0.02;
+    public StrategyParam<double> RiskPerTrade { get; } = new("RiskPerTrade", 0.02)
+        { Group = "Position", Description = "单笔风险占比", OptimizeRange = (0.005, 0.05, 0.005) };
 
-    [StrategyParameter(Description = "最大保证金占比", DefaultValue = 0.25, Min = 0.10, Max = 0.50, Category = "Position")]
-    public double MaxMarginRatio { get; set; } = 0.25;
+    public StrategyParam<double> MaxMarginRatio { get; } = new("MaxMarginRatio", 0.25)
+        { Group = "Position", Description = "最大保证金占比", OptimizeRange = (0.10, 0.50, 0.05) };
 
-    [StrategyParameter(Description = "最大持仓手数", DefaultValue = 2, Min = 1, Max = 20, Category = "Position")]
-    public int MaxPosition { get; set; } = 2;
+    public StrategyParam<int> MaxPosition { get; } = new("MaxPosition", 2)
+        { Group = "Position", Description = "最大持仓手数", OptimizeRange = (1, 20, 1) };
 
-    [StrategyParameter(Description = "因子CSV路径 (相对于工作目录或绝对路径)", DefaultValue = "", Category = "Data")]
-    public string FactorCsvPath { get; set; } = "";
+    public StrategyParam<string> FactorCsvPath { get; } = new("FactorCsvPath", "")
+        { Group = "Data", Description = "因子CSV路径 (相对于工作目录或绝对路径)" };
 
     public string Name => "日内动量因子(IntradayMom)";
 
