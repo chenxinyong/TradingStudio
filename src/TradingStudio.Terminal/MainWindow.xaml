@@ -320,7 +320,9 @@
                         <Button Style="{StaticResource NavButton}" Content="🔬" ToolTip="回测 (Ctrl+5)" Click="NavBacktest_Click" />
                         <Button Style="{StaticResource NavButton}" Content="⏯" ToolTip="回放 (Ctrl+6)" Click="NavReplay_Click" />
                         <Separator Background="{StaticResource VsBorderLight}" Height="1" Margin="8,4" />
-                        <Button Style="{StaticResource NavButton}" Content="⚙" ToolTip="日志 (Ctrl+6)" Click="NavLogs_Click" />
+                        <Button Style="{StaticResource NavButton}" Content="📐" ToolTip="缠论分析 (Ctrl+7)" Click="NavChanLun_Click" />
+                        <Separator Background="{StaticResource VsBorderLight}" Height="1" Margin="8,4" />
+                        <Button Style="{StaticResource NavButton}" Content="⚙" ToolTip="日志 (Ctrl+8)" Click="NavLogs_Click" />
                     </StackPanel>
                     <Button Grid.Row="2" Style="{StaticResource NavButton}" Content="⚡"
                             ToolTip="管理" Margin="0,0,0,8" Click="NavAdmin_Click" />

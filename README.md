@@ -16,7 +16,7 @@ TradingStudio 是一个**从头自研**的国内期货量化交易系统。不�
 
 - **市场**: 国内六大期货交易所（上期所/大商所/郑商所/中金所/广期所/上能源）
 - **接口**: CTP 官方原生 C++ API，通过 FtdcNet.CTP (NuGet P/Invoke) 接入
-- **数据**: 2020-2026 连续主力合约 K 线，8100 万条 Bar，0 硬伤验证通过
+- **数据**: 2020-2026 全市场连续+单月合约 K 线，3.6 亿条 Bar (~28 GB)，0 硬伤验证通过
 - **语言**: 90%+ C# (.NET 10)，策略研究用 Python，前端 WPF
 
 > 更多项目理念、用户背景、工作约定见 [CLAUDE.md](CLAUDE.md)
@@ -59,14 +59,14 @@ TradingStudio 是一个**从头自研**的国内期货量化交易系统。不�
 | CTP 封装 | ✅ 完成 | MdApi + TraderApi，FtdcNet.CTP P/Invoke |
 | 实时行情采集 | ✅ 完成 | 全市场 74 品种，7×24 自动重连 |
 | Bar 聚合入库 | ✅ 完成 | 1min/5min/15min/Day/Week → DuckDB |
-| 历史数据验证 | ✅ 完成 | 2020-2026，8100 万条 Bar，0 硬伤 |
+| 历史数据验证 | ✅ 完成 | 2020-2026，3.6 亿条 Bar (~28 GB)，0 硬伤 |
 | 连续合约 | ✅ 完成 | xxx000 自动生成，PeriodMaintainer 维护 |
 | 缠论引擎 | ✅ 完成 | C# 实现：包含/分型/笔/线段/中枢/买卖点 |
-| ToolBox CLI | ✅ 完成 | 10 命令：import/import-jinshuyuan/import-url/verify/merge/append/build-periods/analyze/continuous |
+| ToolBox CLI | ✅ 完成 | 12 命令：import/import-jinshuyuan/import-url/verify/merge/append/build-periods/analyze/continuous/chanlun-analyze/bar-export/mind |
 | 🔥 回测引擎 | ✅ 基本完成 | Phase 2 — 事件驱动，Tick/Bar 级精度，281 测试覆盖 |
 | WPF 监控客户端 | ✅ 完成 | Dashboard + Chart + Replay，MVVM + SignalR 实时 |
-| 🔥 策略研发 | 进行中 | Phase 3 — MaCross/Bollinger/Donchian/ChanLun，目标 2-3 正期望策略 |
-| 🔥 实盘对接 | 当前冲刺 | Phase 4 — Simnow Live 全链路跑通，ag2612 首笔成交 @ 14544 |
+| 🔥 策略研发 | 进行中 | Phase 3 — 10 策略 (趋势/均值回归/缠论/日内动量/横截面因子)，StrategyParam\<T\> |
+| 🔥 实盘对接 | 当前冲刺 | Phase 4 — Simnow Live 全链路跑通，下单/风控/成交/持久化闭环，PnL+平仓修复 |
 
 ---
 
@@ -122,7 +122,7 @@ dotnet run --project src/TradingStudio.ToolBox -- verify --db data/bars_history.
 dotnet run --project src/TradingStudio.ToolBox -- import-jinshuyuan --rar-dir D:\期货数据\
 ```
 
-> 历史数据库 `bars_history.duckdb` (8.42 GB, 2020-2026) 位于 `C:\Works\Datas\`，回测时通过 `--db` 参数指定。
+> 历史数据库 `bars_history.duckdb` (~28 GB, 2020-2026, 3.6 亿 Bar) 位于 `C:\Works\Datas\`，回测时通过 `--db` 参数指定。
 
 ---
 
@@ -137,11 +137,11 @@ TradingStudio/
 │   ├── TradingStudio.Core/    核心抽象（Exchange, Future, Bar, TickRecord, Risk, Indicators）
 │   ├── TradingStudio.Data/    数据聚合 + 存储（BarAggregator, DuckDBStore）
 │   ├── TradingStudio.Engine/  回测/实盘引擎（TradingEngine, ExecutionHandler, PortfolioManager, RiskController）
-│   ├── TradingStudio.Strategy/ 策略库（ChanLun 分型/笔/中枢, DonchianTrend, SmaMacd, MaCross, BollingerReversion）
+│   ├── TradingStudio.Strategy/ 策略库（ChanLun 缠论, DonchianTrend, SmaMacd, MtfChanLun + Engine/Examples: MaCross/Bollinger/IntradayMomentum/CrossSectional/CompositeFactor 共 10 策略）
 │   ├── TradingStudio.Mind/    LLM 模块（Anthropic/OpenAI 客户端, BacktestAnalyst, ChanLunAnalyst）
 │   ├── TradingStudio.Research/ 研究工具（统计指标 + ScottPlot 可视化）
 │   ├── TradingStudio.Terminal/ WPF 监控客户端（Dashboard + 实时图表 + 回放）
-│   ├── TradingStudio.ToolBox/ 数据工具 CLI（独立控制台，10 命令）
+│   ├── TradingStudio.ToolBox/ 数据工具 CLI（独立控制台，12 命令）
 │   ├── TradingStudio/         引擎主程序（.NET Host + DI + Serilog + CtpLiveFeed/CtpTraderBridge + 3 种运行模式）
 │   └── scripts/               Python 脚本（品种生成、数据导入、交叉验证）
 │
@@ -154,7 +154,7 @@ TradingStudio/
 │   └── TradingStudio.SignalRContractTest/ SignalR 连通性 demo（非自动化）
 │
 ├── docs/
-│   ├── design/                设计文档（26 篇，架构/数据/UI/部署）
+│   ├── design/                设计文档（18 篇，架构/数据/UI/部署/策略）
 │   └── README.md             文档索引
 │
 ├── configs/                   策略配置 + 批量回测 + 参数扫描
@@ -172,8 +172,8 @@ TradingStudio/
 |---|------|------|
 | 运行时 | .NET 10 | C#, x64 |
 | CTP 接口 | FtdcNet.CTP P/Invoke | NuGet 包 `FtdcNet.CTP 1.4.0` |
-| 时序存储 | DuckDB | 列存 OLAP，bars_1min/5min/15min/day/week，8100 万 Bar |
-| 关系存储 | SQLite → PostgreSQL (Phase 4) | 品种配置、订单记录 |
+| 时序存储 | DuckDB | 列存 OLAP，bars_1min/5min/15min/day/week，3.6 亿 Bar |
+| 关系存储 | SQLite（远期 PostgreSQL） | 品种配置、订单记录 |
 | 实时通信 | SignalR | 引擎 ↔ WPF 前端 |
 | 前端 | WPF | MVVM + OxyPlot，SignalR 实时推送 |
 | 策略研究 | Python + pandas/numpy | Jupyter 可选 |
@@ -192,10 +192,10 @@ Tick 级事件驱动回放 → 模拟撮合 → 仓位资金管理 → 绩效指
 > 待做：与文华/博易 K线交叉验证
 
 ### Phase 3 — 策略研发 🔥 进行中
-趋势跟踪（MaCross/Donchian）+ 均值回归（Bollinger）+ ChanLun 缠论 → 目标 2-3 个正期望策略
+10 策略（趋势/均值回归/缠论/日内动量/横截面因子）+ StrategyParam\<T\> 类型安全参数 → 目标 2-3 个正期望策略
 
 ### Phase 4 — 实盘对接 🔥 当前冲刺
-Simnow Live 全链路跑通 → ag2612 首笔成交 → 小合约实盘验证
+Simnow Live 全链路跑通：下单/风控/成交/持仓同步/事件持久化，PnL + 平今平昨修复，待连续交易日验证
 
 ---
 

@@ -40,6 +40,7 @@ public static class Bootstrapper
         services.AddTransient<ChartViewModel>();
         services.AddTransient<BacktestViewModel>();
         services.AddTransient<ReplayViewModel>();
+        services.AddTransient<ChanLunViewModel>();
         services.AddSingleton<PanelManager>();
         services.AddSingleton<ActivityBarViewModel>();
         services.AddSingleton<MainWindow>();
@@ -110,6 +111,16 @@ public static class Bootstrapper
             cmd.DefaultGesture = new KeyGesture(Key.B, ModifierKeys.Control);
         });
 
+        registry.Register("view.chanlun", () =>
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+                GetMainWindow(sp).SwitchToPanel("chanlun"));
+        }, cmd =>
+        {
+            cmd.Title = "缠论分析"; cmd.Category = "视图";
+            cmd.DefaultGesture = new KeyGesture(Key.D7, ModifierKeys.Control);
+        });
+
         // ── Connection Command ──
         registry.Register("engine.connect", async () =>
         {
@@ -141,6 +152,8 @@ public static class Bootstrapper
             () => sp.GetRequiredService<BacktestViewModel>(), order: 2);
         pm.Register("replay",     "回放",   PanelLocation.Sidebar,
             () => sp.GetRequiredService<ReplayViewModel>(), order: 3);
+        pm.Register("chanlun",    "缠论分析", PanelLocation.Sidebar,
+            () => sp.GetRequiredService<ChanLunViewModel>(), order: 4);
 
         pm.Show("dashboard");
     }

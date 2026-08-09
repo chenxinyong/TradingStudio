@@ -61,7 +61,7 @@ TradingStudio.Terminal              — 监控与管理界面
 
 > **实际实现映射（与代码对齐）**：`Risk` / `Execution` / `Backtest` 三层目前统一在 `TradingStudio.Engine` 内，未拆为独立项目；另有 `TradingStudio.Research`（统计/可视化）与 `TradingStudio`（.NET Host 主程序）。CTP 适配在 `TradingStudio/Live/`（CtpLiveFeed / CtpTraderBridge，基于 FtdcNet.CTP NuGet P/Invoke）；C++/CLI 旧版已删除，`TradingStudio.Ctp` 占位项目也已清理。
 
-### 当前实现 (2026-07-25)
+### 当前实现 (2026-08-07)
 
 ```
 src/
@@ -71,13 +71,14 @@ src/
 │   ├── Aggregation/       BarAggregator, DailyBarAggregator, MultiBarAggregator
 │   ├── Import/            CsvTickImporter, TickImportService, JinshuyuanImportService
 │   └── Storage/           DuckDBStore, SqliteBarStore, TickCsvWriter, BuildPeriodsService
-├── TradingStudio.Engine/    回测/实盘引擎 (TradingEngine, ExecutionHandler, PortfolioManager, RiskController, StrategyContainer)
+├── TradingStudio.Engine/    回测/实盘引擎 (TradingEngine, ExecutionHandler, PortfolioManager, RiskController, StrategyContainer, StrategyParam\<T\>)
 ├── TradingStudio.Strategy/  策略库 (ChanLun 缠论: 分型/笔/中枢, DonchianTrend, SmaMacd, MtfChanLun)
+│   └── Engine/Examples/     更多策略 (MaCross, BollingerReversion, IntradayMomentum, CrossSectionalIntradayMom, CompositeFactor, MaCrossMultiTf)
 ├── TradingStudio.Mind/      LLM 模块 (Anthropic/OpenAI 客户端, BacktestAnalyst, ChanLunAnalyst)
 ├── TradingStudio.Research/  研究工具 (BarReader, ReturnsAnalyzer, DrawdownAnalyzer, ScottPlot 可视化)
 ├── TradingStudio.Terminal/  WPF 监控客户端 (MVVM + SignalR 实时, Dashboard/Chart/Replay)
 ├── TradingStudio.ToolBox/   数据工具 CLI（独立项目，不依赖主程序）
-│   └── 命令: import / import-jinshuyuan / import-url / verify / merge / append / build-periods / analyze / continuous
+│   └── 命令: import / import-jinshuyuan / import-url / verify / merge / append / build-periods / analyze / continuous / chanlun-analyze / bar-export / mind
 ├── TradingStudio/           引擎主程序 (.NET Host + DI + Serilog)
 │   ├── Program.cs           入口（live / collect / backtest）
 │   ├── Live/                CtpLiveFeed (FtdcNet.CTP P/Invoke), CtpTraderBridge (FtdcNet.CTP P/Invoke), ContractActivityTracker, CtpOptions
@@ -127,7 +128,7 @@ PeriodMaintainer (每 5min / 收盘):
 
 ### 历史数据库
 
-`C:\Works\Datas\bars_history.duckdb` — **~30 GB，3.6 亿 Bar** (2026-08-05 实测)，2020-01-02 ~ 2026-06-30，覆盖 80 品种连续合约 + 5363 单月合约，全周期（1min/5min/15min/day/week）。Backtest 模式默认使用。
+`C:\Works\Datas\bars_history.duckdb` — **~28 GB，3.6 亿 Bar** (2026-08-07 实测)，2020-01-02 ~ 2026-06-30，覆盖 80 品种连续合约 + 5363 单月合约，全周期（1min/5min/15min/day/week）。Backtest 模式默认使用。
 
 ### 调度逻辑
 
@@ -210,7 +211,7 @@ PeriodMaintainer (每 5min / 收盘):
 ### 第二阶段：回测基础 ✅ 基本完成
 历史数据回放 → 模拟撮合 → 仓位资金管理 → 绩效指标。Engine 151 测试覆盖核心链路。
 > 设计文档：[phase2-backtest-design-v2.md](docs/design/phase2-backtest-design-v2.md)
-> 数据就绪：DuckDB 8.42 GB，8100 万 Bar，2020-2026 全周期，0 硬伤
+> 数据就绪：DuckDB ~28 GB，3.6 亿 Bar，2020-2026 全周期，0 硬伤
 > ⚠️ 待做：与文华/博易 K线交叉验证
 
 ### 第三阶段：策略研发（进行中）
@@ -224,6 +225,7 @@ PeriodMaintainer (每 5min / 收盘):
 >   - **IntradayMom 是同日内因子**: 预测盘中走势(O2C Sharpe 1.79)，非隔夜(C2C Sharpe -0.90)
 > ✅ **C#横截面+日内策略**: CrossSectionalIntradayMomStrategy (v2: C# Factor 直连, 无 Python 依赖)
 > ✅ **因子管线 C# 化** (2026-08-07): IntradayMomFactor+VwapDevFactor 直连策略, 消除 Python→CSV 中转
+> ✅ **StrategyParam\<T\> 全量迁移** (2026-08-07): 6 策略 × 42 参数全部从 [StrategyParameter] attribute 迁移至泛型 StrategyParam\<T\>，编译时类型安全
 > ⚠️ IntradayMom执行质量敏感: Python Sharpe 1.16 vs C# 含成本≈0
 
 ### 第四阶段：实盘对接
@@ -235,7 +237,11 @@ TraderApi 风控规则引擎 → simnow 模拟盘 → 小合约实盘验证。
 > ✅ **CtpTraderBridge 自动重连修复** — _pendingReconnect竞态修复 (2026-08-05)
 > ✅ **OrderEvent 持久化** — bars_live.duckdb order_events 表写入确认 (5条, 8/4-8/5)
 > ✅ **FillChannel 竞态根治** (2026-08-07) — OrderEventPump (借鉴StockSharp回调泵) 单消费者→串行Sink
-> ⚠️ simnow 拒单"平昨仓位不足" — 账户权限问题
+> ✅ **SHFE/INE PnL 修复** (2026-08-07) — PositionCost 含合约乘数，除以 TradingUnit 后正常
+> ✅ **simnow 平今/平昨修复** (2026-08-07) — CTP PositionDate 传递链路修复，CloseToday/CloseYesterday 正确区分
+> ✅ **StrategyParam\<T\> 全量迁移** (2026-08-07) — 6 策略 × 42 参数全部迁移，0 旧 [StrategyParameter] 残留
+> ✅ **SlippageAtrFactor** — 市价单滑点按 ATR 缩放，替代固定 1 跳
+> ⚠️ 待验证: 连续交易日 PnL 正常 + simnow 不再拒单 (需实际跑盘 2-3 天)
 
 ---
 
@@ -286,7 +292,7 @@ main ← feat/* ← fix/* ← chore/*
 **规则：**
 - 从 `main` 创建分支，完成后合并回 `main`
 - 不在 `main` 上直接开发大于单 commit 的功能
-- 合并前确保测试全绿（当前：280/280 — Core 88 + Data 28 + Engine 150 + Strategy 14）
+- 合并前确保测试全绿（当前：281/281 — Core 88 + Data 28 + Engine 151 + Strategy 14）
 - 小修复（<20行、单文件、编译器可验证）可直接在 `main` 提交
 - 实验性工作（网格搜索、策略探索）产出放在 gitignored 目录（`configs/grid/`、`configs/batch/`）
 

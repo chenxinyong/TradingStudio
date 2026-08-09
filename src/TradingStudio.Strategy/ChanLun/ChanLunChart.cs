@@ -9,12 +9,28 @@ namespace TradingStudio.Strategy.ChanLun;
 public static class ChanLunChart
 {
     /// <summary>
-    /// 生成缠论分析 HTML 图表 (单面板: K线+分型+笔+中枢)。
+    /// 生成缠论分析 HTML 图表并保存到文件。
     /// </summary>
     public static string SaveHtml(
         ChanLunResult result,
         string instrument,
         string outputPath,
+        string? title = null,
+        int maxBis = 80,
+        int maxZhongshus = 15)
+    {
+        var html = RenderHtml(result, instrument, title, maxBis, maxZhongshus);
+        File.WriteAllText(outputPath, html);
+        return outputPath;
+    }
+
+    /// <summary>
+    /// 生成缠论分析 HTML 字符串（供 WebView2 等嵌入使用）。
+    /// 单面板: K线+分型+笔+中枢，Plotly.js 交互图表。
+    /// </summary>
+    public static string RenderHtml(
+        ChanLunResult result,
+        string instrument,
         string? title = null,
         int maxBis = 80,
         int maxZhongshus = 15)
@@ -52,8 +68,8 @@ public static class ChanLunChart
             high = bars.Select(b => (object)b.High).ToArray(),
             low = bars.Select(b => (object)b.Low).ToArray(),
             close = bars.Select(b => (object)b.Close).ToArray(),
-            increasing = new { line = new { color = "red" } },
-            decreasing = new { line = new { color = "green" } },
+            increasing = new { line = new { color = "#ef5350" } },
+            decreasing = new { line = new { color = "#26a69a" } },
             hovertext = bars.Select((b, i) =>
                 $"{times[i]:yyyy-MM-dd HH:mm}<br>O:{b.Open:F1} H:{b.High:F1} L:{b.Low:F1} C:{b.Close:F1}").ToArray(),
             hoverinfo = "text",
@@ -70,8 +86,8 @@ public static class ChanLunChart
                 name = $"顶分型({topFx.Count})",
                 x = topFx.Select(f => (object)T2I(f.Dt)).ToArray(),
                 y = topFx.Select(f => (object)f.Price).ToArray(),
-                marker = new { symbol = "triangle-down", size = 8, color = "red", line = new { width = 1, color = "darkred" } },
-                hovertext = topFx.Select(f => $"{f.Dt:MM/dd HH:mm} {f.Price:F1}").ToArray(),
+                marker = new { symbol = "triangle-down", size = 9, color = "#ef5350", line = new { width = 1, color = "#b71c1c" } },
+                hovertext = topFx.Select(f => $"{f.Dt:MM/dd HH:mm}<br>顶分型 {f.Price:F1}").ToArray(),
                 hoverinfo = "text",
             });
         }
@@ -87,8 +103,8 @@ public static class ChanLunChart
                 name = $"底分型({botFx.Count})",
                 x = botFx.Select(f => (object)T2I(f.Dt)).ToArray(),
                 y = botFx.Select(f => (object)f.Price).ToArray(),
-                marker = new { symbol = "triangle-up", size = 8, color = "green", line = new { width = 1, color = "darkgreen" } },
-                hovertext = botFx.Select(f => $"{f.Dt:MM/dd HH:mm} {f.Price:F1}").ToArray(),
+                marker = new { symbol = "triangle-up", size = 9, color = "#26a69a", line = new { width = 1, color = "#1b5e20" } },
+                hovertext = botFx.Select(f => $"{f.Dt:MM/dd HH:mm}<br>底分型 {f.Price:F1}").ToArray(),
                 hoverinfo = "text",
             });
         }
@@ -96,7 +112,9 @@ public static class ChanLunChart
         // ── 4. 笔 ──
         foreach (var bi in result.Bis.Take(maxBis))
         {
-            var color = bi.Type == Direction.Up ? "blue" : "orange";
+            var isUp = bi.Type == Direction.Up;
+            var color = isUp ? "#42a5f5" : "#ff9800";
+            var label = isUp ? "↑" : "↓";
             traces.Add(new
             {
                 type = "scatter",
@@ -105,9 +123,9 @@ public static class ChanLunChart
                 showlegend = false,
                 x = new object[] { T2I(bi.DtStart), T2I(bi.DtEnd) },
                 y = new object[] { bi.StartFx.Price, bi.EndFx.Price },
-                line = new { color, width = 2 },
-                marker = new { size = 4, color },
-                hovertext = $"power={bi.Power:F1} len={bi.BarCount}K {(bi.Type == Direction.Up ? "UP" : "DN")}",
+                line = new { color, width = 2.5 },
+                marker = new { size = 5, color },
+                hovertext = $"{label} {bi.ChangePct:+.2f}% | power={bi.Power:F0} | {bi.BarCount}K | {bi.DtStart:MM/dd}→{bi.DtEnd:MM/dd}",
                 hoverinfo = "text",
             });
         }
@@ -127,9 +145,33 @@ public static class ChanLunChart
                 x = new object[] { x0, x1, x1, x0, x0 },
                 y = new object[] { zs.Zd, zs.Zd, zs.Zg, zs.Zg, zs.Zd },
                 fill = "toself",
-                fillcolor = "rgba(128,0,128,0.06)",
-                line = new { color = "purple", width = 1, dash = "dot" },
-                hovertext = $"[{zs.Zd:F1}, {zs.Zg:F1}] zz={zs.Zz:F1}",
+                fillcolor = "rgba(156,39,176,0.08)",
+                line = new { color = "rgba(156,39,176,0.6)", width = 1.5, dash = "dot" },
+                hovertext = $"Z{zi + 1}: [{zs.Zd:F1}, {zs.Zg:F1}] 中轨={zs.Zz:F1} 宽度={zs.Zg - zs.Zd:F1}",
+                hoverinfo = "text",
+            });
+        }
+
+        // ── 6. 背驰标记 (在笔端点上) ──
+        var divBiEnds = new HashSet<(DateTime, double)>();
+        foreach (var d in DivergenceDetector.Detect(result.Bis))
+        {
+            var key = (d.CurrBi.DtEnd, d.CurrBi.EndFx.Price);
+            if (!divBiEnds.Add(key)) continue;
+            var isBuy = d.CurrBi.Type == Direction.Down;
+            traces.Add(new
+            {
+                type = "scatter",
+                mode = "markers+text",
+                name = "",
+                showlegend = false,
+                x = new object[] { T2I(d.CurrBi.DtEnd) },
+                y = new object[] { d.CurrBi.EndFx.Price * (isBuy ? 0.97 : 1.03) },
+                text = new[] { isBuy ? "买" : "卖" },
+                textposition = new[] { isBuy ? "bottom center" : "top center" },
+                textfont = new { size = 14, color = isBuy ? "#26a69a" : "#ef5350", family = "sans-serif" },
+                marker = new { symbol = isBuy ? "circle" : "circle", size = 12, color = isBuy ? "#26a69a" : "#ef5350", opacity = 0.7 },
+                hovertext = new[] { $"{d.LevelLabel} {d.DirectionLabel}<br>得分:{d.Score}/4 后笔:{d.CurrBi.ChangePct:+.2f}%" },
                 hoverinfo = "text",
             });
         }
@@ -137,13 +179,13 @@ public static class ChanLunChart
         // ── Layout ──
         var upCount = result.Bis.Count(b => b.Type == Direction.Up);
         var dnCount = result.Bis.Count(b => b.Type == Direction.Down);
-        var chartTitle = title ?? $"{instrument} 缠论分析 (MIN_BI_LEN=5)";
+        var chartTitle = title ?? $"{instrument} 缠论分析";
 
         var layout = new
         {
             title = new
             {
-                text = $"{chartTitle}<br><sup>{result.RawCount}根→标准{result.StdCount}根→分型{result.FractalCount}→笔{result.BiCount}(UP={upCount} DN={dnCount})→中枢{result.ZhongshuCount}→走势:{result.Trend}</sup>",
+                text = $"{chartTitle}<br><sup>{result.RawCount}根→标准{result.StdCount}根→分型{result.FractalCount}→笔{result.BiCount}(↑{upCount} ↓{dnCount})→中枢{result.ZhongshuCount}→{result.Trend}</sup>",
                 font = new { size = 14 },
             },
             xaxis = new
@@ -153,13 +195,17 @@ public static class ChanLunChart
                 tickvals = tickVals.Cast<object>().ToArray(),
                 ticktext = tickTexts.ToArray(),
                 showgrid = true,
-                rangeslider = new { visible = true, thickness = 0.05 },
+                rangeslider = new { visible = true, thickness = 0.06 },
             },
-            yaxis = new { title = "价格" },
+            yaxis = new { title = "价格", fixedrange = false },
             height = 750,
             hovermode = "x unified",
             template = "plotly_white",
-            margin = new { l = 60, r = 30, t = 80, b = 60 },
+            paper_bgcolor = "#1E1E1E",
+            plot_bgcolor = "#1E1E1E",
+            font = new { color = "#CCCCCC" },
+            margin = new { l = 60, r = 40, t = 80, b = 60 },
+            legend = new { x = 0.01, y = 0.99, bgcolor = "rgba(30,30,30,0.8)", font = new { color = "#CCCCCC" } },
         };
 
         var chartData = new { data = traces, layout };
@@ -170,18 +216,16 @@ public static class ChanLunChart
             WriteIndented = false,
         });
 
-        var html = $@"<!DOCTYPE html>
+        return $@"<!DOCTYPE html>
 <html><head><meta charset=""utf-8"">
 <script src=""https://cdn.plot.ly/plotly-2.35.2.min.js""></script>
+<style>body{{margin:0;padding:0;background:#1E1E1E;overflow:hidden}}</style>
 </head><body>
 <div id=""chart"" style=""width:100%;height:100vh;""></div>
 <script>
 var data = {json};
 Plotly.newPlot('chart', data.data, data.layout, {{responsive: true, displaylogo: false}});
 </script></body></html>";
-
-        File.WriteAllText(outputPath, html);
-        return outputPath;
     }
 
     /// <summary>

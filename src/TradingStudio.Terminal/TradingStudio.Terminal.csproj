@@ -19,10 +19,12 @@
   <ItemGroup>
     <ProjectReference Include="..\TradingStudio.Core\TradingStudio.Core.csproj" />
     <ProjectReference Include="..\TradingStudio.Data\TradingStudio.Data.csproj" />
+    <ProjectReference Include="..\TradingStudio.Strategy\TradingStudio.Strategy.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.*" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.*" />
     <PackageReference Include="OxyPlot.Wpf" Version="2.2.*" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
 

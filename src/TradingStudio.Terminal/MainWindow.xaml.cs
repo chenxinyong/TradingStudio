@@ -77,6 +77,7 @@ public partial class MainWindow : Window
             case "orders":     NavOrders_Click(this, new RoutedEventArgs());    break;
             case "backtest":  NavBacktest_Click(this, new RoutedEventArgs()); break;
             case "replay":    NavReplay_Click(this, new RoutedEventArgs());   break;
+            case "chanlun":   NavChanLun_Click(this, new RoutedEventArgs());  break;
         }
     }
 
@@ -232,6 +233,7 @@ public partial class MainWindow : Window
     void NavOrders_Click(object s, RoutedEventArgs e)     => OpenTab("📜 订单",    () => new PlaceholderView("📜","订单监控","Phase 2"));
     void NavBacktest_Click(object s, RoutedEventArgs e)   => OpenTab("🔬 回测",   () => new BacktestView());
     void NavReplay_Click(object s, RoutedEventArgs e)     => OpenTab("⏯ 回放",   () => new ReplayView());
+    void NavChanLun_Click(object s, RoutedEventArgs e)   => OpenTab("📐 缠论",   () => new ChanLunView());
     void NavLogs_Click(object s, RoutedEventArgs e)       => OpenTab("⚙ 日志",    () => new PlaceholderView("⚙","系统日志","Phase 2"));
     void NavAdmin_Click(object s, RoutedEventArgs e)      => OpenTab("⚡ 管理",    () => new PlaceholderView("⚡","管理","Phase 2"));
 }

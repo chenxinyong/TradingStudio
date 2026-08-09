@@ -1,0 +1,164 @@
+<UserControl x:Class="TradingStudio.Terminal.Views.ChanLunView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />   <!-- 工具栏 -->
+            <RowDefinition Height="Auto" />   <!-- 参数面板 -->
+            <RowDefinition Height="*" />      <!-- WebView2 图表 -->
+            <RowDefinition Height="Auto" />   <!-- 摘要栏 -->
+        </Grid.RowDefinitions>
+
+        <!-- ── 工具栏 ── -->
+        <Border Grid.Row="0" Background="{StaticResource VsBgTertiary}"
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,0,1" Padding="6,4">
+            <WrapPanel>
+                <!-- 品种选择 -->
+                <TextBlock Text="品种" Foreground="{StaticResource VsFgMuted}"
+                           FontSize="11" VerticalAlignment="Center" Margin="4,0,4,0" />
+                <ComboBox Width="80" Height="24" FontSize="12"
+                          ItemsSource="{Binding AvailableProducts}"
+                          SelectedItem="{Binding SelectedProduct}"
+                          DisplayMemberPath="Code"
+                          Background="{StaticResource VsBgSecondary}"
+                          Foreground="{StaticResource VsFgPrimary}" />
+
+                <!-- 周期选择 -->
+                <TextBlock Text="周期" Foreground="{StaticResource VsFgMuted}"
+                           FontSize="11" VerticalAlignment="Center" Margin="12,0,4,0" />
+                <ComboBox Width="60" Height="24" FontSize="12"
+                          ItemsSource="{Binding AvailableFrequencies}"
+                          SelectedItem="{Binding SelectedFrequency}"
+                          Background="{StaticResource VsBgSecondary}"
+                          Foreground="{StaticResource VsFgPrimary}" />
+
+                <!-- 笔长度 Slider -->
+                <TextBlock Text="笔长度" Foreground="{StaticResource VsFgMuted}"
+                           FontSize="11" VerticalAlignment="Center" Margin="12,0,4,0" />
+                <Slider Minimum="3" Maximum="10" Value="{Binding BiLen}"
+                        SmallChange="1" IsSnapToTickEnabled="True" TickFrequency="1"
+                        Width="70" VerticalAlignment="Center"
+                        Background="Transparent" />
+                <TextBlock Text="{Binding BiLen, StringFormat={}{0}K}"
+                           Foreground="{StaticResource VsAccentBlue}" FontWeight="Bold"
+                           FontSize="12" VerticalAlignment="Center" Width="24" />
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,0" />
+
+                <!-- 按钮 -->
+                <Button Content="▶ 分析" Command="{Binding AnalyzeCommand}" Margin="4,0" Height="24"
+                        Background="{StaticResource VsAccentBlue}" Foreground="White"
+                        BorderThickness="0" FontSize="11" Cursor="Hand"
+                        IsEnabled="{Binding IsAnalyzing, Converter={StaticResource InvertBool}}" />
+                <Button Content="📄 导出HTML" Command="{Binding ExportHtmlCommand}" Margin="4,0" Height="24"
+                        Background="{StaticResource VsBgTertiary}" Foreground="{StaticResource VsFgPrimary}"
+                        BorderBrush="{StaticResource VsBorder}" FontSize="11" />
+
+                <!-- 加载/状态文字 -->
+                <TextBlock Foreground="{StaticResource VsAccentYellow}"
+                           FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsAnalyzing}" Value="True">
+                                    <Setter Property="Text" Value="⏳ 分析中..." />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </WrapPanel>
+        </Border>
+
+        <!-- ── 参数面板 (可折叠) ── -->
+        <Border Grid.Row="1" Background="{StaticResource VsBgSecondary}"
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,0,0,1" Padding="6,2">
+            <WrapPanel>
+                <TextBlock Text="参数" Foreground="{StaticResource VsFgMuted}"
+                           FontSize="10" VerticalAlignment="Center" Margin="4,0,8,0" />
+                <TextBlock Text="最大笔数" Foreground="{StaticResource VsFgMuted}"
+                           FontSize="10" VerticalAlignment="Center" Margin="4,0,2,0" />
+                <TextBox Text="{Binding MaxBiNum, UpdateSourceTrigger=LostFocus}" Width="50" Height="20"
+                         FontSize="11" Background="{StaticResource VsBgTertiary}"
+                         Foreground="{StaticResource VsFgPrimary}" BorderBrush="{StaticResource VsBorder}" />
+                <TextBlock Text="中枢最小重叠" Foreground="{StaticResource VsFgMuted}"
+                           FontSize="10" VerticalAlignment="Center" Margin="12,0,2,0" />
+                <TextBox Text="{Binding MinZsOverlap, UpdateSourceTrigger=LostFocus}" Width="40" Height="20"
+                         FontSize="11" Background="{StaticResource VsBgTertiary}"
+                         Foreground="{StaticResource VsFgPrimary}" BorderBrush="{StaticResource VsBorder}" />
+            </WrapPanel>
+        </Border>
+
+        <!-- ── WebView2 图表 ── -->
+        <Border Grid.Row="2" Background="{StaticResource VsBgPrimary}">
+            <Grid>
+                <!-- 占位文字：HtmlContent 为空时显示 -->
+                <TextBlock Foreground="{StaticResource VsFgMuted}" FontSize="14"
+                           HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="选择品种后点击 [▶ 分析]" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HtmlContent}" Value="">
+                                    <Setter Property="Text" Value="选择品种后点击 [▶ 分析]" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <wv2:WebView2 x:Name="ChanLunWebView" />
+            </Grid>
+        </Border>
+
+        <!-- ── 摘要栏 ── -->
+        <Border Grid.Row="3" Background="{StaticResource VsBgTertiary}"
+                BorderBrush="{StaticResource VsBorder}" BorderThickness="0,1,0,0" Padding="8,3">
+            <WrapPanel>
+                <!-- 状态文本 -->
+                <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource VsFgSecondary}"
+                           FontSize="11" VerticalAlignment="Center" Margin="0,0,16,0" />
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="0,2" />
+
+                <!-- 走势 -->
+                <TextBlock Foreground="{StaticResource VsFgMuted}" FontSize="11"
+                           VerticalAlignment="Center" Margin="8,0">
+                    <Run Text="走势:" /><Run Text="{Binding TrendText}" Foreground="{StaticResource VsAccentLight}" FontWeight="Bold" />
+                </TextBlock>
+
+                <!-- 笔 -->
+                <TextBlock Foreground="{StaticResource VsFgMuted}" FontSize="11"
+                           VerticalAlignment="Center" Margin="12,0">
+                    <Run Text="笔:" /><Run Text="{Binding BiCount, StringFormat={}{0}}" Foreground="{StaticResource VsFgPrimary}" FontWeight="Bold" />
+                    <Run Text="(" Foreground="{StaticResource VsFgMuted}" />
+                    <Run Text="{Binding UpBiCount, StringFormat=↑{0}}" Foreground="{StaticResource VsAccentRed}" />
+                    <Run Text=" " />
+                    <Run Text="{Binding DownBiCount, StringFormat=↓{0}}" Foreground="{StaticResource VsAccentGreen}" />
+                    <Run Text=")" Foreground="{StaticResource VsFgMuted}" />
+                </TextBlock>
+
+                <!-- 中枢 -->
+                <TextBlock Foreground="{StaticResource VsFgMuted}" FontSize="11"
+                           VerticalAlignment="Center" Margin="12,0">
+                    <Run Text="中枢:" /><Run Text="{Binding ZhongshuCount, StringFormat={}{0}}" Foreground="{StaticResource VsFgPrimary}" FontWeight="Bold" />
+                </TextBlock>
+
+                <!-- 分型 -->
+                <TextBlock Foreground="{StaticResource VsFgMuted}" FontSize="11"
+                           VerticalAlignment="Center" Margin="12,0">
+                    <Run Text="分型:" /><Run Text="{Binding FractalCount, StringFormat={}{0}}" Foreground="{StaticResource VsFgPrimary}" />
+                </TextBlock>
+
+                <!-- 背驰 -->
+                <TextBlock Foreground="{StaticResource VsFgMuted}" FontSize="11"
+                           VerticalAlignment="Center" Margin="12,0">
+                    <Run Text="背驰:" /><Run Text="{Binding DivergenceCount, StringFormat={}{0}}" Foreground="{StaticResource VsFgPrimary}" FontWeight="Bold" />
+                    <Run Text=" — " Foreground="{StaticResource VsFgMuted}" />
+                    <Run Text="{Binding DivergenceSummary}" Foreground="{StaticResource VsAccentYellow}" />
+                </TextBlock>
+            </WrapPanel>
+        </Border>
+    </Grid>
+</UserControl>
