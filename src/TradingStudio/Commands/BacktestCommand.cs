@@ -203,6 +203,17 @@ public class BacktestCommand
                     foreach (var (reason, stats) in sr.ExitReasonBreakdown.OrderByDescending(x => x.Value.Count))
                         Console.WriteLine($"    {reason}: {stats.Count}T  WinRate={stats.WinRate:P1}  PnL={stats.TotalPnL:C}");
                 }
+
+                // 按品种 × 退出原因
+                if (sr.ExitReasonByInstrument.Count > 0)
+                {
+                    Console.WriteLine("    ── Exit Reason × Instrument ──");
+                    Console.WriteLine($"    {"Inst",-8} {"Reason",-8} {"Trades",6} {"WinRate",8} {"PnL",12}");
+                    Console.WriteLine($"    {"----",-8} {"------",-8} {"------",6} {"-------",8} {"----",12}");
+                    foreach (var (inst, reasonDict) in sr.ExitReasonByInstrument.OrderByDescending(x => x.Value.Values.Sum(v => v.Count)))
+                    foreach (var (reason, stats) in reasonDict.OrderByDescending(x => x.Value.Count))
+                        Console.WriteLine($"    {inst,-8} {reason,-8} {stats.Count,6} {stats.WinRate,8:P1} {stats.TotalPnL,12:C}");
+                }
             }
             Console.WriteLine($"  ── Monitor ──");
             Console.WriteLine($"    Total Slippage:{report.MonitorSummary.TotalSlippage,10:F2}");

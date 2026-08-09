@@ -137,9 +137,10 @@ public static class StrategyFactory
             var group = paramType.GetProperty("Group")?.GetValue(instance)?.ToString() ?? "General";
 
             var rt = range.GetType();
-            var min = rt.GetProperty("Item1")?.GetValue(range);
-            var max = rt.GetProperty("Item2")?.GetValue(range);
-            var step = rt.GetProperty("Item3")?.GetValue(range);
+            // ValueTuple 的 Item1/Item2/Item3 是字段(Field)，不是属性(Property)
+            var min = rt.GetField("Item1")?.GetValue(range);
+            var max = rt.GetField("Item2")?.GetValue(range);
+            var step = rt.GetField("Item3")?.GetValue(range);
 
             if (min != null && max != null)
                 result.Add(new ParamMeta

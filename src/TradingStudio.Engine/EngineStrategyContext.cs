@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Indicators;
@@ -19,6 +20,7 @@ internal class EngineStrategyContext : StrategyContext
     private readonly IReadOnlyList<string> _instruments;
     private readonly List<Bar> _barHistory;
     private readonly ILogger _log;
+    private readonly ChannelWriter<TradeSignal>? _signalWriter;
 
     private DateTimeOffset _currentTime;
     public override DateTimeOffset CurrentTime => _currentTime;
@@ -33,7 +35,8 @@ internal class EngineStrategyContext : StrategyContext
         FutureRegistry registry,
         IReadOnlyList<string> instruments,
         List<Bar> barHistory,
-        ILogger logger)
+        ILogger logger,
+        ChannelWriter<TradeSignal>? signalWriter = null)
         : base(strategyId)
     {
         _execution = execution;
@@ -43,6 +46,7 @@ internal class EngineStrategyContext : StrategyContext
         _instruments = instruments;
         _barHistory = barHistory;
         _log = logger;
+        _signalWriter = signalWriter;
     }
 
     public void SetCurrentTime(DateTimeOffset time) => _currentTime = time;
@@ -161,6 +165,19 @@ internal class EngineStrategyContext : StrategyContext
             InstrumentId = instrumentId, Direction = OrderDirection.Sell,
             Type = OrderType.Stop, Quantity = quantity, StopPrice = stopPrice,
         }, StrategyId, _portfolio);
+    }
+
+    // ═══ 信号发射（v2: 信号与仓位解耦） ═══
+    /// <summary>发射交易信号 → SignalChannel。Warmup 模式下忽略。</summary>
+    public override void EmitSignal(TradeSignal signal)
+    {
+        if (IsWarmup) return;
+        if (_signalWriter == null) return;
+
+        var enriched = signal with { StrategyId = StrategyId, Timestamp = DateTime.UtcNow };
+        if (!_signalWriter.TryWrite(enriched))
+            _log.LogWarning("[{Strategy}] SignalChannel full, signal dropped: {Inst} {Dir}",
+                StrategyId, signal.InstrumentId, signal.Direction);
     }
 
     // ═══ 购买力硬闸门已下沉至 ExecutionHandler.Submit（与 CheckPreOrder 同层，杜绝绕过）═══

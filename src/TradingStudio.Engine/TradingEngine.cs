@@ -137,7 +137,8 @@ public class TradingEngine
 
             var ctx = new EngineStrategyContext(
                 config.StrategyId, _execution, _portfolio, _indicators,
-                _registry, config.Instruments, barHistory, _log);
+                _registry, config.Instruments, barHistory, _log,
+                (_execution is ExecutionHandler ehSig) ? ehSig.SignalChannel.Writer : null);
             strategy.Initialize(ctx);
 
             // 预热：喂入历史 Bar 到策略（Warmup 模式，策略只更新状态不产生信号）
@@ -287,6 +288,10 @@ public class TradingEngine
                     // 更新指标 → 策略 OnBar
                     _indicators.Feed(bar);
                     _strategies.DispatchBar(barEvt);
+
+                    // 信号管线: EmitSignal → TargetCombiner → Rebalancer → Submit
+                    if (_execution is ExecutionHandler eh3)
+                        eh3.ProcessSignals(_portfolio, _registry);
 
                     // 追加到策略历史（仅该策略订阅的品种）
                     foreach (var (strategyId, history) in barHistories)

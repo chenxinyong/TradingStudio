@@ -528,7 +528,12 @@ public class SmaMacdStrategy : IStrategy
 
         if (exit)
         {
-            _ctx.ClosePosition(instId);
+            var slReason = reason.Contains("硬止损") ? "SL"
+                : reason.Contains("止损") ? "SL"
+                : reason.Contains("止盈") ? "TP"
+                : reason.Contains("上穿") || reason.Contains("下穿") ? "Signal"
+                : "Signal";
+            _ctx.ClosePosition(instId, slReason);
             s._entryPrice = null;
             s._entryDir = 0;
             s._trailStop = double.NaN;

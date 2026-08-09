@@ -25,6 +25,8 @@ public class PerformanceReport
     public List<Trade> Trades { get; init; } = [];
     /// <summary>退出原因统计: {reason: (tradeCount, totalPnL, winRate)}</summary>
     public Dictionary<string, ExitReasonStats> ExitReasonBreakdown { get; init; } = [];
+    /// <summary>按品种 × 退出原因统计: {instrumentId: {reason: stats}}</summary>
+    public Dictionary<string, Dictionary<string, ExitReasonStats>> ExitReasonByInstrument { get; init; } = [];
 
     public static PerformanceReport Generate(
         string strategyId,
@@ -50,7 +52,7 @@ public class PerformanceReport
             MaxDrawdown = (decimal)maxDrawdown,
             SharpeRatio = (decimal)sharpe,
             SortinoRatio = (decimal)sortino,
-            TotalOrders = totalOrders > 0 ? totalOrders : trades.Count * 2, // 每个Trade至少一对买卖单
+            TotalOrders = totalOrders > 0 ? totalOrders : trades.Count * 2,
             TotalTrades = trades.Count,
             WinRate = trades.Count > 0 ? (decimal)wins.Count / trades.Count : 0,
             AverageWin = wins.Count > 0 ? wins.Average(t => t.PnL) : 0,
@@ -63,6 +65,7 @@ public class PerformanceReport
             EquityCurve = equityCurve.ToList(),
             Trades = trades.ToList(),
             ExitReasonBreakdown = BuildExitReasonBreakdown(trades),
+            ExitReasonByInstrument = BuildExitReasonByInstrument(trades),
         };
     }
 
@@ -84,6 +87,41 @@ public class PerformanceReport
         foreach (var s in dict.Values)
             s.WinRate = s.Count > 0 ? (decimal)s.Wins / s.Count : 0;
         return dict;
+    }
+
+    /// <summary>
+    /// 按品种 × 退出原因 统计: 日内止损/止盈触发率按品种汇总。
+    /// </summary>
+    private static Dictionary<string, Dictionary<string, ExitReasonStats>> BuildExitReasonByInstrument(
+        IReadOnlyList<Trade> trades)
+    {
+        var result = new Dictionary<string, Dictionary<string, ExitReasonStats>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in trades)
+        {
+            var inst = string.IsNullOrEmpty(t.InstrumentId) ? "Unknown" : t.InstrumentId;
+            var reason = string.IsNullOrEmpty(t.ExitReason) ? "Unknown" : t.ExitReason;
+
+            if (!result.TryGetValue(inst, out var reasonDict))
+            {
+                reasonDict = new Dictionary<string, ExitReasonStats>(StringComparer.OrdinalIgnoreCase);
+                result[inst] = reasonDict;
+            }
+
+            if (!reasonDict.TryGetValue(reason, out var s))
+            {
+                s = new ExitReasonStats { Reason = reason };
+                reasonDict[reason] = s;
+            }
+            s.Count++;
+            s.TotalPnL += t.PnL;
+            if (t.IsWin) s.Wins++;
+        }
+
+        foreach (var (_, reasonDict) in result)
+        foreach (var (_, s) in reasonDict)
+            s.WinRate = s.Count > 0 ? (decimal)s.Wins / s.Count : 0;
+
+        return result;
     }
 
     public class ExitReasonStats

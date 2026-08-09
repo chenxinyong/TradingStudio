@@ -244,7 +244,7 @@ public class WalkForwardCommand
     // Backtest Runner
     // ═══════════════════════════════════════════════════════════════
 
-    private static async Task<PerformanceReport> RunSingleBacktest(
+    internal static async Task<PerformanceReport> RunSingleBacktest(
         StrategyConfig baseConfig, string dbPath, string symbolsPath,
         DateTime? dataStart, DateTime? dataEnd, string runId)
     {
@@ -330,7 +330,7 @@ public class WalkForwardCommand
         };
     }
 
-    private static StrategyConfig CloneWithParameter(StrategyConfig src, string paramName, object paramValue)
+    internal static StrategyConfig CloneWithParameter(StrategyConfig src, string paramName, object paramValue)
     {
         // StrategyParameters 没有 Remove/索引器，构建一个新的副本并替换目标参数
         var ps = new StrategyParameters();

@@ -66,6 +66,13 @@ public class StrategyContext
         throw new NotImplementedException();
     public virtual IReadOnlyList<string> SubscribedInstruments => [];
 
+    // ═══ 信号发射（v2: 信号与仓位解耦） ═══
+    /// <summary>
+    /// 发射交易信号 — 策略只表达方向和信心，仓位计算由组合层统一处理。
+    /// 与 MarketBuy/ClosePosition 双轨运行，策略可逐步迁移。
+    /// </summary>
+    public virtual void EmitSignal(TradeSignal signal) { }
+
     // ═══ 风控收紧（运行时，只能收紧不能放宽） ═══
     public virtual bool TightenRisk(string ruleName, object newValue) => false;
 

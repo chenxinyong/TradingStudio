@@ -175,7 +175,7 @@ public class MtfChanLunStrategy : IStrategy
         {
             bool exit = (pos!.Quantity > 0 && bi.Type == Direction.Down)
                      || (pos.Quantity < 0 && bi.Type == Direction.Up);
-            if (exit) { _ctx.ClosePosition(s.InstId); s.Trail = 0; }
+            if (exit) { _ctx.ClosePosition(s.InstId, "Signal"); s.Trail = 0; }
             return;
         }
 
@@ -206,7 +206,7 @@ public class MtfChanLunStrategy : IStrategy
         if (pos is null || pos.Quantity == 0 || s.Trail <= 0) return;
         bool stopped = (pos.Quantity > 0 && bar.LowDouble <= s.Trail)
                     || (pos.Quantity < 0 && bar.HighDouble >= s.Trail);
-        if (stopped) { _ctx.ClosePosition(s.InstId); s.Trail = 0; }
+        if (stopped) { _ctx.ClosePosition(s.InstId, "ATR_SL"); s.Trail = 0; }
     }
 
     // ═══ 日线工具 ═══

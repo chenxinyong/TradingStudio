@@ -243,7 +243,8 @@ public class ChanLunStrategy : IStrategy
 
             if (shouldExit)
             {
-                _ctx.ClosePosition(s.InstrumentId);
+                var exitReason = completedBi.Type == ChanLun.Direction.Down ? "Signal" : "Signal";
+                _ctx.ClosePosition(s.InstrumentId, exitReason);
                 s.HasPendingEntry = false; s.EntryBarTime = null; s.StopPrice = 0; s.ActiveBi = null;
                 return;
             }
@@ -312,7 +313,8 @@ public class ChanLunStrategy : IStrategy
 
         if (stopped)
         {
-            _ctx.ClosePosition(s.InstrumentId);
+            var slType = reason.StartsWith("硬止损") ? "HardSL" : "ATR_SL";
+            _ctx.ClosePosition(s.InstrumentId, slType);
             _ctx.Log($"止损: {s.InstrumentId} {reason}");
             s.EntryBarTime = null; s.StopPrice = 0; s.EntryPrice = 0; s.ActiveBi = null;
         }

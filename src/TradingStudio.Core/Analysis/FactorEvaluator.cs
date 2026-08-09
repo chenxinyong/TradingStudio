@@ -46,13 +46,13 @@ public class FactorEvaluator
         var icSeries = new List<double>();
         var timestamps = new List<DateTime>();
 
-        for (int t = 0; t < sorted.Count - 1; t++)
+        for (int t = 0; t < sorted.Count; t++)
         {
             var current = sorted[t];
-            var next = sorted[t + 1];
 
-            // 本期因子百分位 vs 下一期收益 → Rank IC
-            var ic = ComputeRankIC(current.FactorValues, next.ForwardReturns);
+            // ForwardReturns(T) = 从 T 到 T+1 的收益 (FwdRet_1d)
+            // 因子值(T) vs 前向收益(T) → Rank IC — 因子对下一期收益的预测力
+            var ic = ComputeRankIC(current.FactorValues, current.ForwardReturns);
             icSeries.Add(ic);
             timestamps.Add(current.Timestamp);
         }
@@ -91,10 +91,10 @@ public class FactorEvaluator
             ICSeriesTimestamps = timestamps,
             CumulativeIC = cumulativeIC,
             ICDecay = decay,
-            Verdict = icIR switch
+            Verdict = Math.Abs(icIR) switch
             {
-                >= 0.50 => IcVerdict.Excellent,  // Gray: IC IR > 0.5 是优秀因子
-                >= 0.30 => IcVerdict.Good,       // Gray: IC IR > 0.3 是可接受因子
+                >= 0.50 => IcVerdict.Excellent,  // Gray: |IC IR| > 0.5 是优秀因子 (正向或反向)
+                >= 0.30 => IcVerdict.Good,       // Gray: |IC IR| > 0.3 是可接受因子
                 >= 0.10 => IcVerdict.Weak,
                 _ => IcVerdict.Insufficient,
             },
@@ -174,9 +174,10 @@ public class FactorEvaluator
         foreach (var lag in lags)
         {
             var ics = new List<double>();
-            for (int t = 0; t < sorted.Count - lag; t++)
+            // lag=N: factor(T) vs FwdRet_1d(T+N-1) = return from T+N-1 to T+N
+            for (int t = 0; t < sorted.Count - lag + 1; t++)
             {
-                var ic = ComputeRankIC(sorted[t].FactorValues, sorted[t + lag].ForwardReturns);
+                var ic = ComputeRankIC(sorted[t].FactorValues, sorted[t + lag - 1].ForwardReturns);
                 ics.Add(ic);
             }
             decay[lag] = ics.Count > 0 ? ics.Average() : 0;

@@ -1,0 +1,24 @@
+{
+  "StrategyId": "ChanLun-AG-MinBiPower-Scan",
+  "StrategyType": "ChanLun",
+  "Description": "AG 缠论 MinBiPower 参数敏感度扫描 (ag000连续合约)",
+  "Version": 1,
+  "Instruments": ["ag000"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 30,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.30,
+  "MaxPositionPerInstrument": 1,
+  "Priority": 0,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "AtrPeriod": 20,
+    "StopAtrMult": 2.0,
+    "HardStopPct": 0.05,
+    "MinBiPower": 200,
+    "MinBiLen": 3,
+    "RiskPerTrade": 0.02,
+    "MaxMarginRatio": 0.6
+  }
+}

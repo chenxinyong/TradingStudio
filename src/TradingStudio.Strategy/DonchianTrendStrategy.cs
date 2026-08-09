@@ -194,7 +194,11 @@ public class DonchianTrendStrategy : IStrategy
 
             if (shouldExit)
             {
-                _ctx.ClosePosition(s.InstrumentId);
+                var slReason = exitReason.Contains("止损") ? "SL"
+                    : exitReason.Contains("突破") ? "Signal"
+                    : exitReason.Contains("超时") ? "Timeout"
+                    : "Signal";
+                _ctx.ClosePosition(s.InstrumentId, slReason);
                 _ctx.Log($"出场: {s.InstrumentId} {exitReason} @ {bar.CloseDouble:F2}");
                 s.ResetTrade();
                 s.CooldownRemaining = ReentryCooldown;

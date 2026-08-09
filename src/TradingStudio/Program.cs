@@ -8,6 +8,7 @@ using TradingStudio.Engine;
 using TradingStudio.Data.Storage;
 using TradingStudio.Live;
 using TradingStudio.Options;
+using TradingStudio.Commands;
 using TradingStudio.Services;
 
 // ================================================================
@@ -15,7 +16,9 @@ using TradingStudio.Services;
 //
 //   TradingStudio live                 启动实盘引擎 (Windows Service)
 //   TradingStudio backtest [options]   回测引擎
+//   TradingStudio walkforward [opts]   Walk-Forward 参数优化
 //   TradingStudio collect [options]    行情采集
+//   TradingStudio factor-eval [opts]   因子IC评估 (Parquet/DuckDB)
 //
 // 数据导入已迁移至: TradingStudio.ToolBox
 // ================================================================
@@ -45,6 +48,8 @@ try
         case "backtest":    await RunBacktestAsync(args[1..], config);    break;
         case "walkforward": await RunWalkForwardAsync(args[1..], config); break;
         case "collect":     await RunCollectAsync(args[1..], config);     break;
+        case "factor-eval":  await FactorEvalCommand.RunAsync(args[1..]);  break;
+        case "param-scan":  await ParamScanCommand.RunAsync(args[1..]);  break;
         default:            PrintUsage(); break;
     }
 }

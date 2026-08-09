@@ -48,6 +48,16 @@ public class ExecutionHandler : IExecutionHandler
     public System.Threading.Channels.Channel<OrderEvent> OrderOutbox { get; }
         = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
 
+    /// <summary>信号通道 — 策略通过 EngineStrategyContext.EmitSignal 写入，引擎主循环消费</summary>
+    public System.Threading.Channels.Channel<TradeSignal> SignalChannel { get; }
+        = System.Threading.Channels.Channel.CreateBounded<TradeSignal>(128);
+
+    /// <summary>信号合并器（可选注入，用于 EmitSignal 管线）</summary>
+    public ITargetCombiner? TargetCombiner { get; set; }
+
+    /// <summary>再平衡器（可选注入，用于 EmitSignal 管线）</summary>
+    public Rebalancer? Rebalancer { get; set; }
+
     public IReadOnlyList<Order> ActiveOrders { get { lock (_sync) return _activeOrders.ToList(); } }
     public IReadOnlyList<Order> GetActiveOrders(string strategyId)
     {
@@ -66,6 +76,41 @@ public class ExecutionHandler : IExecutionHandler
     public void SetStrategyPriority(string strategyId, int priority)
     {
         _strategyPriority[strategyId] = priority;
+    }
+
+    /// <summary>
+    /// 处理信号管线: SignalChannel → TargetCombiner → Rebalancer → Submit。
+    /// 由 TradingEngine 在 DispatchBar 之后调用，确保所有策略信号已收集完毕。
+    /// TargetCombiner 或 Rebalancer 为 null 时跳过。
+    /// </summary>
+    public void ProcessSignals(IPortfolioState portfolio, FutureRegistry registry)
+    {
+        if (TargetCombiner == null || Rebalancer == null)
+            return;
+
+        // 1. 从 SignalChannel 收集所有待处理信号
+        var signals = new List<TradeSignal>();
+        while (SignalChannel.Reader.TryRead(out var signal))
+            signals.Add(signal);
+
+        if (signals.Count == 0)
+            return;
+
+        // 2. 信号合并 → 目标持仓
+        var targets = TargetCombiner.Combine(signals, portfolio, registry);
+
+        // 3. 按策略分组，分别调用 Rebalancer（每个策略管理自己的仓位）
+        var strategyIds = signals.Select(s => s.StrategyId).Distinct();
+        foreach (var sid in strategyIds)
+        {
+            var orders = Rebalancer.GenerateOrders(targets, portfolio.AllPositions, sid);
+            foreach (var order in orders)
+                Submit(order, sid, portfolio);
+        }
+
+        if (targets.Count > 0)
+            _log.LogDebug("ProcessSignals: {SignalCount} signals → {TargetCount} targets → orders submitted",
+                signals.Count, targets.Count);
     }
 
     public OrderTicket Submit(Order order, string strategyId, Core.Risk.IPortfolioState? portfolio = null)

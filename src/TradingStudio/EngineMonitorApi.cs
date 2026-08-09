@@ -175,6 +175,26 @@ public static class EngineMonitorApi
             return Results.Ok(new { StrategyId = id, Rule = req.RuleName, Phase = 3 });
         });
 
+        // ═══ 策略参数热更新 (不停机) ═══
+        api.MapPost("/strategies/{id}/params", (string id, [FromBody] UpdateParameterRequest req,
+            [FromServices] StrategyContainer strategies) =>
+        {
+            var (ok, error) = strategies.UpdateParameter(id, req.ParamName, req.Value);
+            if (!ok)
+                return Results.BadRequest(new { StrategyId = id, ParamName = req.ParamName, Error = error });
+            return Results.Ok(new { StrategyId = id, ParamName = req.ParamName, Value = req.Value });
+        });
+
+        // 批量参数更新
+        api.MapPost("/strategies/{id}/params/batch", (string id, [FromBody] Dictionary<string, object> updates,
+            [FromServices] StrategyContainer strategies) =>
+        {
+            var (ok, error) = strategies.UpdateParameters(id, updates);
+            if (!ok)
+                return Results.BadRequest(new { StrategyId = id, Updated = updates.Count, Error = error });
+            return Results.Ok(new { StrategyId = id, Updated = updates.Count });
+        });
+
         // ═══ 测试: 手动下单到 Simnow ═══
         api.MapPost("/orders/test", ([FromBody] TestOrderRequest req,
             [FromServices] ExecutionHandler execution) =>
@@ -284,6 +304,7 @@ public static class EngineMonitorApi
 public record TightenRiskRequest(string RuleName, string NewValue);
 public record ClosePositionRequest(string InstrumentId);
 public record TestOrderRequest(string InstrumentId, string Side, int Quantity);
+public record UpdateParameterRequest(string ParamName, object Value);
 
 /// <summary>API 响应类型</summary>
 public record BarDto(DateTime Dt, double Open, double High, double Low, double Close, long Volume);
