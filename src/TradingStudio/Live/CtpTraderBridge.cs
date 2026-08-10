@@ -263,6 +263,7 @@ public class CtpTraderBridge : IDisposable
         {
             BrokerID = _opts.BrokerId, InvestorID = _opts.UserId, UserID = _opts.UserId,
             InstrumentID = order.InstrumentId, OrderRef = order.OrderId.ToString(),
+            ExchangeID = futures?.Exchange.ToCtp() ?? "",
             Direction = order.Direction == OrderDirection.Buy ? CTP.EnumDirectionType.Buy : CTP.EnumDirectionType.Sell,
             CombOffsetFlag_0 = offsetFlag,
             OrderPriceType = orderType,
@@ -305,6 +306,29 @@ public class CtpTraderBridge : IDisposable
         return CTP.EnumOffsetFlagType.Close;
     }
 
+    /// <summary>
+    /// 从 CTP 日期+时间字段解析为北京时间的 DateTimeOffset。
+    /// CTP 的交易日/成交日期就是交易所日历日，不存在夜盘日期偏移问题。
+    /// </summary>
+    private static DateTimeOffset ParseCtpTime(string dateStr, string timeStr)
+    {
+        try
+        {
+            if (dateStr?.Length >= 8 && timeStr?.Length >= 8)
+            {
+                var y = int.Parse(dateStr[..4]);
+                var m = int.Parse(dateStr[4..6]);
+                var d = int.Parse(dateStr[6..8]);
+                var h = int.Parse(timeStr[..2]);
+                var min = int.Parse(timeStr[3..5]);
+                var s = int.Parse(timeStr[6..8]);
+                return new DateTimeOffset(y, m, d, h, min, s, TimeSpan.FromHours(8));
+            }
+        }
+        catch { }
+        return DateTimeOffset.UtcNow;
+    }
+
     private static OrderEvent? ConvertOrder(CTP.ThostFtdcOrderField o)
     {
         var t = o.VolumeTraded > 0;
@@ -316,13 +340,13 @@ public class CtpTraderBridge : IDisposable
             CTP.EnumOrderStatusType.Canceled => OrderEventType.Cancelled,
             _ => OrderEventType.Submitted,
         };
-        return new OrderEvent { OrderId = ParseOrderRef(o.OrderRef), InstrumentId = o.InstrumentID ?? "", Direction = o.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t ? o.VolumeTraded : o.VolumeTotalOriginal, OrderQty = o.VolumeTotalOriginal, FilledQty = o.VolumeTraded, FillPrice = (decimal)(o.LimitPrice > 0 ? o.LimitPrice : 0), Type = type, Message = o.StatusMsg, Time = DateTimeOffset.UtcNow };
+        return new OrderEvent { OrderId = ParseOrderRef(o.OrderRef), InstrumentId = o.InstrumentID ?? "", Direction = o.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t ? o.VolumeTraded : o.VolumeTotalOriginal, OrderQty = o.VolumeTotalOriginal, FilledQty = o.VolumeTraded, FillPrice = (decimal)(o.LimitPrice > 0 ? o.LimitPrice : 0), Type = type, Message = o.StatusMsg, Time = ParseCtpTime(o.InsertDate, o.InsertTime) };
     }
 
     private static OrderEvent? ConvertTrade(CTP.ThostFtdcTradeField t)
     {
         if (t.Volume <= 0) return null;
-        return new OrderEvent { OrderId = ParseOrderRef(t.OrderRef), InstrumentId = t.InstrumentID ?? "", Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, Time = DateTimeOffset.UtcNow };
+        return new OrderEvent { OrderId = ParseOrderRef(t.OrderRef), InstrumentId = t.InstrumentID ?? "", Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, Time = ParseCtpTime(t.TradeDate, t.TradeTime) };
     }
 
     /// <summary>查询 CTP 所有持仓（启动登录后 / 重连登录后调用）。</summary>
