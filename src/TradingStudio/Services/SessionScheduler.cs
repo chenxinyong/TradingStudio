@@ -20,16 +20,20 @@ public class SessionScheduler
     public bool IsInSession()
     {
         var now = BeijingNow;
-        if (IsRestDay(DateOnly.FromDateTime(now))) return false;
         var t = now.TimeOfDay;
         var today = DateOnly.FromDateTime(now);
+
+        // 夜盘属于次日交易日：>= 20:30 时检查明天是否休息日
+        // （如周日 20:30 夜盘属于周一，周五 20:30 无夜盘因为周六休息）
+        var effectiveDay = t >= NightStart ? today.AddDays(1) : today;
+        if (IsRestDay(effectiveDay)) return false;
 
         // 日盘
         if (t >= DayStart && t <= DayEnd) return true;
 
         // 夜盘：>= 20:30 到今天结束，或从 00:00 到 03:00
         if (t >= NightStart) return true;
-        if (t <= NightEnd) return !IsRestDay(today.AddDays(-1)); // 夜盘交易日的白天不是休息日
+        if (t <= NightEnd) return !IsRestDay(today.AddDays(-1)); // 前一晚夜盘的前置条件
 
         return false;
     }
@@ -39,19 +43,31 @@ public class SessionScheduler
     {
         var now = BeijingNow;
         var today = DateOnly.FromDateTime(now);
+        var t = now.TimeOfDay;
 
         // 尝试今天日盘
-        if (!IsRestDay(today) && now.TimeOfDay < DayStart)
-            return DayStart - now.TimeOfDay;
+        if (!IsRestDay(today) && t < DayStart)
+            return DayStart - t;
 
-        // 尝试今天夜盘
-        if (!IsRestDay(today) && now.TimeOfDay < NightStart && now.TimeOfDay < DayStart.Add(new TimeSpan(1,0,0,0)))
-            return NightStart - now.TimeOfDay;
+        // 尝试今天夜盘（夜盘属于明天交易日，检查明天是否休息日）
+        if (!IsRestDay(today.AddDays(1)) && t < NightStart)
+            return NightStart - t;
 
-        // 尝试明天日盘
-        var next = today.AddDays(1);
-        while (IsRestDay(next)) next = next.AddDays(1);
-        return (next.ToDateTime(new TimeOnly(8, 30)) - now).Duration();
+        // 找下一个有效交易日（日盘）
+        var nextDay = today.AddDays(1);
+        while (IsRestDay(nextDay)) nextDay = nextDay.AddDays(1);
+
+        // 检查 nextDay 前一天的夜盘（夜盘属于 nextDay，在前一天 20:30 开始）
+        var nightDay = nextDay.AddDays(-1);
+        if (nightDay >= today)
+        {
+            var nightTime = nightDay.ToDateTime(new TimeOnly(20, 30));
+            if (nightTime > now)
+                return nightTime - now;
+        }
+
+        // 回退到 nextDay 的日盘
+        return (nextDay.ToDateTime(new TimeOnly(8, 30)) - now).Duration();
     }
 
     /// <summary>是否是休息日（周末或节假日）</summary>
