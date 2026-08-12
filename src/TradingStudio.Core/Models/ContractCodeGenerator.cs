@@ -42,9 +42,11 @@ public static class ContractCodeGenerator
             yield return all.Skip(i).Take(batchSize).ToArray();
     }
 
-    // === internal ===
-
-    private static string MakeCode(string symbolCode, ExchangeCode exchange, int year, int month)
+    /// <summary>
+    /// 生成合约代码 — CZCE 短码(TA609) 或 标准长码(cu2607)。
+    /// 传入 ExchangeCode 自动选择格式。
+    /// </summary>
+    public static string MakeCode(string symbolCode, ExchangeCode exchange, int year, int month)
     {
         return exchange == ExchangeCode.CZCE
             ? $"{symbolCode}{year % 10}{month:D2}"            // TA608 (CTP郑商所短码, 年份个位)

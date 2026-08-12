@@ -1,7 +1,7 @@
 {
   "StrategyId": "ma-cross-ta",
   "StrategyType": "MaCross",
-  "Instruments": ["TA2609"],
+  "Instruments": ["TA609"],
   "PrimaryBarType": "bars_1min",
   "AllocatedCapital": 200000,
   "MaxPositionPerInstrument": 2,

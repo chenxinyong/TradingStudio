@@ -205,7 +205,7 @@ public static class LiveComposer
                 // 目录模式：加载所有 .json 文件，每个品种独立配置
                 foreach (var file in Directory.GetFiles(strategyConfigPath, "*.json").OrderBy(f => f))
                 {
-                    var sc = TryLoadConfig(file);
+                    var sc = TryLoadConfig(file, registry);
                     if (sc != null) strategyConfigs.Add(sc);
                 }
                 Console.Error.WriteLine($"[LiveComposer] Directory mode: {strategyConfigs.Count} configs from {strategyConfigPath}");
@@ -213,7 +213,7 @@ public static class LiveComposer
             else if (File.Exists(strategyConfigPath))
             {
                 // 单文件模式（向后兼容）
-                var sc = TryLoadConfig(strategyConfigPath);
+                var sc = TryLoadConfig(strategyConfigPath, registry);
                 if (sc != null) strategyConfigs.Add(sc);
             }
         }
@@ -311,15 +311,65 @@ public static class LiveComposer
         buffer.Clear();
     }
 
-    private static TradingStudio.Core.Strategy.StrategyConfig? TryLoadConfig(string path)
+    private static TradingStudio.Core.Strategy.StrategyConfig? TryLoadConfig(string path, FutureRegistry registry)
     {
         try
         {
             var json = File.ReadAllText(path);
             var sc = System.Text.Json.JsonSerializer.Deserialize<TradingStudio.Core.Strategy.StrategyConfig>(
                 json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (sc != null)
-                Console.Error.WriteLine($"[LiveComposer] Loaded: {Path.GetFileName(path)} → {sc.StrategyId} [{string.Join(",", sc.Instruments)}] Capital={sc.AllocatedCapital}");
+            if (sc == null) return null;
+
+            // ── 郑商所合约代码归一化：长码(TA2609) → 短码(TA609) ──
+            var instruments = sc.Instruments.ToList();
+            var normalized = false;
+            for (int i = 0; i < instruments.Count; i++)
+            {
+                try
+                {
+                    var (symbol, year, month) = ContractCodeGenerator.ParseCode(instruments[i]);
+                    var future = registry.Resolve(instruments[i]);
+                    if (future?.Exchange == ExchangeCode.CZCE)
+                    {
+                        var shortCode = ContractCodeGenerator.MakeCode(symbol, ExchangeCode.CZCE, year, month);
+                        if (shortCode != instruments[i])
+                        {
+                            Console.Error.WriteLine($"[LiveComposer] CZCE归一化: {instruments[i]} → {shortCode}");
+                            instruments[i] = shortCode;
+                            normalized = true;
+                        }
+                    }
+                }
+                catch { /* 解析失败则保持原值 */ }
+            }
+
+            if (normalized)
+            {
+                sc = new TradingStudio.Core.Strategy.StrategyConfig
+                {
+                    StrategyId = sc.StrategyId,
+                    StrategyType = sc.StrategyType,
+                    Description = sc.Description,
+                    Version = sc.Version,
+                    Instruments = instruments.AsReadOnly(),
+                    PrimaryBarType = sc.PrimaryBarType,
+                    BarPeriodMinutes = sc.BarPeriodMinutes,
+                    AllocatedCapital = sc.AllocatedCapital,
+                    MaxDrawdownPct = sc.MaxDrawdownPct,
+                    MaxPositionPerInstrument = sc.MaxPositionPerInstrument,
+                    DataStartDate = sc.DataStartDate,
+                    DataEndDate = sc.DataEndDate,
+                    OptimizationEndDate = sc.OptimizationEndDate,
+                    BacktestMode = sc.BacktestMode,
+                    Priority = sc.Priority,
+                    Parameters = sc.Parameters,
+                    RiskRules = sc.RiskRules,
+                    SessionFilter = sc.SessionFilter,
+                    SkipAuction = sc.SkipAuction,
+                };
+            }
+
+            Console.Error.WriteLine($"[LiveComposer] Loaded: {Path.GetFileName(path)} → {sc.StrategyId} [{string.Join(",", sc.Instruments)}] Capital={sc.AllocatedCapital}");
             return sc;
         }
         catch (Exception ex)
