@@ -12,4 +12,6 @@ public class Position
     public decimal Commission { get; set; }
     public DateTimeOffset CreatedTime { get; init; }
     public string StrategyId { get; set; } = "";
+    /// <summary>CTP PositionDate — '1'=今仓, '2'=昨仓, '\0'=未设置（回测模式）。平今/平昨判断的直接依据。</summary>
+    public char PositionDate { get; set; } = '\0';
 }

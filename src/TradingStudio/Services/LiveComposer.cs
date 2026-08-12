@@ -293,17 +293,15 @@ public static class LiveComposer
             {
                 if (info.NetPosition == 0) continue;
                 var sid = instrumentStrategyMap.TryGetValue(instId, out var m) ? m : "live-test";
-                // 根据 CTP PositionDate 确定建仓日期: '1'=今仓→今天, '2'=昨仓→昨天
-                var createdDate = info.PositionDate == '2'
-                    ? DateTime.Today.AddDays(-1)
-                    : DateTime.Today;
+                // createdDate 仅用于显示/审计（平今/平昨判断走 Position.CTPPositionDate）
+                var createdDate = DateTime.Today;
                 var restored = portfolio.RestorePosition(instId, sid,
                     info.NetPosition, (decimal)info.OpenCost, (decimal)info.UseMargin,
-                    createdDate);
+                    createdDate, info.PositionDate);
                 if (restored)
-                    Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {instId} x{info.NetPosition} @{info.OpenCost:F4} Margin={info.UseMargin:F2} PosDate={info.PositionDate}→Created={createdDate:yyyy-MM-dd}");
+                    Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {instId} x{info.NetPosition} @{info.OpenCost:F4} Margin={info.UseMargin:F2} PosDate={info.PositionDate} ({(info.PositionDate == '1' ? "今仓" : "昨仓")})");
                 else
-                    Console.Error.WriteLine($"[LiveComposer] CTP持仓恢复跳过(已存在): {instId}");
+                    Console.Error.WriteLine($"[LiveComposer] CTP持仓更新PosDate: {instId} PosDate={info.PositionDate} (已存在)");
             }
             catch (Exception ex)
             {

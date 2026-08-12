@@ -113,6 +113,10 @@ internal class EngineStrategyContext : StrategyContext
             throw new InvalidOperationException($"No position to close: {instrumentId}");
         var direction = pos.Quantity > 0 ? OrderDirection.Sell : OrderDirection.Buy;
         var quantity = Math.Abs(pos.Quantity);
+        // 平今/平昨: 优先 CTP PositionDate（Live 模式权威来源），否则日期比较（回测模式）
+        bool? isCloseToday = pos.PositionDate == '1' ? true
+                           : pos.PositionDate == '2' ? false
+                           : null;
         var ticket = _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = direction,
@@ -120,6 +124,7 @@ internal class EngineStrategyContext : StrategyContext
             Tag = pos.Quantity > 0 ? "平多" : "平空",
             IsCloseOrder = true,
             PositionCreatedDate = DateOnly.FromDateTime(pos.CreatedTime.DateTime),
+            IsCloseToday = isCloseToday,
             ExitReason = exitReason,
         }, StrategyId, _portfolio);
         _log.LogInformation("[{Strategy}] ClosePosition {Inst} x{Qty} {Reason} → {Status}",

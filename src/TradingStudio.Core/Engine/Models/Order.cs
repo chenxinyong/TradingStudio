@@ -20,6 +20,8 @@ public class Order
     public bool IsCloseOrder { get; init; }
     /// <summary>被平仓位的建仓日期（用于区分平今/平昨，仅SHFE/INE需要）</summary>
     public DateOnly PositionCreatedDate { get; init; }
+    /// <summary>平今/平昨标识 — true=平今, false=平昨, null=自动判断（日期比较或非SHFE/INE）。从 CTP PositionDate 直接映射。</summary>
+    public bool? IsCloseToday { get; init; }
     /// <summary>退出原因(平仓单专用): SL/TP/Signal/EOD/Manual</summary>
     public string ExitReason { get; init; } = "";
 }

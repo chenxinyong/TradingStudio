@@ -305,7 +305,8 @@ public class CtpTraderBridge : IDisposable
     /// <summary>
     /// 根据订单方向和品种所属交易所，选择合适的开平标志。
     /// 上期所/上能所平仓必须明确区分 CloseToday / CloseYesterday，不能使用泛型 Close。
-    /// 通过 Order.PositionCreatedDate 与 CTP 交易日比较判断平今/平昨。
+    /// 优先使用 Order.IsCloseToday（从 CTP PositionDate 直接映射，Live 模式权威来源），
+    /// 其次回退到 PositionCreatedDate vs _tradingDay 日期比较（回测模式）。
     /// </summary>
     private CTP.EnumOffsetFlagType ResolveOffsetFlag(Order order)
     {
@@ -317,15 +318,26 @@ public class CtpTraderBridge : IDisposable
             var future = _registry.Resolve(order.InstrumentId);
             if (future != null && RequiresExplicitClose(future.Exchange))
             {
-                // 比较建仓日期与CTP交易日：同一天→平今，不同→平昨
+                // ① 优先：CTP PositionDate 直接映射（Live 模式，权威来源，无需日期推断）
+                if (order.IsCloseToday.HasValue)
+                {
+                    var flag = order.IsCloseToday.Value
+                        ? CTP.EnumOffsetFlagType.CloseToday
+                        : CTP.EnumOffsetFlagType.CloseYesterday;
+                    _log.Debug("ResolveOffset(PosDate): {Inst} IsCloseToday={IsToday} → {Offset}",
+                        order.InstrumentId, order.IsCloseToday.Value, flag);
+                    return flag;
+                }
+
+                // ② 回退：日期比较（回测模式）
                 var td = _tradingDay;
                 var created = order.PositionCreatedDate;
                 var isToday = td != default && created != default && created == td;
-                _log.Debug("ResolveOffset: {Inst} TradingDay={TD} PosCreated={Created} → {Offset}",
+                _log.Debug("ResolveOffset(Date): {Inst} TradingDay={TD} PosCreated={Created} → {Offset}",
                     order.InstrumentId, td, created, isToday ? "CloseToday" : "CloseYesterday");
-                if (isToday)
-                    return CTP.EnumOffsetFlagType.CloseToday;
-                return CTP.EnumOffsetFlagType.CloseYesterday;
+                return isToday
+                    ? CTP.EnumOffsetFlagType.CloseToday
+                    : CTP.EnumOffsetFlagType.CloseYesterday;
             }
         }
         return CTP.EnumOffsetFlagType.Close;
@@ -354,28 +366,7 @@ public class CtpTraderBridge : IDisposable
         return DateTimeOffset.UtcNow;
     }
 
-    /// <summary>
-    /// 将 CTP 时间字段转换为基于 CTP 交易日的时间戳（非静态，使用 _tradingDay）。
-    /// 夜盘（20:00-03:00）CTP 回调中的 TradeDate/InsertDate 是日历日，
-    /// 与 CTP 交易日相差一天。用 _tradingDay 覆盖日期部分，确保
-    /// PositionCreatedDate 与 CTP 交易日对齐，平今/平昨判断正确。
-    /// </summary>
-    private DateTimeOffset ToTradingDayTime(string dateStr, string timeStr)
-    {
-        var dt = ParseCtpTime(dateStr, timeStr);
-        if (_tradingDay != default)
-        {
-            var calDate = DateOnly.FromDateTime(dt.DateTime);
-            if (calDate != _tradingDay)
-            {
-                return new DateTimeOffset(_tradingDay.Year, _tradingDay.Month, _tradingDay.Day,
-                    dt.Hour, dt.Minute, dt.Second, dt.Offset);
-            }
-        }
-        return dt;
-    }
-
-    private OrderEvent? ConvertOrder(CTP.ThostFtdcOrderField o)
+    private static OrderEvent? ConvertOrder(CTP.ThostFtdcOrderField o)
     {
         // OnRtnOrder 仅输出状态变更通知，成交事件由 OnRtnTrade→ConvertTrade 独立产生。
         // 否则同一笔成交会产生两份 Filled 事件，导致 PortfolioManager 重复处理。
@@ -388,13 +379,13 @@ public class CtpTraderBridge : IDisposable
             CTP.EnumOrderStatusType.Canceled => OrderEventType.Cancelled,
             _ => OrderEventType.Submitted,
         };
-        return new OrderEvent { OrderId = ParseOrderRef(o.OrderRef), InstrumentId = o.InstrumentID ?? "", Direction = o.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t ? o.VolumeTraded : o.VolumeTotalOriginal, OrderQty = o.VolumeTotalOriginal, FilledQty = o.VolumeTraded, FillPrice = (decimal)(o.LimitPrice > 0 ? o.LimitPrice : 0), Type = type, Message = o.StatusMsg, Time = ToTradingDayTime(o.InsertDate, o.InsertTime) };
+        return new OrderEvent { OrderId = ParseOrderRef(o.OrderRef), InstrumentId = o.InstrumentID ?? "", Direction = o.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t ? o.VolumeTraded : o.VolumeTotalOriginal, OrderQty = o.VolumeTotalOriginal, FilledQty = o.VolumeTraded, FillPrice = (decimal)(o.LimitPrice > 0 ? o.LimitPrice : 0), Type = type, Message = o.StatusMsg, Time = ParseCtpTime(o.InsertDate, o.InsertTime) };
     }
 
-    private OrderEvent? ConvertTrade(CTP.ThostFtdcTradeField t)
+    private static OrderEvent? ConvertTrade(CTP.ThostFtdcTradeField t)
     {
         if (t.Volume <= 0) return null;
-        return new OrderEvent { OrderId = ParseOrderRef(t.OrderRef), InstrumentId = t.InstrumentID ?? "", Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, Time = ToTradingDayTime(t.TradeDate, t.TradeTime) };
+        return new OrderEvent { OrderId = ParseOrderRef(t.OrderRef), InstrumentId = t.InstrumentID ?? "", Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, Time = ParseCtpTime(t.TradeDate, t.TradeTime) };
     }
 
     /// <summary>查询 CTP 所有持仓（启动登录后 / 重连登录后调用）。</summary>

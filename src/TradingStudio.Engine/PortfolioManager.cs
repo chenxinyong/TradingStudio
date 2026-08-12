@@ -68,14 +68,20 @@ public class PortfolioManager : IPortfolioState
     /// <summary>
     /// 从 CTP 恢复已有持仓（引擎启动/重连后调用）。
     /// 仅在 _positions 中不存在该合约时才注入，避免覆盖引擎已管理的仓位。
+    /// 仓位已存在时，会用 CTP 的 PositionDate 更新（权威来源，跨越时段后今/昨可能变化）。
     /// 线程安全。
     /// </summary>
     public bool RestorePosition(string instrumentId, string strategyId, int quantity,
-        decimal avgPrice, decimal margin, DateTime createdTime)
+        decimal avgPrice, decimal margin, DateTime createdTime, char positionDate = '\0')
     {
         lock (_sync)
         {
-            if (_positions.ContainsKey(instrumentId)) return false;
+            if (_positions.TryGetValue(instrumentId, out var existing))
+            {
+                // 更新 PositionDate — CTP 权威来源（跨时段后今仓可能变昨仓）
+                if (positionDate != '\0') existing.PositionDate = positionDate;
+                return false;
+            }
 
             var pos = new Position
             {
@@ -86,6 +92,7 @@ public class PortfolioManager : IPortfolioState
                 Commission = 0,
                 CreatedTime = new DateTimeOffset(createdTime, TimeSpan.FromHours(8)),
                 StrategyId = strategyId,
+                PositionDate = positionDate,
             };
             _positions[instrumentId] = pos;
             MarginUsed += margin;
@@ -324,6 +331,7 @@ public class PortfolioManager : IPortfolioState
                 Margin = margin,
                 CreatedTime = fill.Time,
                 StrategyId = fill.StrategyId,
+                PositionDate = '1',  // 新开仓 = 今仓（跨段后由 CTP 查询纠正）
             };
             _positions[key] = pos;
             Cash -= fill.Fee + margin;  // 保证金必须从现金扣除，否则 Equity=Cash+Margin 双重计算
@@ -441,6 +449,7 @@ public class PortfolioManager : IPortfolioState
                     Margin = newMargin,
                     CreatedTime = fill.Time,
                     StrategyId = fill.StrategyId,
+                    PositionDate = '1',  // 新开仓 = 今仓
                 };
                 _positions[key] = pos;
                 MarginUsed += newMargin;
