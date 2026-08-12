@@ -442,24 +442,35 @@ public class DuckDBStore : IBarStore, ITickStore
     // Order/Trade 持久化（原则3: 所有事件可回放）
     // ═══════════════════════════════════════════
 
-    /// <summary>批量写入订单事件。线程安全（每次调用创建独立连接）。</summary>
+    /// <summary>批量写入订单事件。线程安全（每次调用创建独立连接）。INSERT OR IGNORE 防重复。</summary>
     public void WriteOrderEvents(IReadOnlyList<OrderEvent> events)
     {
         if (_readOnly || events.Count == 0) return;
         try
         {
             using var conn = OpenConnection();
-            using var appender = conn.CreateAppender("order_events");
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                INSERT OR IGNORE INTO order_events
+                (order_id, instrument_id, strategy_id, direction, quantity, order_qty, filled_qty, type, fill_price, fee, slippage, message, event_time)
+                VALUES ($order_id, $instrument_id, $strategy_id, $direction, $quantity, $order_qty, $filled_qty, $type, $fill_price, $fee, $slippage, $message, $event_time)";
             foreach (var e in events)
             {
-                appender.CreateRow()
-                    .AppendValue(e.OrderId).AppendValue(e.InstrumentId)
-                    .AppendValue(e.StrategyId).AppendValue(e.Direction.ToString())
-                    .AppendValue(e.Quantity).AppendValue(e.OrderQty)
-                    .AppendValue(e.FilledQty).AppendValue(e.Type.ToString())
-                    .AppendValue((double?)e.FillPrice ?? 0).AppendValue((double)e.Fee)
-                    .AppendValue((double)e.Slippage).AppendValue(e.Message ?? "")
-                    .AppendValue(e.Time.DateTime).EndRow();
+                cmd.Parameters.Clear();
+                cmd.Parameters.Add(new DuckDBParameter("order_id", e.OrderId));
+                cmd.Parameters.Add(new DuckDBParameter("instrument_id", e.InstrumentId));
+                cmd.Parameters.Add(new DuckDBParameter("strategy_id", e.StrategyId));
+                cmd.Parameters.Add(new DuckDBParameter("direction", e.Direction.ToString()));
+                cmd.Parameters.Add(new DuckDBParameter("quantity", e.Quantity));
+                cmd.Parameters.Add(new DuckDBParameter("order_qty", e.OrderQty));
+                cmd.Parameters.Add(new DuckDBParameter("filled_qty", e.FilledQty));
+                cmd.Parameters.Add(new DuckDBParameter("type", e.Type.ToString()));
+                cmd.Parameters.Add(new DuckDBParameter("fill_price", (double?)e.FillPrice ?? 0));
+                cmd.Parameters.Add(new DuckDBParameter("fee", (double)e.Fee));
+                cmd.Parameters.Add(new DuckDBParameter("slippage", (double)e.Slippage));
+                cmd.Parameters.Add(new DuckDBParameter("message", e.Message ?? ""));
+                cmd.Parameters.Add(new DuckDBParameter("event_time", e.Time.DateTime));
+                cmd.ExecuteNonQuery();
             }
         }
         catch (Exception ex) { Console.Error.WriteLine($"[DuckDB] WriteOrderEvents error: {ex.Message}"); }

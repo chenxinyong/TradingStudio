@@ -196,9 +196,34 @@ public class CtpTraderBridge : IDisposable
             if (e.EventType == CTP.EnumOnRtnType.OnRtnOrder && e.Param != IntPtr.Zero)
             {
                 var ord = CTP.Conv.P2S<CTP.ThostFtdcOrderField>(e.Param);
-                _log.Information("[CTP-Trader] OnRtnOrder: {Inst} Status={Status} Ref={Ref} VolTraded={Vol} Msg={Msg}",
-                    ord.InstrumentID, ord.OrderStatus, ord.OrderRef, ord.VolumeTraded, ord.StatusMsg);
-                var evt = ConvertOrder(ord); if (evt != null) _fillWriter.TryWrite(evt);
+                var refId = ParseOrderRef(ord.OrderRef);
+
+                // 去重：CTP 可能对同一状态重复回调 OnRtnOrder。
+                // 跳过 (Status, VolTraded) 与上一次完全相同的回调。
+                if (_lastOrderRtn.TryGetValue(refId, out var last)
+                    && last.Status == ord.OrderStatus
+                    && last.VolTraded == ord.VolumeTraded)
+                {
+                    _log.Debug("[CTP-Trader] OnRtnOrder dup skipped: {Inst} Status={Status} Ref={Ref}",
+                        ord.InstrumentID, ord.OrderStatus, ord.OrderRef);
+                    return;
+                }
+                _lastOrderRtn[refId] = (ord.OrderStatus, ord.VolumeTraded);
+
+                // 防重复写入：同一个 OrderRef 只写入第一个 Submitted 事件。
+                // CTP 会多次回调 OnRtnOrder（报单已提交→全部成交），全部映射为 Submitted，
+                // 若都写入则 DuckDB PK (order_id, type, event_time) 冲突。
+                if (!_submittedEmitted.Add(refId))
+                {
+                    _log.Debug("[CTP-Trader] OnRtnOrder Submitted skipped (already emitted): {Inst} Status={Status} Ref={Ref}",
+                        ord.InstrumentID, ord.OrderStatus, ord.OrderRef);
+                }
+                else
+                {
+                    _log.Information("[CTP-Trader] OnRtnOrder: {Inst} Status={Status} Ref={Ref} VolTraded={Vol} Msg={Msg}",
+                        ord.InstrumentID, ord.OrderStatus, ord.OrderRef, ord.VolumeTraded, ord.StatusMsg);
+                    var evt = ConvertOrder(ord); if (evt != null) _fillWriter.TryWrite(evt);
+                }
             }
             else if (e.EventType == CTP.EnumOnRtnType.OnRtnTrade && e.Param != IntPtr.Zero)
             {
@@ -329,24 +354,47 @@ public class CtpTraderBridge : IDisposable
         return DateTimeOffset.UtcNow;
     }
 
-    private static OrderEvent? ConvertOrder(CTP.ThostFtdcOrderField o)
+    /// <summary>
+    /// 将 CTP 时间字段转换为基于 CTP 交易日的时间戳（非静态，使用 _tradingDay）。
+    /// 夜盘（20:00-03:00）CTP 回调中的 TradeDate/InsertDate 是日历日，
+    /// 与 CTP 交易日相差一天。用 _tradingDay 覆盖日期部分，确保
+    /// PositionCreatedDate 与 CTP 交易日对齐，平今/平昨判断正确。
+    /// </summary>
+    private DateTimeOffset ToTradingDayTime(string dateStr, string timeStr)
     {
+        var dt = ParseCtpTime(dateStr, timeStr);
+        if (_tradingDay != default)
+        {
+            var calDate = DateOnly.FromDateTime(dt.DateTime);
+            if (calDate != _tradingDay)
+            {
+                return new DateTimeOffset(_tradingDay.Year, _tradingDay.Month, _tradingDay.Day,
+                    dt.Hour, dt.Minute, dt.Second, dt.Offset);
+            }
+        }
+        return dt;
+    }
+
+    private OrderEvent? ConvertOrder(CTP.ThostFtdcOrderField o)
+    {
+        // OnRtnOrder 仅输出状态变更通知，成交事件由 OnRtnTrade→ConvertTrade 独立产生。
+        // 否则同一笔成交会产生两份 Filled 事件，导致 PortfolioManager 重复处理。
         var t = o.VolumeTraded > 0;
         var type = o.OrderStatus switch
         {
-            CTP.EnumOrderStatusType.AllTraded => t ? OrderEventType.Filled : OrderEventType.Submitted,
-            CTP.EnumOrderStatusType.PartTradedQueueing or CTP.EnumOrderStatusType.PartTradedNotQueueing => t ? OrderEventType.PartiallyFilled : OrderEventType.Submitted,
+            CTP.EnumOrderStatusType.AllTraded => OrderEventType.Submitted,  // 成交由 OnRtnTrade 处理
+            CTP.EnumOrderStatusType.PartTradedQueueing or CTP.EnumOrderStatusType.PartTradedNotQueueing => OrderEventType.Submitted,
             CTP.EnumOrderStatusType.NoTradeQueueing or CTP.EnumOrderStatusType.NoTradeNotQueueing => OrderEventType.Submitted,
             CTP.EnumOrderStatusType.Canceled => OrderEventType.Cancelled,
             _ => OrderEventType.Submitted,
         };
-        return new OrderEvent { OrderId = ParseOrderRef(o.OrderRef), InstrumentId = o.InstrumentID ?? "", Direction = o.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t ? o.VolumeTraded : o.VolumeTotalOriginal, OrderQty = o.VolumeTotalOriginal, FilledQty = o.VolumeTraded, FillPrice = (decimal)(o.LimitPrice > 0 ? o.LimitPrice : 0), Type = type, Message = o.StatusMsg, Time = ParseCtpTime(o.InsertDate, o.InsertTime) };
+        return new OrderEvent { OrderId = ParseOrderRef(o.OrderRef), InstrumentId = o.InstrumentID ?? "", Direction = o.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t ? o.VolumeTraded : o.VolumeTotalOriginal, OrderQty = o.VolumeTotalOriginal, FilledQty = o.VolumeTraded, FillPrice = (decimal)(o.LimitPrice > 0 ? o.LimitPrice : 0), Type = type, Message = o.StatusMsg, Time = ToTradingDayTime(o.InsertDate, o.InsertTime) };
     }
 
-    private static OrderEvent? ConvertTrade(CTP.ThostFtdcTradeField t)
+    private OrderEvent? ConvertTrade(CTP.ThostFtdcTradeField t)
     {
         if (t.Volume <= 0) return null;
-        return new OrderEvent { OrderId = ParseOrderRef(t.OrderRef), InstrumentId = t.InstrumentID ?? "", Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, Time = ParseCtpTime(t.TradeDate, t.TradeTime) };
+        return new OrderEvent { OrderId = ParseOrderRef(t.OrderRef), InstrumentId = t.InstrumentID ?? "", Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, Time = ToTradingDayTime(t.TradeDate, t.TradeTime) };
     }
 
     /// <summary>查询 CTP 所有持仓（启动登录后 / 重连登录后调用）。</summary>
@@ -380,6 +428,12 @@ public class CtpTraderBridge : IDisposable
     private int _reconnectAttempts;
     private bool _pendingReconnect;
     private DateOnly _tradingDay;  // CTP 交易日，用于区分平今/平昨
+
+    /// <summary>OnRtnOrder 去重：追踪每个 OrderRef 最后一次回调的 (Status, VolTraded)</summary>
+    private readonly Dictionary<long, (CTP.EnumOrderStatusType Status, int VolTraded)> _lastOrderRtn = new();
+
+    /// <summary>已发送首个 Submitted 事件的 OrderRef 集合（防同 Ref 多状态重复写入 DuckDB）</summary>
+    private readonly HashSet<long> _submittedEmitted = new();
 
     private async void ScheduleReconnect()
     {
