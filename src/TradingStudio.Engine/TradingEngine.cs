@@ -78,6 +78,10 @@ public class TradingEngine
             .SelectMany(c => c.Instruments).Distinct().ToList();
         var warmupCache = new Dictionary<string, List<Bar>>();
 
+        // 会话重启防护：EngineHost 每个交易时段调用一次 RunAsync，策略容器是单例。
+        // 不清空会导致上一会话的策略 Slot 残留，同一信号被重复分发 → 重复下单。
+        _strategies.Clear();
+
         foreach (var config in _options.StrategyConfigs)
         {
             var strategy = StrategyFactory.Create(config);

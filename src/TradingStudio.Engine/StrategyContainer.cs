@@ -47,6 +47,20 @@ public class StrategyContainer
                 list.Remove(slot);
     }
 
+    /// <summary>
+    /// 清空全部策略注册 — 会话重启（EngineHost 每会话调用一次 RunAsync）时，
+    /// 必须在重新注册前清掉上一会话的 Slot，否则每重启一个会话就多出 N 份重复策略，
+    /// 导致同一信号重复下单。
+    /// </summary>
+    public void Clear()
+    {
+        lock (_mutex)
+        {
+            _allSlots.Clear();
+            _subscriptions.Clear();
+        }
+    }
+
     public void Pause(string strategyId)
     {
         lock (_mutex)
