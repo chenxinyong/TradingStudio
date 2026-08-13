@@ -130,6 +130,8 @@ public class ExecutionHandler : IExecutionHandler
             Status = OrderStatus.Submitted,
             CreatedTime = DateTimeOffset.UtcNow,
             IsCloseOrder = order.IsCloseOrder,
+            PositionCreatedDate = order.PositionCreatedDate,
+            IsCloseToday = order.IsCloseToday,
             ExitReason = order.ExitReason,
         };
 
