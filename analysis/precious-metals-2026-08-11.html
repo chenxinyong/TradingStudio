@@ -1,0 +1,486 @@
+<title>贵金属中长期研判 — 2026年8月11日</title>
+<meta name="description" content="黄金白银多周期技术+基本面综合分析，含缠论结构、资金流向、央行购金、COMEX库存、光伏需求驱动及中长期展望">
+<style>
+:root {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --border: #e5e3de;
+  --text: #292524;
+  --text-secondary: #78716c;
+  --accent: #b8860b;
+  --accent-dim: #fef3c7;
+  --up: #059669;
+  --dn: #dc2626;
+  --warn: #d97706;
+  --muted: #a8a29e;
+}
+:root[data-theme="dark"] {
+  --bg: #1c1917;
+  --surface: #292524;
+  --border: #44403c;
+  --text: #e7e5e4;
+  --text-secondary: #a8a29e;
+  --accent: #fbbf24;
+  --accent-dim: #451a03;
+  --up: #34d399;
+  --dn: #f87171;
+  --warn: #fbbf24;
+  --muted: #78716c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1c1917;
+    --surface: #292524;
+    --border: #44403c;
+    --text: #e7e5e4;
+    --text-secondary: #a8a29e;
+    --accent: #fbbf24;
+    --accent-dim: #451a03;
+    --up: #34d399;
+    --dn: #f87171;
+    --warn: #fbbf24;
+    --muted: #78716c;
+  }
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.6; max-width: 960px; margin: 0 auto; padding: 24px 20px 80px;
+}
+h1 { font-size: 1.75rem; margin-bottom: 4px; color: var(--accent); }
+h1 + p { color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 32px; }
+h2 { font-size: 1.25rem; margin: 36px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--accent-dim); color: var(--accent); }
+h3 { font-size: 1.05rem; margin: 24px 0 8px; color: var(--text); }
+table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 0.9rem; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { background: var(--accent-dim); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; }
+td { vertical-align: middle; }
+tr:hover { background: var(--accent-dim); }
+.up { color: var(--up); font-weight: 600; }
+.dn { color: var(--dn); font-weight: 600; }
+.highlight { background: var(--accent-dim); padding: 4px 8px; border-radius: 4px; font-weight: 600; }
+.metric-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 20px; }
+.metric-card { flex: 1; min-width: 160px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+.metric-card .label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.metric-card .value { font-size: 1.5rem; font-weight: 700; margin-top: 2px; }
+.metric-card .sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
+.signal-bull { color: var(--up); }
+.signal-bear { color: var(--dn); }
+.signal-warn { color: var(--warn); }
+.progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 4px; }
+.progress-fill { height: 6px; border-radius: 3px; }
+.progress-fill.high { background: var(--dn); }
+.progress-fill.mid { background: var(--warn); }
+.progress-fill.low { background: var(--up); }
+.divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+.note { font-size: 0.85rem; color: var(--text-secondary); padding: 16px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); margin: 20px 0; }
+.note strong { color: var(--text); }
+ul, ol { margin: 8px 0 16px 20px; }
+li { margin: 4px 0; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-right: 4px; }
+.tag-bull { background: #d1fae5; color: #065f46; }
+.tag-bear { background: #fee2e2; color: #991b1b; }
+.tag-warn { background: #fef3c7; color: #92400e; }
+@media (prefers-color-scheme: dark) {
+  .tag-bull { background: #064e3b; color: #6ee7b7; }
+  .tag-bear { background: #7f1d1d; color: #fca5a5; }
+  .tag-warn { background: #78350f; color: #fcd34d; }
+}
+:root[data-theme="dark"] .tag-bull, :root[data-theme="dark"] .tag-bear, :root[data-theme="dark"] .tag-warn {
+  /* handled by dark rule via same selectors redefined below */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tag-bull { background: #064e3b; color: #6ee7b7; }
+  :root:not([data-theme="light"]) .tag-bear { background: #7f1d1d; color: #fca5a5; }
+  :root:not([data-theme="light"]) .tag-warn { background: #78350f; color: #fcd34d; }
+}
+:root[data-theme="dark"] .tag-bull { background: #064e3b; color: #6ee7b7; }
+:root[data-theme="dark"] .tag-bear { background: #7f1d1d; color: #fca5a5; }
+:root[data-theme="dark"] .tag-warn { background: #78350f; color: #fcd34d; }
+</style>
+
+<h1>⚜️ 贵金属中长期研判</h1>
+<p>黄金 AU + 白银 AG | 多周期技术 + 基本面综合 | 2026-08-11</p>
+
+<!-- ===== 1. EXECUTIVE SUMMARY ===== -->
+<h2>一、核心结论</h2>
+
+<div class="metric-row">
+  <div class="metric-card">
+    <div class="label">白银中期评级</div>
+    <div class="value signal-bull">🟢 战略看多</div>
+    <div class="sub">周线一买已确认 → 日线二买突破</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">黄金中期评级</div>
+    <div class="value signal-bull">🟢 战略看多</div>
+    <div class="sub">央行Q2购金288吨创纪录 + 美元见顶</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">核心矛盾</div>
+    <div class="value" style="font-size:1.1rem;">短期超买 vs 中长期底</div>
+    <div class="sub">5日+10%，但大周期底部刚确认</div>
+  </div>
+</div>
+
+<p style="margin-top:16px;">
+  <span class="tag tag-bull">周线级别一买</span>
+  <span class="tag tag-bull">央行Q2购金289吨</span>
+  <span class="tag tag-bull">非农爆冷→加息预期崩塌</span>
+  <span class="tag tag-warn">5日涨幅过大</span>
+  <span class="tag tag-warn">金银20日位>90%</span>
+</p>
+
+<!-- ===== 2. SITUATION UPDATE ===== -->
+<h2>二、当前盘面</h2>
+
+<table>
+  <thead>
+    <tr><th>指标</th><th>白银 AG（沪银 AG2612）</th><th>黄金 AU（沪金 AU2612）</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>最新价</td><td>15,735 (<span class="dn">+0.45%</span>)</td><td>950 (<span class="up">+1.25%</span>)</td>
+    </tr>
+    <tr>
+      <td>5日涨幅</td><td><span class="up">+10.4%</span></td><td><span class="up">+7.0%</span></td>
+    </tr>
+    <tr>
+      <td>6周涨幅 (6/30→8/10)</td><td><span class="up">+11.6%</span> (14,101→15,735)</td><td><span class="up">+7.8%</span> (882→950)</td>
+    </tr>
+    <tr>
+      <td>MA20偏离</td><td>上方 +9%</td><td>上方 +6%</td>
+    </tr>
+    <tr>
+      <td>20日位置</td><td><span class="dn">92% 极高</span></td><td><span class="dn">97% 极高</span></td>
+    </tr>
+    <tr>
+      <td>持仓变化（日）</td><td>+3,489 增仓 ↑</td><td>+3,692 增仓 ↑</td>
+    </tr>
+    <tr>
+      <td>持仓趋势（6/30，30日）</td><td>+13.7% ↑</td><td>+25.4% ↑</td>
+    </tr>
+    <tr>
+      <td>放量情况</td><td>正常</td><td>正常</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>⚠️ 短期超买警告：</strong>金银20日位置分别达92%和97%，5日涨幅超7-10%，短线存在获利回吐风险。但这发生在<strong>周线底部刚确认</strong>的背景下——底部区域的超买和顶部区域的超买性质不同。
+</div>
+
+<!-- ===== 3. TECHNICAL - CHANLUN ===== -->
+<h2>三、缠论多周期联立分析</h2>
+
+<h3>3.1 白银 AG — 周线+月线（chan_ag2609.py 实时）</h3>
+
+<div class="metric-row">
+  <div class="metric-card">
+    <div class="label">月线</div>
+    <div class="value" style="font-size:1.1rem;">无中枢 | 1笔下 -50.5%</div>
+    <div class="sub">2026-01(30377)→2026-04(15030)</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">周线</div>
+    <div class="value" style="font-size:1.1rem;">1中枢 | 震荡中</div>
+    <div class="sub">ZS1: [15030 ~ 20532] IN</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">背驰信号</div>
+    <div class="value signal-bull">✅ 底背驰</div>
+    <div class="sub">Bi3↓3952 vs Bi1↓9419 (-58%)</div>
+  </div>
+</div>
+
+<p><strong>周线笔结构（3笔 + 1中枢）：</strong></p>
+<table>
+  <tr><th>笔</th><th>方向</th><th>起点</th><th>终点</th><th>幅度</th><th>K线数</th></tr>
+  <tr><td>Bi1</td><td><span class="dn">↓ 下跌</span></td><td>01-30 (30,377)</td><td>03-27 (15,030)</td><td class="dn">-50.5%</td><td>5</td></tr>
+  <tr><td>Bi2</td><td><span class="up">↑ 反弹</span></td><td>03-27 (15,030)</td><td>04-24 (20,532)</td><td class="up">+36.6%</td><td>3</td></tr>
+  <tr><td style="background:var(--accent-dim)">Bi3</td><td style="background:var(--accent-dim)"><span class="dn">↓ 下跌</span></td><td style="background:var(--accent-dim)">05-15 (22,146)</td><td style="background:var(--accent-dim)">07-03 (13,538)</td><td style="background:var(--accent-dim)" class="dn">-38.9%</td><td style="background:var(--accent-dim)">4</td></tr>
+</table>
+
+<div style="margin:16px 0; padding:12px 20px; background:var(--accent-dim); border-radius:8px;">
+  <strong>🔍 周线中枢 ZS1: [15,030 ~ 20,532]</strong><br>
+  当前价 <strong>15,683</strong> 刚进入中枢下沿区域。<br>
+  <strong>底背驰确认</strong>：Bi3 力度 (3,952) &lt; Bi1 力度 (9,419)，衰减 <strong>58%</strong> → 下跌动能衰竭。
+</div>
+
+<p><strong>分型标记：</strong></p>
+<ul>
+  <li>最近<strong>顶分型</strong>：07-10 H=15,442 → <span class="up">✅ 已突破</span>（现在15,735 > 15,442）</li>
+  <li>最近<strong>底分型</strong>：07-17 L=13,320 → 已确认</li>
+  <li>最新<strong>持仓</strong>：24,440 (+1,410)，持续增仓</li>
+</ul>
+
+<p><strong>联立判断：</strong></p>
+<ul>
+  <li><strong>月线</strong>：无中枢，一笔下跌 -50.5% → 月线级别仍是空头结构，但跌幅已深</li>
+  <li><strong>周线</strong>：1中枢 + 底背驰 + 价格回中枢 → 属于<strong>中枢下方一买</strong>的经典结构</li>
+  <li><strong>日线</strong>：B1(13,514) 未创新低 + 突破B2确认线(14,950) → <span class="up"><strong>二买已确认</strong></span></li>
+</ul>
+
+<h3>3.2 黄金 AU — 多周期均线</h3>
+
+<table>
+  <tr><th>周期</th><th>价格 vs MA</th><th>状态</th></tr>
+  <tr><td>日线</td><td>950 > MA5(889) > MA10(912)</td><td><span class="up">站上短期均线</span></td></tr>
+  <tr><td>日线 MA20</td><td>950 > MA20(929)</td><td><span class="up">站上20日均线</span></td></tr>
+  <tr><td>日线 MA60</td><td>950 < MA60(995)</td><td><span class="dn">仍在60日均线下方</span></td></tr>
+  <tr><td>周线形态</td><td>从869低点反弹至950</td><td><span class="up">V型反弹</span></td></tr>
+</table>
+
+<div class="note">
+  <strong>黄金 vs 白银技术差异：</strong>黄金没有出现白银那样的周线级别底背驰确认（黄金的下跌更有序、跌幅更小），但两者的大级别方向一致——都是从中期底部区域反弹。黄金的60日均线(995)是下一个关键技术目标，站上后正式进入多头排列。
+</div>
+
+<h3>3.3 记忆文件追踪 — 白银交易逻辑演进</h3>
+
+<table>
+  <thead>
+    <tr><th>时间</th><th>框架</th><th>关键价位</th><th>状态</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026-07-14</td>
+      <td>周线五段末端 + 日线背驰</td>
+      <td>止损 13,560 | 确认 14,310 | 目标 15,296</td>
+      <td><span class="up">✅ 已超过目标</span></td>
+    </tr>
+    <tr>
+      <td>2026-08-04</td>
+      <td>周线一买 + 日线二买构建</td>
+      <td>B1 13,514 | B2确认 14,950 | 失效 13,514</td>
+      <td><span class="up">✅ B2已突破</span></td>
+    </tr>
+    <tr style="background:var(--accent-dim)">
+      <td><strong>2026-08-11</strong></td>
+      <td><strong>周线一买 + 日线三买构建中</strong></td>
+      <td><strong>B2 14,950 ✓ | 下一目标 20,532（中枢上沿）</strong></td>
+      <td><span class="up"><strong>🟢 持仓中</strong></span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ===== 4. FUNDAMENTALS ===== -->
+<h2>四、基本面分析</h2>
+
+<h3>4.1 黄金：三重宏观支撑</h3>
+
+<div class="metric-row">
+  <div class="metric-card">
+    <div class="label">🏦 央行购金 Q2</div>
+    <div class="value" style="font-size:1.3rem;">289 吨</div>
+    <div class="sub" style="color:var(--up)">创Q2历史记录，同比+62%</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">📉 7月非农</div>
+    <div class="value" style="font-size:1.3rem;">-2.3 万</div>
+    <div class="sub" style="color:var(--up)">远低预期+8万，年内新低</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">💵 美元指数</div>
+    <div class="value" style="font-size:1.3rem;">走弱中</div>
+    <div class="sub">美日韩联合干预+非农拖累</div>
+  </div>
+</div>
+
+<p><strong>央行购金 — 最硬的中长期底：</strong></p>
+<ul>
+  <li>Q2 全球央行净购入 <strong>288.9 吨</strong>，创有记录以来二季度最高</li>
+  <li>中国+33吨（2023Q4以来最大单季），波兰+51吨（最大买家），韩国13年来首次恢复购金</li>
+  <li>近<strong>90%</strong>受访央行计划未来一年增加黄金储备，处于历史极高水平</li>
+  <li>瑞银预测全年央行购金 <strong>750-1000 吨</strong></li>
+  <li>央行买盘 vs ETF净流出形成鲜明对比——央行等非市场化买盘在价格下跌30%后<strong>持续增持</strong>，构成刚性托底</li>
+</ul>
+
+<p><strong>美联储政策转向 — 加息预期崩塌：</strong></p>
+<ul>
+  <li>7月非农意外<strong>减少2.3万人</strong>（预期+8万），ADP仅+4.4万创年内新低</li>
+  <li>7月FOMC仅<strong>3/12</strong>投票支持加息 → 9月加息预期基本消失</li>
+  <li>11月中期选举前美联储更可能<strong>按兵不动</strong></li>
+  <li>美债实际利率可能<strong>已见顶</strong>（BCA Research）——压制金价的主要宏观阻力正在减弱</li>
+</ul>
+
+<p><strong>美元 — 从阻力变为助力：</strong></p>
+<ul>
+  <li>美日韩联合干预汇率令美元指数高位回落</li>
+  <li>非农走弱 → 美债收益率和美元同步走弱</li>
+  <li>美国财政赤字加速扩张（军费暴涨）→ 长期美元信用侵蚀</li>
+</ul>
+
+<h3>4.2 白银：供需缺口 + 金银比修复</h3>
+
+<div class="metric-row">
+  <div class="metric-card">
+    <div class="label">📦 COMEX库存 H1</div>
+    <div class="value dn" style="font-size:1.3rem;">-27%</div>
+    <div class="sub">半年降幅创历史</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">☀️ 光伏用银 2025E</div>
+    <div class="value" style="font-size:1.3rem;">7,863 吨</div>
+    <div class="sub">CAGR 23%，TOPCon/HJT增耗</div>
+  </div>
+  <div class="metric-card">
+    <div class="label">⚖️ 金银比</div>
+    <div class="value" style="font-size:1.3rem;">~65:1</div>
+    <div class="sub">历史均值上沿，修复空间大</div>
+  </div>
+</div>
+
+<p><strong>供需格局：</strong></p>
+<ul>
+  <li>COMEX库存上半年<strong>降幅27%</strong>，可流通现货稀缺性持续累积</li>
+  <li>全球白银需求创历史新高→供应对价格缺乏弹性（多为铜铅锌金副产品）</li>
+  <li>光伏用银 3,421吨(2021)→7,863吨(2025E)，年复合增长23%</li>
+  <li><strong>AI数据中心</strong>新增需求：银-钯合金MLCC、变压器/开关/继电器用银</li>
+  <li>预计2024-2025年供需缺口<strong>持续扩大</strong></li>
+</ul>
+
+<p><strong>金银比修复逻辑（国金证券）：</strong></p>
+<ol>
+  <li><strong>黄金快速上涨 + 白银库存去化 + 投资需求回升</strong> → 三个条件逐步满足</li>
+  <li>当前金银比~65:1（国际）/ ~16.6:1（国内）— 处于历史区间上沿</li>
+  <li>历史均值50:1-80:1，若回归50:1，白银有<strong>30%+</strong>的相对补涨空间</li>
+</ol>
+
+<div class="note">
+  <strong>白银的风险面：</strong><br>
+  ① 波动率远超黄金，流动性冲击中跌幅更深——回调时比黄金惨<br>
+  ② 光伏减银技术迭代（铜浆替代）是长期威胁<br>
+  ③ 部分市场参与者认为实物紧缺被夸大，再生银+存量库存可消化缺口<br>
+  ④ 上半年金银比修复多次证伪——需要确认本轮不是又一次假突破
+</div>
+
+<h3>4.3 机构目标价汇总</h3>
+
+<table>
+  <thead>
+    <tr><th>机构</th><th>品种</th><th>目标价</th><th>时间</th><th>核心逻辑</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>中信证券</td><td>黄金</td><td>4000美元=底部</td><td>当前</td><td>六因子模型悲观测算3970</td></tr>
+    <tr><td>德意志银行</td><td>黄金</td><td>4,600美元</td><td>2026年底</td><td>底部构筑已完成</td></tr>
+    <tr><td>瑞银</td><td>黄金</td><td>5,000美元</td><td>2027上半年</td><td>不再加息+资金回流+央行购金</td></tr>
+    <tr><td>渣打</td><td>黄金</td><td>5,000美元</td><td>—</td><td>重回上行通道</td></tr>
+    <tr><td>华泰期货</td><td>白银</td><td>谨慎偏多</td><td>H2</td><td>金融属性压制消退后入场</td></tr>
+    <tr><td>国金证券</td><td>白银</td><td>向121.67美元修复</td><td>中长期</td><td>金银比修复+光伏AI双驱动</td></tr>
+  </tbody>
+</table>
+
+<!-- ===== 5. SYNTHESIS ===== -->
+<h2>五、综合研判</h2>
+
+<h3>5.1 周期定位</h3>
+
+<p>用美林时钟+缠论周期叠加的框架来看：</p>
+
+<table>
+  <tr><th>周期层级</th><th>黄金</th><th>白银</th></tr>
+  <tr><td><strong>月线（>1年）</strong></td><td>仍处2015年开启的大牛市，本轮调整是牛市中的回调</td><td>月线空头结构（-50.5%），需要时间修复</td></tr>
+  <tr><td><strong>周线（3-6月）</strong></td><td>底部区域确认中，从869低点反弹</td><td>一买确认 + 中枢[15030~20532]震荡</td></tr>
+  <tr><td><strong>日线（1-4周）</strong></td><td>V型反弹，站上MA20，MA60(995)是下一个目标</td><td>二买突破确认(14,950)，进入三买构建</td></tr>
+  <tr><td><strong>短线（<1周）</strong></td><td>⚠️ 超买（20dPos 97%）</td><td>⚠️ 超买（20dPos 92%）</td></tr>
+</table>
+
+<h3>5.2 白银的关键价位（更新）</h3>
+
+<table>
+  <tr><th>级别</th><th>价位</th><th>含义</th></tr>
+  <tr><td>🔴 一买失效线</td><td><strong>13,514</strong></td><td>跌破则缠论结构全部重来</td></tr>
+  <tr><td>🟢 B2确认线</td><td><strong>14,950</strong> ✅ 已突破</td><td>日线二买成立，现在是持仓阶段</td></tr>
+  <tr><td>🟡 短期支撑</td><td><strong>15,030</strong></td><td>周线中枢下沿，也是前期低点区域</td></tr>
+  <tr><td>🟡 中枢中轨</td><td><strong>~17,780</strong></td><td>(15,030+20,532)/2，中期目标</td></tr>
+  <tr><td>🟢 中枢上沿</td><td><strong>20,532</strong></td><td>突破则确认周线级别主升浪</td></tr>
+  <tr><td>🎯 历史高点</td><td><strong>30,377</strong></td><td>月线前高，牛市目标参照</td></tr>
+</table>
+
+<h3>5.3 黄金的关键价位</h3>
+
+<table>
+  <tr><th>价位</th><th>含义</th></tr>
+  <tr><td>869</td><td>本轮低点（6/26），底部参照</td></tr>
+  <tr><td>929</td><td>MA20 — 已站上</td></tr>
+  <tr><td><strong>995</strong></td><td><strong>MA60 — 下一个关键技术目标</strong></td></tr>
+  <tr><td>1,074</td><td>60日高点，突破则打开上方空间</td></tr>
+</table>
+
+<!-- ===== 6. SCENARIOS ===== -->
+<h2>六、情景推演</h2>
+
+<h3>🟢 基准情景（概率：50-55%）— 中期震荡上行</h3>
+<ul>
+  <li>金银在当前位置（银15,000-16,500 / 金920-990）做<strong>周线级别中枢震荡</strong></li>
+  <li>短线超买消化后继续上行，白银目标中枢中轨~17,800</li>
+  <li>驱动：央行持续购金 + 美元走弱 + 非农疲软确认加息终止</li>
+  <li>时间：3-6个月完成中枢震荡并向上突破</li>
+</ul>
+
+<h3>🟡 乐观情景（概率：20-25%）— 加速上行</h3>
+<ul>
+  <li>美联储明确转鸽（9月降息预期重燃）+ 美元加速下跌</li>
+  <li>白银突破20,532（中枢上沿），确认周线主升浪</li>
+  <li>黄金直接突破1,074（60日高点），进入多头排列</li>
+  <li>触发：9月FOMC明确结束加息周期 + 新兴市场危机推升避险</li>
+</ul>
+
+<h3>🔴 悲观情景（概率：20-25%）— 二次探底</h3>
+<ul>
+  <li>通胀反弹 → 美联储被迫再次加息 → 美元走强 → 金银承压</li>
+  <li>白银回踩14,950-15,030支撑（B2确认线 + 中枢下沿）</li>
+  <li>黄金回踩900-920区间</li>
+  <li>底线：13,514 — 跌破则一买失效，但概率较低（央行购金托底）</li>
+</ul>
+
+<!-- ===== 7. KEY CATALYSTS ===== -->
+<h2>七、关注催化事件</h2>
+
+<table>
+  <thead>
+    <tr><th>时间</th><th>事件</th><th>预期影响</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>8月中</td><td>7月CPI数据</td><td>通胀继续回落 → 利好；反弹 → 利空</td></tr>
+    <tr><td>9月</td><td>FOMC会议</td><td>暂停加息确认 → 强利好；意外加息 → 利空</td></tr>
+    <tr><td>Q3</td><td>央行Q3购金数据</td><td>若继续>250吨 → 夯实中长期底部</td></tr>
+    <tr><td>11月</td><td>美国中期选举</td><td>政策不确定性 → 利好避险资产</td></tr>
+    <tr><td>持续</td><td>COMEX白银库存</td><td>库存继续下降 → 实物紧缺加剧 → 利好</td></tr>
+  </tbody>
+</table>
+
+<hr class="divider">
+
+<!-- ===== 8. RISK ===== -->
+<h2>八、风险矩阵</h2>
+
+<table>
+  <thead>
+    <tr><th>风险</th><th>概率</th><th>影响</th><th>应对</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>通胀反弹 → 美联储再加息</td><td>低 (~15%)</td><td><span class="dn">高</span></td><td>设紧止损于14,950下方</td></tr>
+    <tr><td>美元强势反弹</td><td>中低 (~25%)</td><td><span class="dn">中高</span></td><td>关注美元指数关键阻力位</td></tr>
+    <tr><td>短线获利回吐（5日+10%后）</td><td>中高 (~40%)</td><td><span class="warn">中低</span></td><td>不动——底部区域的回调是加仓机会</td></tr>
+    <tr><td>光伏减银技术突破</td><td>低 (~10%)</td><td><span class="dn">中长期</span></td><td>关注铜浆替代进展</td></tr>
+    <tr><td>COMEX库存企稳/回升</td><td>中 (~25%)</td><td><span class="dn">中</span></td><td>周度跟踪库存数据</td></tr>
+    <tr><td>央行购金大幅放缓</td><td>低 (~10%)</td><td><span class="dn">高</span></td><td>关注WGC季度报告</td></tr>
+  </tbody>
+</table>
+
+<hr class="divider">
+
+<div class="note" style="font-size:0.85rem;">
+  <strong>📋 方法论说明</strong><br>
+  本分析采用<strong>缠论多周期联立</strong>+<strong>宏观因子驱动</strong>+<strong>供需基本面</strong>三重框架交叉验证。<br>
+  技术面：DuckDB 6.5年周线/日线数据 + Sina API实时日线 + 自定义缠论脚本。<br>
+  基本面：WGC央行购金报告 + 美联储政策路径 + COMEX库存数据 + 光伏/工业需求。<br>
+  历史分析追踪：<code>ag1610-long-position-logic</code> → <code>ag-weekly-b1-daily-b2-20260804</code> → 本报告 (2026-08-11)。<br><br>
+  <strong>⚠️ 免责声明：</strong>以上为个人分析框架下的研判，不构成投资建议。期货交易有杠杆风险，请自行决策。
+</div>
+
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin-top:40px;">
+  TradingStudio · 2026-08-11 · 基于自有数据 + 公开研报 + Web搜索
+</p>
