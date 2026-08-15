@@ -1,15 +1,19 @@
 namespace TradingStudio.Services;
 
 /// <summary>
-/// 期货交易时段调度 — 日盘 8:30-15:30，夜盘 20:30-03:00，周末休市。
+/// 期货交易时段调度 — 日盘 8:30-15:30，夜盘 21:00-次日 02:30，周末休市。
 /// 所有时间为北京时间 (UTC+8)。
+///
+/// 夜盘归属规则（关键）：夜盘归属「下一个交易日」而非下一个自然日。
+///   - 周一至周五晚都有夜盘；周五晚夜盘跳过周末归属下周一。
+///   - 仅「法定节假日前最后一个工作日晚」夜盘暂停（下一工作日是节假日）。
 /// </summary>
 public class SessionScheduler
 {
     private static readonly TimeSpan DayStart   = new(8, 30, 0);
     private static readonly TimeSpan DayEnd     = new(15, 30, 0);
-    private static readonly TimeSpan NightStart = new(20, 30, 0);
-    private static readonly TimeSpan NightEnd   = new(3, 0, 0);   // 次日凌晨
+    private static readonly TimeSpan NightStart = new(21, 0, 0);   // 夜盘统一 21:00 开盘
+    private static readonly TimeSpan NightEnd   = new(2, 30, 0);   // 次日凌晨，最晚 02:30（金银/原油）
 
     private readonly HashSet<DateOnly> _holidays = new();
 
@@ -23,17 +27,14 @@ public class SessionScheduler
         var t = now.TimeOfDay;
         var today = DateOnly.FromDateTime(now);
 
-        // 夜盘属于次日交易日：>= 20:30 时检查明天是否休息日
-        // （如周日 20:30 夜盘属于周一，周五 20:30 无夜盘因为周六休息）
-        var effectiveDay = t >= NightStart ? today.AddDays(1) : today;
-        if (IsRestDay(effectiveDay)) return false;
-
         // 日盘
-        if (t >= DayStart && t <= DayEnd) return true;
+        if (t >= DayStart && t <= DayEnd) return !IsRestDay(today);
 
-        // 夜盘：>= 20:30 到今天结束，或从 00:00 到 03:00
-        if (t >= NightStart) return true;
-        if (t <= NightEnd) return !IsRestDay(today.AddDays(-1)); // 前一晚夜盘的前置条件
+        // 夜盘开始段：交易日当晚 21:00 起
+        if (t >= NightStart) return HasNightSession(today);
+
+        // 夜盘延续段：00:00-02:30，是前一晚夜盘的尾部
+        if (t <= NightEnd) return HasNightSession(today.AddDays(-1));
 
         return false;
     }
@@ -49,33 +50,39 @@ public class SessionScheduler
         if (!IsRestDay(today) && t < DayStart)
             return DayStart - t;
 
-        // 尝试今天夜盘（夜盘属于明天交易日，检查明天是否休息日）
-        if (!IsRestDay(today.AddDays(1)) && t < NightStart)
+        // 尝试今天夜盘（今晚是交易日且节前不暂停）
+        if (HasNightSession(today) && t < NightStart)
             return NightStart - t;
 
-        // 找下一个有效交易日（日盘）
+        // 找下一个交易日日盘
         var nextDay = today.AddDays(1);
         while (IsRestDay(nextDay)) nextDay = nextDay.AddDays(1);
-
-        // 检查 nextDay 前一天的夜盘（夜盘属于 nextDay，在前一天 20:30 开始）
-        var nightDay = nextDay.AddDays(-1);
-        if (nightDay >= today)
-        {
-            var nightTime = nightDay.ToDateTime(new TimeOnly(20, 30));
-            if (nightTime > now)
-                return nightTime - now;
-        }
-
-        // 回退到 nextDay 的日盘
-        return (nextDay.ToDateTime(new TimeOnly(8, 30)) - now).Duration();
+        return nextDay.ToDateTime(new TimeOnly(8, 30)) - now;
     }
 
     /// <summary>是否是休息日（周末或节假日）</summary>
-    public bool IsRestDay(DateOnly day)
+    public bool IsRestDay(DateOnly day) => IsWeekend(day) || IsHoliday(day);
+
+    private bool IsWeekend(DateOnly day) =>
+        day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+
+    private bool IsHoliday(DateOnly day) => _holidays.Contains(day);
+
+    /// <summary>下一个工作日（跳过周末，保留节假日，供节前判断用）</summary>
+    private DateOnly NextWorkingDay(DateOnly day)
     {
-        if (day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) return true;
-        if (_holidays.Contains(day)) return true;
-        return false;
+        var d = day.AddDays(1);
+        while (IsWeekend(d)) d = d.AddDays(1);
+        return d;
+    }
+
+    /// <summary>某自然日当晚是否有夜盘。</summary>
+    /// 夜盘归属下一个交易日（跳过周末）——周五晚夜盘属下周一；
+    /// 仅「法定节假日前最后一个工作日晚」暂停（下一工作日是节假日）。
+    private bool HasNightSession(DateOnly day)
+    {
+        if (IsRestDay(day)) return false;          // 周末/节假日当晚无夜盘
+        return !IsHoliday(NextWorkingDay(day));    // 节前最后工作日晚暂停
     }
 
     /// <summary>注册节假日（如 2026-01-01 元旦）</summary>
@@ -101,10 +108,10 @@ public class SessionScheduler
         // 日盘结束 15:30
         if (t >= DayStart && t <= DayEnd)
             return now.Date.Add(DayEnd);
-        // 夜盘结束 03:00（次日）
+        // 夜盘结束 02:30（次日）
         if (t >= NightStart)
             return now.Date.AddDays(1).Add(NightEnd);
-        // 夜盘延续 00:00-03:00
+        // 夜盘延续 00:00-02:30
         return now.Date.Add(NightEnd);
     }
 
