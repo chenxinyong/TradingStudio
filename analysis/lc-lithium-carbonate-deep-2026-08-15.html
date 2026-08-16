@@ -1,0 +1,189 @@
+<title>碳酸锂 LC 深度分析</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg:#f7f6f3; --panel:#ffffff; --ink:#1c1a17; --ink-2:#5c574f; --ink-3:#8a8479;
+    --line:#e5e0d8; --accent:#c2472a; --accent-soft:#f4d8cd; --down:#c2472a; --up:#2a7a52;
+    --grid:#ece8e0; --warn:#8a6d2a;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#141210; --panel:#1c1916; --ink:#ece7df; --ink-2:#b3aca0; --ink-3:#7a746a;
+      --line:#2e2a24; --accent:#e2704f; --accent-soft:#3a2620; --up:#58b087; --grid:#26221c; --warn:#c9a84c;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#141210; --panel:#1c1916; --ink:#ece7df; --ink-2:#b3aca0; --ink-3:#7a746a;
+    --line:#2e2a24; --accent:#e2704f; --accent-soft:#3a2620; --up:#58b087; --grid:#26221c; --warn:#c9a84c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.65;padding:32px 20px 64px}
+  .wrap{max-width:960px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:.5px}
+  .sub{color:var(--ink-3);font-size:13px;margin:0 0 20px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 20px 16px;margin-bottom:18px}
+  .panel h2{font-size:16px;margin:0 0 4px;font-weight:600}
+  .panel .meta{font-size:12px;color:var(--ink-3);margin:0 0 12px}
+  .stat-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+  .stat{flex:1 1 160px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .stat .k{font-size:12px;color:var(--ink-3);margin-bottom:4px}
+  .stat .v{font-size:22px;font-weight:700;letter-spacing:-.5px}
+  .stat .d{font-size:12px;color:var(--ink-2);margin-top:2px}
+  .up{color:var(--up)} .down{color:var(--down)} .warn{color:var(--warn)}
+  svg{width:100%;height:auto;display:block}
+  .note{font-size:13px;color:var(--ink-2);margin-top:10px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--ink-3);font-weight:500;font-size:12px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .verdict{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:16px 18px;margin-top:20px}
+  .verdict h2{margin-top:0}
+  ul{margin:8px 0;padding-left:20px} li{margin-bottom:6px}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--accent-soft);color:var(--accent);font-weight:600;margin-right:6px}
+  .tag.green{background:#dceee4;color:var(--up)}
+  .tag.gray{background:var(--grid);color:var(--ink-2)}
+  .tag.yellow{background:#f0e6cf;color:var(--warn)}
+  .cols{display:flex;flex-wrap:wrap;gap:16px}
+  .cols>div{flex:1 1 300px}
+  .callout{background:var(--accent-soft);border-radius:8px;padding:10px 14px;font-size:13px;margin:10px 0}
+</style>
+<div class="wrap">
+  <h1>碳酸锂 LC · 深度分析</h1>
+  <p class="sub">广期所 GFEX · 连续合约 LC0 · 2026-08-14 收盘 · 数据源 akshare / 新浪</p>
+
+  <div class="stat-row">
+    <div class="stat"><div class="k">当前价格</div><div class="v">155,240</div><div class="d">元/吨</div></div>
+    <div class="stat"><div class="k">历史分位</div><div class="v">53.2%</div><div class="d">58400 ~ 240450</div></div>
+    <div class="stat"><div class="k">自底涨幅</div><div class="v up">+166%</div><div class="d">58400 → 155240</div></div>
+    <div class="stat"><div class="k">自顶回调</div><div class="v down">−26%</div><div class="d">209880 → 155240</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>一、月线全景：一个完整的暴涨暴跌周期</h2>
+    <p class="meta">2023-07 上市 ~ 2026-08 · 38 根月线</p>
+    <svg viewBox="0 0 920 320" role="img" aria-label="碳酸锂月线全景"><g id="monthly"></g></svg>
+    <p class="note">上市即暴跌（240450→58400，−76%，2023-07~2025-05），完成产能出清；随后反转（58400→209880，+259%，2025-06~2026-05）；当前回调至 155240（−26%）。这是典型的「供给冲击→产能过剩→出清→反转」完整产业周期。</p>
+  </div>
+
+  <div class="panel">
+    <h2>二、周线缠论：一买后上涨趋势，当前回调</h2>
+    <p class="meta">2025-06 反转以来 · 60 根周线</p>
+    <svg viewBox="0 0 920 340" role="img" aria-label="碳酸锂周线缠论结构"><g id="weekly"></g></svg>
+    <p class="note"><b>B1 一买 = 58400</b>（2025-06，历史大底）。上涨笔 58400→209880（+259%），途中 2026-02 有次 −34% 深回踩（189440→124100）再创新高。当前从 209880 回调至 135560，<b>已跌破最后中枢下沿 152500</b>，反弹 155240 正在回测中枢下沿。135560 恰落在 50% 黄金分割 134140 上方。</p>
+  </div>
+
+  <div class="panel">
+    <h2>三、日线近期：回调结构 + 黄金分割</h2>
+    <p class="meta">最近 40 个交易日 · 2026-06-22 ~ 08-14</p>
+    <svg viewBox="0 0 920 340" role="img" aria-label="碳酸锂日线近期"><g id="daily"></g></svg>
+    <p class="note">回调三段式：209880→145000（6/26）→ 反弹 172000（7/3）→ 再下 135560（8/7，二次探底）。8/7 后连续 6 日反弹至 155240（+14.5%），已站回 38.2% 回撤位 152015。持仓 7 月从 45 万手降至 8/12 的 23.4 万手（减仓下跌→空头回补反弹），8/13-14 回升至 28.4 万。</p>
+  </div>
+
+  <div class="panel">
+    <h2>四、关键价位</h2>
+    <table>
+      <tr><th>类型</th><th>价位</th><th>含义</th></tr>
+      <tr><td class="num">阻力</td><td class="num"><b>209,880</b></td><td>2026-05 大顶（反弹高点）</td></tr>
+      <tr><td class="num">阻力</td><td class="num">187,700 ~ 189,440</td><td>2 月反弹高点 / 最后中枢上沿</td></tr>
+      <tr><td class="num">阻力</td><td class="num">172,000</td><td>7/3 反弹高点</td></tr>
+      <tr><td class="num">支撑</td><td class="num">152,015</td><td>38.2% 黄金分割（当前已站回）</td></tr>
+      <tr><td class="num">支撑</td><td class="num">135,560</td><td>8/7 回调低点（二次探底）</td></tr>
+      <tr><td class="num">支撑</td><td class="num">134,140</td><td>50% 黄金分割</td></tr>
+      <tr><td class="num">支撑</td><td class="num">124,100</td><td>2/6 深回踩低点（趋势生命线）</td></tr>
+      <tr><td class="num">支撑</td><td class="num">116,265</td><td>61.8% 黄金分割（反转逻辑底线）</td></tr>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>五、基本面深度：强现实 vs 弱预期</h2>
+    <div class="cols">
+      <div>
+        <h2 style="font-size:14px">需求端（强）</h2>
+        <ul style="font-size:13px">
+          <li>储能 H1 全球出货 <b>461GWh（+71%）</b>，国内 202.5GWh 居首</li>
+          <li>新能源车 7 月渗透率 <b>65.1%</b> 创新高，产销 +26.8%</li>
+          <li>8 月电池排产环比 <b>+5~8%</b>，磷酸铁锂增产去库</li>
+          <li>中报密集兑现：亿纬+95%、天赐+908%、多氟多+777%</li>
+        </ul>
+      </div>
+      <div>
+        <h2 style="font-size:14px">供给端（紧转松）</h2>
+        <ul style="font-size:13px">
+          <li>7-8 月锂盐厂集中检修，减产 <b>9000~9500 吨</b></li>
+          <li>但远期增量强：津巴布韦到港、宁德枧下窝复产、盐湖高产</li>
+          <li>2026 供给 <b>172 万吨（+43%）</b>，产能持续释放</li>
+          <li>高盈利刺激复产（现价 15.5 万 &gt; 锂云母成本 8~10 万）</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout">
+      <b>2026 供需平衡</b>：消费 177 万吨（+44%）vs 供给 172 万吨（+43%）→ <b>缺口约 4.7 万吨</b>（国投证券），结构性紧平衡。<b>库存连续 12 周去库</b>，SMM 库存 9.39 万吨（−8.9%）。
+    </div>
+    <p class="note" style="font-size:13px"><b>多空分歧核心</b>：多头看「强现实」——去库+排产高景气+供需缺口，高盈利周期延续；空头看「弱预期」——2027 新增产能、取消强制配储后储能转向经济性驱动、锂价拐点或已现，年末或跌回 10 万区间。</p>
+  </div>
+
+  <div class="verdict">
+    <h2>综合研判</h2>
+    <ul>
+      <li><b>长期定性：已反转，处于上涨趋势的回调段。</b> 58400 一买 → 209880 上涨 +259%，当前回调 −26% 至 155240，趋势结构未破坏（回踩未破 124100 前低）。</li>
+      <li><b>短期风险：已跌破最后中枢下沿 152500。</b> 当前反弹 155240 正在回测该位，能否有效站回是短期强弱分水岭。站回 → 回调结束、二买确认；再破 135560 → 看 50%/61.8% 回撤位（13.4 万 / 11.6 万）。</li>
+      <li><b>量价信号偏弱：本轮反弹是减仓回补，非多头主动进攻。</b> 持仓从 45 万降至 23 万，8/13 才刚回升，需要观察增仓能否持续。</li>
+      <li><b>交易含义：方向偏多，但已涨 259% + 基本面「弱预期」压制，追高危险。</b> 更优策略是<b>等回调到位再布局</b>：13.5~14 万（50% 回撤 + 机构强支撑）是理想多头区，跌破 12.4 万（趋势生命线）则反转逻辑动摇、离场；突破 17.2 万（7/3 高点）确认二买可跟进。</li>
+    </ul>
+    <p class="note">定性：<span class="tag green">中长期已反转</span><span class="tag yellow">短期回调中</span><span class="tag gray">强现实弱预期</span> — 顺势品种里的「等回调」，不是「现在追」。</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const css = getComputedStyle(document.documentElement);
+  const C = {
+    ink:css.getPropertyValue('--ink').trim(), ink2:css.getPropertyValue('--ink-2').trim(),
+    ink3:css.getPropertyValue('--ink-3').trim(), grid:css.getPropertyValue('--grid').trim(),
+    accent:css.getPropertyValue('--accent').trim(), up:css.getPropertyValue('--up').trim(),
+    warn:css.getPropertyValue('--warn').trim(), line:css.getPropertyValue('--line').trim()
+  };
+  const monthly=[["2023-07",228050],["2023-08",186850],["2023-09",150000],["2023-10",153750],["2023-11",106200],["2023-12",107700],["2024-01",99150],["2024-02",119200],["2024-03",107050],["2024-04",111450],["2024-05",104850],["2024-06",94500],["2024-07",82700],["2024-08",78900],["2024-09",79750],["2024-10",74850],["2024-11",78550],["2024-12",77100],["2025-01",79620],["2025-02",75200],["2025-03",74160],["2025-04",65960],["2025-05",59800],["2025-06",62260],["2025-07",68280],["2025-08",77180],["2025-09",72800],["2025-10",80780],["2025-11",96420],["2025-12",121580],["2026-01",148200],["2026-02",176040],["2026-03",157200],["2026-04",189080],["2026-05",179740],["2026-06",163360],["2026-07",137760],["2026-08",155240]];
+  const weekly=[["2025-06-20",58900],["2025-06-27",63300],["2025-07-04",63280],["2025-07-11",64280],["2025-07-18",69960],["2025-07-25",80520],["2025-08-01",68920],["2025-08-08",76960],["2025-08-15",86900],["2025-08-22",78960],["2025-08-29",77180],["2025-09-05",74260],["2025-09-12",71160],["2025-09-19",73960],["2025-09-26",72880],["2025-09-30",72800],["2025-10-10",72740],["2025-10-17",75780],["2025-10-24",79520],["2025-10-31",80780],["2025-11-07",82300],["2025-11-14",87360],["2025-11-21",91020],["2025-11-28",96420],["2025-12-05",92160],["2025-12-12",97720],["2025-12-19",111400],["2025-12-26",130520],["2025-12-31",121580],["2026-01-09",143420],["2026-01-16",146200],["2026-01-23",181520],["2026-01-30",148200],["2026-02-06",132920],["2026-02-13",152640],["2026-02-27",176040],["2026-03-06",156160],["2026-03-13",152080],["2026-03-20",143860],["2026-03-27",168440],["2026-04-03",157860],["2026-04-10",157600],["2026-04-17",177560],["2026-04-24",177900],["2026-04-30",189080],["2026-05-08",196560],["2026-05-15",188800],["2026-05-22",184460],["2026-05-29",179740],["2026-06-05",164360],["2026-06-12",175300],["2026-06-18",160500],["2026-06-26",150220],["2026-07-03",168780],["2026-07-10",151600],["2026-07-17",150140],["2026-07-24",144280],["2026-07-31",137760],["2026-08-07",140000],["2026-08-14",155240]];
+  const daily=[["06-22",161740],["06-23",157220],["06-24",162740],["06-25",150840],["06-26",150220],["06-29",153920],["06-30",163360],["07-01",164560],["07-02",164040],["07-03",168780],["07-06",164560],["07-07",163360],["07-08",158440],["07-09",153020],["07-10",151600],["07-13",152240],["07-14",153180],["07-15",149240],["07-16",151660],["07-17",150140],["07-20",143900],["07-21",141620],["07-22",143300],["07-23",145000],["07-24",144280],["07-27",147220],["07-28",143480],["07-29",147900],["07-30",141060],["07-31",137760],["08-03",138900],["08-04",139380],["08-05",143220],["08-06",141460],["08-07",140000],["08-10",146360],["08-11",145860],["08-12",149700],["08-13",152120],["08-14",155240]];
+
+  function lineChart(gid, data, ymin, ymax, W, H, L, R, T, B, fmt, marks, extraLines){
+    const xs = i => L + i*(W-L-R)/(data.length-1);
+    const ys = v => T + (ymax-v)*(H-T-B)/(ymax-ymin);
+    let g = document.getElementById(gid);
+    let s = '';
+    const step = (ymax-ymin)/4;
+    for(let v=ymin; v<=ymax+0.001; v+=step){
+      s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${C.grid}"/>`;
+      s += `<text x="${L-7}" y="${ys(v)+4}" fill="${C.ink3}" font-size="10" text-anchor="end">${fmt(v)}</text>`;
+    }
+    if(extraLines) extraLines.forEach(el=>{
+      s += `<line x1="${L}" y1="${ys(el.v)}" x2="${W-R}" y2="${ys(el.v)}" stroke="${el.c||C.warn}" stroke-dasharray="4 3" stroke-width="1"/>`;
+      s += `<text x="${W-R}" y="${ys(el.v)-3}" fill="${el.c||C.warn}" font-size="10" text-anchor="end">${el.label}</text>`;
+    });
+    const path = data.map((m,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${ys(m[1]).toFixed(1)}`).join('');
+    s += `<path d="${path}" fill="none" stroke="${C.accent}" stroke-width="2" stroke-linejoin="round"/>`;
+    marks.forEach(mk=>{
+      let idx=-1,best=Infinity;
+      data.forEach((m,i)=>{const d=Math.abs(m[1]-mk.v); if(d<best){best=d;idx=i;}});
+      if(idx<0)return;
+      const x=xs(idx),y=ys(mk.v);
+      s += `<circle cx="${x}" cy="${y}" r="${mk.r||3.5}" fill="${mk.c||C.accent}"/>`;
+      s += `<text x="${x}" y="${y-8}" fill="${mk.c||C.accent}" font-size="10.5" text-anchor="middle" font-weight="600">${mk.label}</text>`;
+    });
+    g.innerHTML = s;
+  }
+
+  // 月线图
+  lineChart('monthly', monthly, 40000, 260000, 920, 320, 60, 14, 16, 28, v=>(v/10000).toFixed(0)+'万',
+    [{v:240450,label:'顶 24.0万',c:C.accent},{v:58400,label:'底 5.84万',c:C.up},{v:209880,label:'反弹顶 21.0万',c:C.accent},{v:155240,label:'现 15.5万',c:C.ink}], null);
+  // 周线图
+  lineChart('weekly', weekly, 50000, 215000, 920, 340, 56, 14, 16, 28, v=>(v/10000).toFixed(0)+'万',
+    [{v:58400,label:'B1 一买',c:C.up,r:4.5},{v:209880,label:'顶 209880',c:C.accent},{v:135560,label:'回调低 135560',c:C.up},{v:155240,label:'现',c:C.ink}],
+    [{v:152500,label:'中枢下沿 152500',c:C.warn}]);
+  // 日线图
+  lineChart('daily', daily, 120000, 215000, 920, 340, 56, 14, 16, 28, v=>(v/10000).toFixed(1)+'万',
+    [{v:172000,label:'7/3 反弹顶',c:C.accent},{v:135560,label:'8/7 低',c:C.up},{v:155240,label:'现',c:C.ink}],
+    [{v:152015,label:'38.2% 152015',c:C.warn},{v:134140,label:'50% 134140',c:C.warn},{v:116265,label:'61.8% 116265',c:C.warn}]);
+})();
+</script>

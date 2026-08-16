@@ -1,0 +1,254 @@
+<title>白银指数中长期走势</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --panel: #ffffff;
+    --ink: #1c1a17;
+    --ink-2: #5c574f;
+    --ink-3: #8a8479;
+    --line: #e5e0d8;
+    --accent: #2a7a52;
+    --accent-soft: #d3e6da;
+    --down: #c2472a;
+    --up: #2a7a52;
+    --grid: #ece8e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141210;
+      --panel: #1c1916;
+      --ink: #ece7df;
+      --ink-2: #b3aca0;
+      --ink-3: #7a746a;
+      --line: #2e2a24;
+      --accent: #58b087;
+      --accent-soft: #22392e;
+      --up: #58b087;
+      --grid: #26221c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141210; --panel: #1c1916; --ink: #ece7df; --ink-2: #b3aca0;
+    --ink-3: #7a746a; --line: #2e2a24; --accent: #58b087; --accent-soft: #22392e;
+    --up: #58b087; --grid: #26221c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6; padding: 32px 20px 64px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: .5px; }
+  .sub { color: var(--ink-3); font-size: 13px; margin: 0 0 24px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 20px 16px; margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .stat-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .stat {
+    flex: 1 1 140px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .stat .k { font-size: 12px; color: var(--ink-3); margin-bottom: 4px; }
+  .stat .v { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+  .stat .d { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .bad { color: var(--down); }
+  .good { color: var(--up); }
+  svg { width: 100%; height: auto; display: block; }
+  .note { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .verdict {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 16px 18px; margin-top: 20px;
+  }
+  .verdict h2 { margin-top: 0; }
+  ul { margin: 8px 0; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+         background: var(--accent-soft); color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .tag-red { background: var(--accent-soft); color: var(--down); }
+</style>
+<div class="wrap">
+  <h1>白银指数 · 中长期走势跟踪</h1>
+  <p class="sub">连续合约 AG000（2020-01 ~ 2026-06）+ 当前主力 AG2612（至 2026-08-14） · 数据源 DuckDB / 新浪</p>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="k">历史最高</div>
+      <div class="v">32380</div>
+      <div class="d">2026-01（牛市大顶）</div>
+    </div>
+    <div class="stat">
+      <div class="k">历史最低</div>
+      <div class="v">2857</div>
+      <div class="d">2020-03（疫情底）</div>
+    </div>
+    <div class="stat">
+      <div class="k">当前历史分位</div>
+      <div class="v">44%</div>
+      <div class="d">6.5 年区间中位偏上</div>
+    </div>
+    <div class="stat">
+      <div class="k">自 2026-01 顶回撤</div>
+      <div class="v bad">−58%</div>
+      <div class="d">32380 → 13514</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>月线收盘 · 长期趋势（2020–2026）</h2>
+    <svg viewBox="0 0 880 380" role="img" aria-label="白银连续合约月线收盘走势">
+      <g id="grid"></g>
+      <g id="series"></g>
+      <g id="topmark"></g>
+      <g id="lowmark"></g>
+    </svg>
+    <p class="note">2020–2023 长期低位震荡（4300~6300），2024 启动、2025 加速、2026-01 见顶 32380 后深度回调 −58% 至 13514（2026-06）。绿色圆点为显著低点，红色为显著高点。与纯碱的「5 年阴跌」是镜像：这是「2 年牛市 + 半年暴跌」。</p>
+  </div>
+
+  <div class="panel">
+    <h2>年度高低点 · 牛市结构与深度回调</h2>
+    <table>
+      <tr><th>年份</th><th class="num">最高</th><th class="num">最低</th><th class="num">年末</th><th>定性</th></tr>
+      <tr><td>2020</td><td class="num">6875</td><td class="num">2857</td><td class="num">5574</td><td>疫情底后修复</td></tr>
+      <tr><td>2021</td><td class="num">6082</td><td class="num">4590</td><td class="num">4836</td><td>高位回落震荡</td></tr>
+      <tr><td>2022</td><td class="num">5442</td><td class="num">4019</td><td class="num">5343</td><td>区间震荡</td></tr>
+      <tr><td>2023</td><td class="num">6342</td><td class="num">4757</td><td class="num">6049</td><td>缓慢上行</td></tr>
+      <tr><td>2024</td><td class="num">8727</td><td class="num">5743</td><td class="num">7495</td><td><span class="tag">牛市启动</span>突破平台</td></tr>
+      <tr><td>2025</td><td class="num">19959</td><td class="num">7535</td><td class="num">18468</td><td><span class="tag">加速上涨</span>年底暴涨</td></tr>
+      <tr><td>2026</td><td class="num">32380</td><td class="num">13514</td><td class="num">14101</td><td><span class="tag tag-red">见顶暴跌</span>半年 −58%</td></tr>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>近期日线 · AG2612 主力（2026-06 末 ~ 08-14）</h2>
+    <svg viewBox="0 0 880 300" role="img" aria-label="白银主力合约近期日线">
+      <g id="recent"></g>
+    </svg>
+    <p class="note">6/26 低点 13579 → 7/6 反弹 15489 → 7/17 二次探底 13359（略破前低，形成双底）→ 8/13 冲高 16374 → 8/14 回落 15754。持仓量 7/14 的 7.7 万手一路增至 8/14 的 13.1 万手（+70%），多头持续加仓。</p>
+  </div>
+
+  <div class="verdict">
+    <h2>中长期研判</h2>
+    <ul>
+      <li><b>长期趋势：牛市中的深度回调，不是熊市。</b> 2024 年起白银走出 2 年大牛市（4300→32380，涨 6.5 倍），2026 上半年深度回调 −58% 至 13514，当前 44% 分位——本质是「大级别牛市的中继调整」，与纯碱「5 年阴跌至 0.2% 分位」的绝对底部有本质区别。</li>
+      <li><b>中期结构：周线一买 + 日线二买，二次启动确认中。</b> 周线 MACD 面积底背驰（笔25 vs 笔23 衰减 57%）确认 13514 为一买；日线回踩不破后突破 14950 确认二买。8/13 冲高 16374、8/14 回落 15754 且持仓持平，属趋势中的正常回踩。</li>
+      <li><b>基本面驱动：</b> 供应缺口扩大（光伏/AI/电子工业需求）+ 白银入列美国「关键矿产」清单 + 去美元化与央行增持，中长期弹性高于黄金。短期受 9 月美联储议息预期反复 + COMEX 库存阶段性累积压制。</li>
+      <li><b>关键价位：</b> 上方 16374（8/13 高）→ 18564（末中枢中轨，第一目标）→ 22051（中枢上沿/5 月高）为压力；下方 14950（B2 确认线）→ 13514（一买低点/生命线）→ 13359（AG2612 实际二次探底低点）为支撑。</li>
+      <li><b>对当前持仓的含义：</b> AG2612 多单 @14591（现价 15754，+8.0%）是「周线一买 + 日线二买」的顺势多，逻辑与纯碱的「超跌抢反弹」不同——<b>这是牛市二次启动的趋势多，健康度远高于纯碱</b>。守 14950 继续持有，回踩 15000 附近是低吸机会，跌破 13514 才证伪。</li>
+    </ul>
+    <p class="note">定性：<span class="tag">牛市深度回调</span><span class="tag">周线一买</span><span class="tag">日线二买</span><span class="tag">顺势做多</span> — 这是「在牛市回调中顺势买入」，而非「在熊市底部赌反转」，逻辑比纯碱更扎实。</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const monthly = [["2020-01",4304],["2020-02",4164],["2020-03",3433],["2020-04",3696],["2020-05",4311],["2020-06",4330],["2020-07",5515],["2020-08",6136],["2020-09",5081],["2020-10",4934],["2020-11",4792],["2020-12",5574],["2021-01",5458],["2021-02",5766],["2021-03",5069],["2021-04",5366],["2021-05",5762],["2021-06",5379],["2021-07",5422],["2021-08",5126],["2021-09",4626],["2021-10",4925],["2021-11",4822],["2021-12",4836],["2022-01",4713],["2022-02",4908],["2022-03",5077],["2022-04",4900],["2022-05",4737],["2022-06",4524],["2022-07",4386],["2022-08",4214],["2022-09",4370],["2022-10",4506],["2022-11",4956],["2022-12",5343],["2023-01",5222],["2023-02",4881],["2023-03",5303],["2023-04",5589],["2023-05",5379],["2023-06",5443],["2023-07",5772],["2023-08",5939],["2023-09",5813],["2023-10",5887],["2023-11",6159],["2023-12",6049],["2024-01",5950],["2024-02",5855],["2024-03",6409],["2024-04",7085],["2024-05",8278],["2024-06",7694],["2024-07",7306],["2024-08",7532],["2024-09",7807],["2024-10",8199],["2024-11",7570],["2024-12",7495],["2025-01",7738],["2025-02",7887],["2025-03",8461],["2025-04",8244],["2025-05",8238],["2025-06",8733],["2025-07",9094],["2025-08",9373],["2025-09",10937],["2025-10",11445],["2025-11",12414],["2025-12",18468],["2026-01",29221],["2026-02",22220],["2026-03",17865],["2026-04",17675],["2026-05",18211],["2026-06",14101]];
+  const tops = [["2024-05",8727],["2025-12",19959],["2026-01",32380]];
+  const lows = [["2020-03",2857],["2026-06",13514]];
+
+  const recent = [
+    [6,22,16121,16269,15780],[6,23,15051,16190,15028],[6,24,15010,15118,14676],[6,25,13872,14523,13635],
+    [6,26,14278,14430,13579],[6,29,14334,14527,14081],[6,30,14481,14581,13804],[7,1,14102,14822,14055],
+    [7,2,14714,14960,14303],[7,3,15325,15364,14840],[7,6,15142,15489,15088],[7,7,14947,15210,14720],
+    [7,8,14925,15137,14631],[7,9,14470,14533,14073],[7,10,14721,14880,14513],[7,13,14200,14724,14150],
+    [7,14,14274,14370,13915],[7,15,14284,14618,14223],[7,16,13967,14425,13852],[7,17,13568,13848,13359],
+    [7,20,13785,14015,13384],[7,21,14444,14478,13759],[7,22,14567,14728,14286],[7,23,14640,14980,14455],
+    [7,24,14188,14272,14022],[7,27,14595,14710,14204],[7,28,14120,14527,13908],[7,29,14306,14308,13940],
+    [7,30,14067,14568,13980],[7,31,14299,14489,14170],[8,3,14249,14363,13988],[8,4,14399,14485,13850],
+    [8,5,15131,15160,14513],[8,6,15126,15465,15050],[8,7,15664,15686,14975],[8,10,15735,15945,15420],
+    [8,11,15779,16278,15570],[8,12,16182,16225,15769],[8,13,15861,16374,15822],[8,14,15754,16026,15530]
+  ]; // [month, day, close, high, low]
+
+  const css = getComputedStyle(document.documentElement);
+  const ink = css.getPropertyValue('--ink').trim();
+  const ink2 = css.getPropertyValue('--ink-2').trim();
+  const ink3 = css.getPropertyValue('--ink-3').trim();
+  const grid = css.getPropertyValue('--grid').trim();
+  const line = css.getPropertyValue('--line').trim();
+  const accent = css.getPropertyValue('--accent').trim();
+  const up = css.getPropertyValue('--up').trim();
+  const down = css.getPropertyValue('--down').trim();
+
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+  // ---- 月线图 ----
+  const W=880, H=380, L=56, R=16, T=18, B=34;
+  const xs = i => L + i*(W-L-R)/(monthly.length-1);
+  const ymin=2000, ymax=34000;
+  const ys = v => T + (ymax-v)*(H-T-B)/(ymax-ymin);
+
+  let g = document.getElementById('grid');
+  let s = '';
+  for(let v=5000; v<=30000; v+=5000){
+    s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${grid}" stroke-width="1"/>`;
+    s += `<text x="${L-8}" y="${ys(v)+4}" fill="${ink3}" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  for(let i=0;i<monthly.length;i++){
+    if(monthly[i][0].endsWith('-01')){
+      s += `<text x="${xs(i)}" y="${H-10}" fill="${ink3}" font-size="11" text-anchor="middle">${monthly[i][0].slice(0,4)}</text>`;
+    }
+  }
+  g.innerHTML = s;
+
+  let path = monthly.map((m,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${ys(m[1]).toFixed(1)}`).join('');
+  document.getElementById('series').innerHTML =
+    `<path d="${path}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+
+  let tm = '';
+  tops.forEach(([d,v])=>{
+    const i = monthly.findIndex(m=>m[0]===d);
+    if(i<0) return;
+    const x=xs(i), y=ys(v);
+    tm += `<circle cx="${x}" cy="${y}" r="4" fill="${down}"/>`;
+    tm += `<text x="${x}" y="${y-9}" fill="${down}" font-size="11" text-anchor="middle" font-weight="600">${v}</text>`;
+  });
+  document.getElementById('topmark').innerHTML = tm;
+
+  let lm = '';
+  lows.forEach(([d,v])=>{
+    const i = monthly.findIndex(m=>m[0]===d);
+    if(i<0) return;
+    const x=xs(i), y=ys(v);
+    lm += `<circle cx="${x}" cy="${y}" r="3.5" fill="${up}"/>`;
+    if(d==='2026-06') lm += `<text x="${x}" y="${y+16}" fill="${up}" font-size="11" text-anchor="middle" font-weight="600">${v} 一买底</text>`;
+    else lm += `<text x="${x}" y="${y-7}" fill="${up}" font-size="10" text-anchor="middle">${v}</text>`;
+  });
+  document.getElementById('lowmark').innerHTML = lm;
+
+  // ---- 近期日线图 ----
+  const RW=880, RH=300, RL=52, RR=16, RT=16, RB=30;
+  const rxs = i => RL + i*(RW-RL-RR)/(recent.length-1);
+  const rymin=13000, rymax=16800;
+  const rys = v => RT + (rymax-v)*(RH-RT-RB)/(rymax-rymin);
+
+  let rg = document.getElementById('recent');
+  let rs = '';
+  for(let v=13000; v<=16800; v+=500){
+    rs += `<line x1="${RL}" y1="${rys(v)}" x2="${RW-RR}" y2="${rys(v)}" stroke="${grid}"/>`;
+    rs += `<text x="${RL-8}" y="${rys(v)+4}" fill="${ink3}" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  // 关键线: 13514, 14591, 14950
+  [[13514,'13514 一买底'],[14591,'14591 成本'],[14950,'14950 B2确认']].forEach(([v,label])=>{
+    rs += `<line x1="${RL}" y1="${rys(v)}" x2="${RW-RR}" y2="${rys(v)}" stroke="${ink3}" stroke-dasharray="4 3" stroke-width="1"/>`;
+    rs += `<text x="${RW-RR}" y="${rys(v)-4}" fill="${ink3}" font-size="10" text-anchor="end">${label}</text>`;
+  });
+  rg.innerHTML = rs;
+
+  let rpath = recent.map((r,i)=>`${i?'L':'M'}${rxs(i).toFixed(1)},${rys(r[2]).toFixed(1)}`).join('');
+  rg.innerHTML += `<path d="${rpath}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+
+  // 标注低点与高点
+  let low1 = recent.findIndex(r=>r[4]===13579);
+  let low2 = recent.findIndex(r=>r[4]===13359);
+  let hi = recent.findIndex(r=>r[3]===16374);
+  if(low2>=0) rg.innerHTML += `<circle cx="${rxs(low2)}" cy="${rys(13359)}" r="4" fill="${up}"/><text x="${rxs(low2)}" y="${rys(13359)+16}" fill="${up}" font-size="11" text-anchor="middle" font-weight="600">13359 二次探底</text>`;
+  if(hi>=0) rg.innerHTML += `<circle cx="${rxs(hi)}" cy="${rys(16374)}" r="4" fill="${down}"/><text x="${rxs(hi)}" y="${rys(16374)-8}" fill="${down}" font-size="11" text-anchor="middle" font-weight="600">16374</text>`;
+})();
+</script>

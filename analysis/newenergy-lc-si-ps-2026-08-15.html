@@ -1,0 +1,169 @@
+<title>碳酸锂 · 工业硅 · 多晶硅 深度分析</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg:#f7f6f3; --panel:#ffffff; --ink:#1c1a17; --ink-2:#5c574f; --ink-3:#8a8479;
+    --line:#e5e0d8; --accent:#c2472a; --accent-soft:#f4d8cd; --down:#c2472a; --up:#2a7a52;
+    --grid:#ece8e0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#141210; --panel:#1c1916; --ink:#ece7df; --ink-2:#b3aca0; --ink-3:#7a746a;
+      --line:#2e2a24; --accent:#e2704f; --accent-soft:#3a2620; --up:#58b087; --grid:#26221c;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#141210; --panel:#1c1916; --ink:#ece7df; --ink-2:#b3aca0; --ink-3:#7a746a;
+    --line:#2e2a24; --accent:#e2704f; --accent-soft:#3a2620; --up:#58b087; --grid:#26221c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;padding:32px 20px 64px}
+  .wrap{max-width:960px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:.5px}
+  .sub{color:var(--ink-3);font-size:13px;margin:0 0 24px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 20px 16px;margin-bottom:20px}
+  .panel h2{font-size:15px;margin:0 0 4px;font-weight:600}
+  .panel .meta{font-size:12px;color:var(--ink-3);margin:0 0 12px}
+  .stat-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+  .stat{flex:1 1 200px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;border-top:3px solid var(--accent)}
+  .stat .nm{font-size:13px;font-weight:700;margin-bottom:2px}
+  .stat .k{font-size:12px;color:var(--ink-3)}
+  .stat .v{font-size:20px;font-weight:700;margin:6px 0 2px}
+  .stat .d{font-size:12px;color:var(--ink-2)}
+  .up{color:var(--up)} .down{color:var(--down)}
+  svg{width:100%;height:auto;display:block}
+  .note{font-size:13px;color:var(--ink-2);margin-top:10px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--ink-3);font-weight:500;font-size:12px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .verdict{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:16px 18px;margin-top:20px}
+  .verdict h2{margin-top:0}
+  ul{margin:8px 0;padding-left:20px} li{margin-bottom:6px}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--accent-soft);color:var(--accent);font-weight:600;margin-right:6px}
+  .tag.green{background:#dceee4;color:var(--up)}
+  .tag.gray{background:var(--grid);color:var(--ink-2)}
+</style>
+<div class="wrap">
+  <h1>新能源材料三剑客 · 深度分析</h1>
+  <p class="sub">碳酸锂 LC · 工业硅 SI · 多晶硅 PS（广期所 GFEX）· 连续合约 2026-08-14 收盘 · 数据源 新浪 / 广期所</p>
+
+  <div class="stat-row">
+    <div class="stat" style="border-top-color:#c2472a">
+      <div class="nm">碳酸锂 LC</div>
+      <div class="v">155,240</div>
+      <div class="d">分位 <b>53.2%</b> · 自底 +166% · <span class="up">已反转</span></div>
+    </div>
+    <div class="stat" style="border-top-color:#2a7a52">
+      <div class="nm">工业硅 SI</div>
+      <div class="v">8,795</div>
+      <div class="d">分位 <b>14.0%</b> · 自顶 −55% · <span class="down">底部磨底</span></div>
+    </div>
+    <div class="stat" style="border-top-color:#8a6d2a">
+      <div class="nm">多晶硅 PS</div>
+      <div class="v">39,190</div>
+      <div class="d">分位 <b>27.8%</b> · 二底反弹 · <span>政策托底</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>碳酸锂 LC — 已反转，高位回调</h2>
+    <p class="meta">上市 2023-07-21 · 区间 58400 ~ 240450 · 当前 155240</p>
+    <svg viewBox="0 0 920 300" role="img" aria-label="碳酸锂月线"><g id="lc"></g></svg>
+    <p class="note">58400（2025-05）历史大底 → 209880（2026-05）顶，反弹 +259%。当前回调至 155240（−26%），处于上涨趋势的回调段，二买/中枢构建中。持仓 7 月以来从 38 万手降至 28 万手，本轮反弹以空头回补为主。</p>
+  </div>
+
+  <div class="panel">
+    <h2>工业硅 SI — 底部磨底，成本支撑</h2>
+    <p class="meta">上市 2022-12-22 · 区间 7015 ~ 19720 · 当前 8795</p>
+    <svg viewBox="0 0 920 300" role="img" aria-label="工业硅月线"><g id="si"></g></svg>
+    <p class="note">19720（上市即顶）→ 7015（2025-05）历史大底，跌 −64%。当前 8795（14% 分位），在 8000~9300 低位箱体震荡。新疆 421# 完全成本约 8300，丰水期云南 553# 成本约 8600，价格已贴近成本线。</p>
+  </div>
+
+  <div class="panel">
+    <h2>多晶硅 PS — 政策底已现，市场底待确认</h2>
+    <p class="meta">上市 2024-12-26 · 区间 30400 ~ 61985 · 当前 39190</p>
+    <svg viewBox="0 0 920 300" role="img" aria-label="多晶硅月线"><g id="ps"></g></svg>
+    <p class="note">上市后剧烈波动：30400（2025-06）底 → 61985（2025-12）顶 → 31070（2026-04）二底。当前 39190，从二底反弹 +23%。8/6 八巨头签《反内卷倡议书》托底，但开工率仅 30~33%、通威 H1 亏 48~54 亿，过剩未解。</p>
+  </div>
+
+  <div class="panel">
+    <h2>三品种横比</h2>
+    <table>
+      <tr><th>维度</th><th class="num">碳酸锂 LC</th><th class="num">工业硅 SI</th><th class="num">多晶硅 PS</th></tr>
+      <tr><td>上市时间</td><td class="num">2023-07</td><td class="num">2022-12</td><td class="num">2024-12</td></tr>
+      <tr><td>历史最高</td><td class="num">240,450</td><td class="num">19,720</td><td class="num">61,985</td></tr>
+      <tr><td>历史最低</td><td class="num">58,400</td><td class="num">7,015</td><td class="num">30,400</td></tr>
+      <tr><td>当前价格</td><td class="num">155,240</td><td class="num">8,795</td><td class="num">39,190</td></tr>
+      <tr><td>历史分位</td><td class="num">53.2%</td><td class="num">14.0%</td><td class="num">27.8%</td></tr>
+      <tr><td>产业链定位</td><td class="num">锂电（电池）</td><td class="num">光伏上游</td><td class="num">光伏中游</td></tr>
+      <tr><td>2026 供需</td><td class="num">缺口 4.7 万吨</td><td class="num">累库 5 万吨</td><td class="num">过剩 5 万吨</td></tr>
+      <tr><td>阶段定性</td><td class="num"><span class="tag green">已反转</span></td><td class="num"><span class="tag gray">磨底</span></td><td class="num"><span class="tag">托底博弈</span></td></tr>
+      <tr><td>驱动核心</td><td class="num">储能爆发 +71%</td><td class="num">成本线 + 丰水期</td><td class="num">反内卷 + 能耗出清</td></tr>
+    </table>
+  </div>
+
+  <div class="verdict">
+    <h2>综合研判</h2>
+    <ul>
+      <li><b>碳酸锂 LC — 三者唯一完成产能出清、已反转的品种。</b> 2022~2024 暴跌完成出清后，储能（H1 全球出货 461GWh +71%）+ 动力（渗透率 65.1%）双轮驱动，2026 供需转紧（缺口 4.7 万吨）、连续 12 周去库。周线已走出 58400→209880 完整上升趋势，当前 155240 是上涨中的回调。<b>方向偏多，但已涨 259%，回调看 13.5~14 万支撑，追高需等二买确认。</b></li>
+      <li><b>工业硅 SI — 最贴近成本底的磨底品种，缺驱动。</b> 7015 历史大底后，2026 在 8000~9300 箱体震荡，价格贴成本线（8300~8600）。供给过剩但边际改善（−1%），四季度基本面修复。<b>下有成本支撑、上无驱动，区间操作 8000 买 / 9300 卖，破 7015 才看更空。</b></li>
+      <li><b>多晶硅 PS — 政策底已至、市场底待验证，弹性最大。</b> 八巨头 8/6 反内卷倡议（承诺不低于完全成本销售）+ 2027 能耗标准出清，给价格托底；但开工率 30~33%、龙头巨亏，过剩 5 万吨未解。当前 39190 从 31070 二底反弹 +23%，现金成本 31000~35000。<b>跌入 3.3~3.5 万可左侧建仓，突破 4.5 万确认反转，波动剧烈需控仓。</b></li>
+      <li><b>产业链视角：</b> 光伏链（工业硅→多晶硅→组件）仍处产能过剩出清中段，政策底已现但市场底未到；锂电链（碳酸锂→电池）已率先完成出清，是三者中基本面最扎实的方向。<b>排序：LC（趋势多）&gt; PS（政策底左侧）&gt; SI（成本底区间）。</b></li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  const css = getComputedStyle(document.documentElement);
+  const C = {
+    ink: css.getPropertyValue('--ink').trim(),
+    ink2: css.getPropertyValue('--ink-2').trim(),
+    ink3: css.getPropertyValue('--ink-3').trim(),
+    grid: css.getPropertyValue('--grid').trim(),
+    accent: css.getPropertyValue('--accent').trim(),
+    up: css.getPropertyValue('--up').trim(),
+  };
+  const lc = [["2023-07",228050],["2023-08",186850],["2023-09",150000],["2023-10",153750],["2023-11",106200],["2023-12",107700],["2024-01",99150],["2024-02",119200],["2024-03",107050],["2024-04",111450],["2024-05",104850],["2024-06",94500],["2024-07",82700],["2024-08",78900],["2024-09",79750],["2024-10",74850],["2024-11",78550],["2024-12",77100],["2025-01",79620],["2025-02",75200],["2025-03",74160],["2025-04",65960],["2025-05",59800],["2025-06",62260],["2025-07",68280],["2025-08",77180],["2025-09",72800],["2025-10",80780],["2025-11",96420],["2025-12",121580],["2026-01",148200],["2026-02",176040],["2026-03",157200],["2026-04",189080],["2026-05",179740],["2026-06",163360],["2026-07",137760],["2026-08",155240]];
+  const si = [["2022-12",17895],["2023-01",17860],["2023-02",17520],["2023-03",15515],["2023-04",15190],["2023-05",12815],["2023-06",13275],["2023-07",13725],["2023-08",13540],["2023-09",13960],["2023-10",14335],["2023-11",14070],["2023-12",14230],["2024-01",13160],["2024-02",13160],["2024-03",11945],["2024-04",11955],["2024-05",12835],["2024-06",11420],["2024-07",10440],["2024-08",10125],["2024-09",9890],["2024-10",13130],["2024-11",12405],["2024-12",10985],["2025-01",10950],["2025-02",10355],["2025-03",9785],["2025-04",8540],["2025-05",7190],["2025-06",8060],["2025-07",8760],["2025-08",8390],["2025-09",8640],["2025-10",9100],["2025-11",9130],["2025-12",8860],["2026-01",8850],["2026-02",8395],["2026-03",8355],["2026-04",8795],["2026-05",8585],["2026-06",8385],["2026-07",8170],["2026-08",8795]];
+  const ps = [["2024-12",42465],["2025-01",43730],["2025-02",44265],["2025-03",43460],["2025-04",37245],["2025-05",35600],["2025-06",33535],["2025-07",49130],["2025-08",49555],["2025-09",51360],["2025-10",56410],["2025-11",56425],["2025-12",57920],["2026-01",47140],["2026-02",46495],["2026-03",35200],["2026-04",38380],["2026-05",36835],["2026-06",35325],["2026-07",33040],["2026-08",39190]];
+
+  function draw(id, data, ymin, ymax, marks, fmt){
+    const W=920, H=300, L=62, R=14, T=16, B=28;
+    const xs = i => L + i*(W-L-R)/(data.length-1);
+    const ys = v => T + (ymax-v)*(H-T-B)/(ymax-ymin);
+    let g = document.getElementById(id);
+    let s = '';
+    const steps = (ymax-ymin)/4;
+    for(let v=ymin; v<=ymax+0.001; v+=steps){
+      s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${C.grid}"/>`;
+      s += `<text x="${L-7}" y="${ys(v)+4}" fill="${C.ink3}" font-size="10" text-anchor="end">${fmt(v)}</text>`;
+    }
+    for(let i=0;i<data.length;i++){
+      if(data[i][0].endsWith('-01') || i===0 || i===data.length-1){
+        s += `<text x="${xs(i)}" y="${H-8}" fill="${C.ink3}" font-size="10" text-anchor="middle">${data[i][0].slice(0,4)}</text>`;
+      }
+    }
+    const path = data.map((m,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${ys(m[1]).toFixed(1)}`).join('');
+    s += `<path d="${path}" fill="none" stroke="${C.accent}" stroke-width="2" stroke-linejoin="round"/>`;
+    // 标注
+    marks.forEach(mk=>{
+      const [label, val, color] = mk;
+      const i = data.findIndex(m=>Math.abs(m[1]-val) < (ymax-ymin)*0.003 && (label.includes('底')||label.includes('低')));
+      // 用最近匹配
+      let idx = -1, best = Infinity;
+      data.forEach((m,ii)=>{ const d=Math.abs(m[1]-val); if(d<best){best=d;idx=ii;} });
+      if(idx<0) return;
+      const x=xs(idx), y=ys(val);
+      s += `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}"/>`;
+      s += `<text x="${x}" y="${y-7}" fill="${color}" font-size="10" text-anchor="middle" font-weight="600">${label} ${fmt(val)}</text>`;
+    });
+    g.innerHTML = s;
+  }
+
+  draw('lc', lc, 40000, 260000, [['顶',240450,C.accent],['底',58400,C.up],['现',155240,C.ink]], v=> (v/10000).toFixed(0)+'万');
+  draw('si', si, 6000, 21000, [['顶',19720,C.accent],['底',7015,C.up],['现',8795,C.ink]], v=> Math.round(v));
+  draw('ps', ps, 25000, 65000, [['顶',61985,C.accent],['底',30400,C.up],['现',39190,C.ink]], v=> Math.round(v));
+})();
+</script>

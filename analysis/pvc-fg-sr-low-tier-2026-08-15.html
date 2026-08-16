@@ -1,0 +1,216 @@
+<title>PVC·玻璃·白糖 中长期跟踪</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg:#f7f6f3; --panel:#ffffff; --ink:#1c1a17; --ink-2:#5c574f; --ink-3:#8a8479;
+    --line:#e5e0d8; --accent:#c2472a; --accent-soft:#f4d8cd; --down:#c2472a; --up:#2a7a52; --grid:#ece8e0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){ --bg:#141210; --panel:#1c1916; --ink:#ece7df; --ink-2:#b3aca0; --ink-3:#7a746a;
+      --line:#2e2a24; --accent:#e2704f; --accent-soft:#3a2620; --up:#58b087; --grid:#26221c; }
+  }
+  :root[data-theme="dark"]{ --bg:#141210; --panel:#1c1916; --ink:#ece7df; --ink-2:#b3aca0; --ink-3:#7a746a;
+    --line:#2e2a24; --accent:#e2704f; --accent-soft:#3a2620; --up:#58b087; --grid:#26221c; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;padding:32px 20px 64px;}
+  .wrap{max-width:960px;margin:0 auto;}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:.5px;}
+  .sub{color:var(--ink-3);font-size:13px;margin:0 0 24px;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 20px 16px;margin-bottom:20px;}
+  .panel h2{font-size:15px;margin:0 0 12px;font-weight:600;}
+  .stat-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;}
+  .stat{flex:1 1 130px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+  .stat .k{font-size:12px;color:var(--ink-3);margin-bottom:4px;}
+  .stat .v{font-size:20px;font-weight:700;letter-spacing:-.5px;}
+  .stat .d{font-size:11px;color:var(--ink-2);margin-top:2px;}
+  .bad{color:var(--down);} .good{color:var(--up);}
+  svg{width:100%;height:auto;display:block;}
+  .note{font-size:13px;color:var(--ink-2);margin-top:10px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);}
+  th{color:var(--ink-3);font-weight:500;font-size:12px;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--accent-soft);color:var(--accent);font-weight:600;margin-right:6px;}
+  .cmp td{padding:8px 10px;}
+  .cmp td:first-child{color:var(--ink-2);font-size:12px;}
+  .sec-title{display:flex;align-items:center;gap:10px;margin:0 0 4px;}
+  .sec-title .name{font-size:19px;font-weight:700;}
+  .sec-title .code{font-size:12px;color:var(--ink-3);}
+  .divider{height:1px;background:var(--line);margin:28px 0;}
+</style>
+<div class="wrap">
+  <h1>PVC · 玻璃 · 白糖 · 中长期跟踪</h1>
+  <p class="sub">三低位品种横向对比 · 连续合约（2020-01 ~ 2026-06）+ 主力 2609（至 2026-08-14） · 数据源 DuckDB / 新浪</p>
+
+  <div class="panel">
+    <h2>横向对比</h2>
+    <table class="cmp">
+      <tr><th></th><th class="num">PVC</th><th class="num">玻璃</th><th class="num">白糖</th></tr>
+      <tr><td>历史高</td><td class="num">13380（2021-10）</td><td class="num">3162（2021-07）</td><td class="num">7202（2023-05）</td></tr>
+      <tr><td>历史低</td><td class="num">4204（2025-12）</td><td class="num">934（2025-12）</td><td class="num">4762（2020-04）</td></tr>
+      <tr><td>现价（8/14）</td><td class="num">4496</td><td class="num">867</td><td class="num">5167</td></tr>
+      <tr><td>历史分位</td><td class="num bad">3.2%</td><td class="num bad">≈0%（破历史低）</td><td class="num bad">16.6%</td></tr>
+      <tr><td>成本/利润</td><td class="num">电石成本 4600，利润 −710</td><td class="num">全线亏损 −55~−206</td><td class="num">微利</td></tr>
+      <tr><td>库存</td><td class="num">高位（同比 +106%）</td><td class="num">7529 万箱高位</td><td class="num">449 万吨（+222 万）</td></tr>
+      <tr><td>需求性质</td><td class="num">地产（管材型材 60%）</td><td class="num">地产竣工（刚性）</td><td class="num">食品饮料（刚性）</td></tr>
+      <tr><td>核心矛盾</td><td class="num">地产拖累 + 高库存</td><td class="num">竣工 −24% + 冷修慢</td><td class="num">巴西增产 + 高库存</td></tr>
+    </table>
+  </div>
+
+  <!-- PVC -->
+  <div class="sec-title"><span class="name">PVC</span><span class="code">v000 / V2609 · 聚氯乙烯</span></div>
+  <div class="stat-row">
+    <div class="stat"><div class="k">历史最高</div><div class="v">13380</div><div class="d">2021-10 煤炭危机顶</div></div>
+    <div class="stat"><div class="k">历史最低</div><div class="v">4204</div><div class="d">2025-12</div></div>
+    <div class="stat"><div class="k">当前分位</div><div class="v bad">3.2%</div><div class="d">极端低位</div></div>
+    <div class="stat"><div class="k">现价</div><div class="v">4496</div><div class="d">跌破电石成本 4600</div></div>
+  </div>
+  <div class="panel"><h2>月线收盘（2020–2026）</h2><svg viewBox="0 0 880 360" id="m-pvc"></svg>
+    <p class="note">2021-10 煤炭危机顶 13380 后 4 年阴跌 −69% 至 2025-12 的 4204。2026 上半年反弹到 6364 后再度回落至 4339。红色为顶、绿色为历史底。</p></div>
+  <div class="panel"><h2>年度高低点</h2><table>
+    <tr><th>年份</th><th class="num">最高</th><th class="num">最低</th><th class="num">年末</th><th>定性</th></tr>
+    <tr><td>2020</td><td class="num">8560</td><td class="num">4955</td><td class="num">7085</td><td>疫后修复</td></tr>
+    <tr><td>2021</td><td class="num">13380</td><td class="num">6875</td><td class="num">8422</td><td><span class="tag">大顶</span>煤炭危机</td></tr>
+    <tr><td>2022</td><td class="num">9527</td><td class="num">5484</td><td class="num">6220</td><td>高位回落</td></tr>
+    <tr><td>2023</td><td class="num">6700</td><td class="num">5597</td><td class="num">5929</td><td>阴跌</td></tr>
+    <tr><td>2024</td><td class="num">6663</td><td class="num">4916</td><td class="num">5314</td><td>阴跌</td></tr>
+    <tr><td>2025</td><td class="num">5390</td><td class="num">4204</td><td class="num">4794</td><td><span class="tag">历史底</span>探底</td></tr>
+    <tr><td>2026</td><td class="num">6364</td><td class="num">4334</td><td class="num">4339</td><td>反弹后回落</td></tr>
+  </table></div>
+  <div class="panel"><h2>近期日线 V2609（2026-06 ~ 08-14）</h2><svg viewBox="0 0 880 300" id="r-pvc"></svg>
+    <p class="note">6 月从 4993 单边回落至 4334（6/30），7/20 反弹至 4723 后再度回落，8/14 收 4496，跌破电石成本 4600 但下方有成本支撑。</p></div>
+
+  <div class="divider"></div>
+
+  <!-- 玻璃 -->
+  <div class="sec-title"><span class="name">玻璃</span><span class="code">FG000 / FG2609 · 浮法玻璃</span></div>
+  <div class="stat-row">
+    <div class="stat"><div class="k">历史最高</div><div class="v">3162</div><div class="d">2021-07 地产竣工潮顶</div></div>
+    <div class="stat"><div class="k">历史最低</div><div class="v">934</div><div class="d">2025-12（已破）</div></div>
+    <div class="stat"><div class="k">当前分位</div><div class="v bad">≈0%</div><div class="d">破历史低，创新低</div></div>
+    <div class="stat"><div class="k">现价</div><div class="v">867</div><div class="d">全线亏损 −55~−206</div></div>
+  </div>
+  <div class="panel"><h2>月线收盘（2020–2026）</h2><svg viewBox="0 0 880 360" id="m-fg"></svg>
+    <p class="note">2021-07 地产竣工潮顶 3162 后 4 年阴跌 −70% 至 2025-12 的 934，2026 年继续磨底并破位（主力跌至 867）。红色为顶、绿色为历史底。</p></div>
+  <div class="panel"><h2>年度高低点</h2><table>
+    <tr><th>年份</th><th class="num">最高</th><th class="num">最低</th><th class="num">年末</th><th>定性</th></tr>
+    <tr><td>2020</td><td class="num">2037</td><td class="num">1177</td><td class="num">1837</td><td>疫后修复</td></tr>
+    <tr><td>2021</td><td class="num">3162</td><td class="num">1574</td><td class="num">1718</td><td><span class="tag">大顶</span>竣工潮</td></tr>
+    <tr><td>2022</td><td class="num">2430</td><td class="num">1332</td><td class="num">1644</td><td>回落</td></tr>
+    <tr><td>2023</td><td class="num">2027</td><td class="num">1394</td><td class="num">1908</td><td>震荡</td></tr>
+    <tr><td>2024</td><td class="num">1983</td><td class="num">1005</td><td class="num">1339</td><td>阴跌破千</td></tr>
+    <tr><td>2025</td><td class="num">1466</td><td class="num">934</td><td class="num">1096</td><td><span class="tag">历史底</span>探底</td></tr>
+    <tr><td>2026</td><td class="num">1170</td><td class="num">955</td><td class="num">966</td><td>磨底破位</td></tr>
+  </table></div>
+  <div class="panel"><h2>近期日线 FG2609（2026-06 ~ 08-14）</h2><svg viewBox="0 0 880 300" id="r-fg"></svg>
+    <p class="note">6 月从 1056 单边下跌，7/17 破 900，8/13 跌至 859（低于历史低 934），8/14 收 867。破位下探，最弱品种。</p></div>
+
+  <div class="divider"></div>
+
+  <!-- 白糖 -->
+  <div class="sec-title"><span class="name">白糖</span><span class="code">SR000 / SR2609 · 食糖</span></div>
+  <div class="stat-row">
+    <div class="stat"><div class="k">历史最高</div><div class="v">7202</div><div class="d">2023-05 食糖大顶</div></div>
+    <div class="stat"><div class="k">历史最低</div><div class="v">4762</div><div class="d">2020-04</div></div>
+    <div class="stat"><div class="k">当前分位</div><div class="v bad">16.6%</div><div class="d">低位</div></div>
+    <div class="stat"><div class="k">现价</div><div class="v">5167</div><div class="d">区间 5100-5700 下沿</div></div>
+  </div>
+  <div class="panel"><h2>月线收盘（2020–2026）</h2><svg viewBox="0 0 880 360" id="m-sr"></svg>
+    <p class="note">2023-05 食糖大顶 7202 后回落，2026 年低位阴跌至 5286。与 PVC/玻璃不同，白糖需求刚性 + 北半球减产预期，是三者里弹性最好的。红色为顶、绿色为历史底。</p></div>
+  <div class="panel"><h2>年度高低点</h2><table>
+    <tr><th>年份</th><th class="num">最高</th><th class="num">最低</th><th class="num">年末</th><th>定性</th></tr>
+    <tr><td>2020</td><td class="num">5916</td><td class="num">4762</td><td class="num">5267</td><td>疫后低位</td></tr>
+    <tr><td>2021</td><td class="num">6165</td><td class="num">5161</td><td class="num">5763</td><td>震荡上行</td></tr>
+    <tr><td>2022</td><td class="num">6129</td><td class="num">5440</td><td class="num">5781</td><td>高位震荡</td></tr>
+    <tr><td>2023</td><td class="num">7202</td><td class="num">5591</td><td class="num">6286</td><td><span class="tag">大顶</span>食糖牛市</td></tr>
+    <tr><td>2024</td><td class="num">6704</td><td class="num">5508</td><td class="num">5949</td><td>回落</td></tr>
+    <tr><td>2025</td><td class="num">6197</td><td class="num">5072</td><td class="num">5244</td><td>阴跌</td></tr>
+    <tr><td>2026</td><td class="num">5542</td><td class="num">5198</td><td class="num">5286</td><td>低位阴跌</td></tr>
+  </table></div>
+  <div class="panel"><h2>近期日线 SR2609（2026-06 ~ 08-14）</h2><svg viewBox="0 0 880 300" id="r-sr"></svg>
+    <p class="note">6 月从 5446 阴跌至 7/31 的 5049，8 月小幅反弹至 5226 后回落到 5167。下方有进口成本支撑，区间震荡。</p></div>
+
+  <div class="panel" style="border-left:3px solid var(--accent);">
+    <h2>综合定位</h2>
+    <ul>
+      <li><b>玻璃最弱（最该躲开）</b>：唯一破历史低的品种，需求端是地产竣工 −24% 的<span class="tag">趋势性萎缩</span>（2028 年前难逆转），深度亏损倒逼冷修但落地慢。追空性价比下降但绝不抄底，唯一变数是批量计划外冷修。</li>
+      <li><b>PVC 次之（有底无弹性）</b>：3.2% 分位跌破成本，亏损倒逼主动减产（比玻璃冷修快），但地产拖累 + 出口退税取消，<span class="tag">低位震荡</span>为主。</li>
+      <li><b>白糖相对最好（唯一弹性点）</b>：16.6% 分位三者最高，需求刚性（不受地产拖累），且 2026/27 榨季北半球减产转向<span class="tag">缺口预期</span>，下方有进口成本支撑，区间 5100-5700。</li>
+    </ul>
+    <p class="note">三者共同点：都是「低位 + 高库存 + 需求弱」，缺乏趋势性上涨驱动。区别在需求端性质——玻璃/PVC 绑地产（萎缩），白糖绑食品（刚性）。</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const css = getComputedStyle(document.documentElement);
+  const ink3 = css.getPropertyValue('--ink-3').trim();
+  const grid = css.getPropertyValue('--grid').trim();
+  const accent = css.getPropertyValue('--accent').trim();
+  const up = css.getPropertyValue('--up').trim();
+  const down = css.getPropertyValue('--down').trim();
+
+  function drawMonthly(id, data, tops, lows, ymin, ymax, ystep){
+    const W=880, H=360, L=52, R=14, T=16, B=30;
+    const xs = i => L + i*(W-L-R)/(data.length-1);
+    const ys = v => T + (ymax-v)*(H-T-B)/(ymax-ymin);
+    const el = document.getElementById(id);
+    let s='';
+    for(let v=ymin; v<=ymax; v+=ystep){
+      s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${grid}"/>`;
+      s += `<text x="${L-8}" y="${ys(v)+4}" fill="${ink3}" font-size="10" text-anchor="end">${v}</text>`;
+    }
+    for(let i=0;i<data.length;i++){
+      if(data[i][0].endsWith('-01')) s += `<text x="${xs(i)}" y="${H-8}" fill="${ink3}" font-size="10" text-anchor="middle">${data[i][0].slice(0,4)}</text>`;
+    }
+    const path = data.map((m,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${ys(m[1]).toFixed(1)}`).join('');
+    s += `<path d="${path}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+    tops.forEach(([d,v])=>{ const i=data.findIndex(m=>m[0]===d); if(i<0)return;
+      s += `<circle cx="${xs(i)}" cy="${ys(v)}" r="4" fill="${down}"/><text x="${xs(i)}" y="${ys(v)-8}" fill="${down}" font-size="10" text-anchor="middle" font-weight="600">${v}</text>`; });
+    lows.forEach(([d,v])=>{ const i=data.findIndex(m=>m[0]===d); if(i<0)return;
+      s += `<circle cx="${xs(i)}" cy="${ys(v)}" r="4" fill="${up}"/><text x="${xs(i)}" y="${ys(v)+14}" fill="${up}" font-size="10" text-anchor="middle" font-weight="600">${v}</text>`; });
+    el.innerHTML = s;
+  }
+
+  function drawRecent(id, data, marks, lines, ymin, ymax, ystep){
+    const W=880, H=300, L=46, R=14, T=14, B=26;
+    const xs = i => L + i*(W-L-R)/(data.length-1);
+    const ys = v => T + (ymax-v)*(H-T-B)/(ymax-ymin);
+    const el = document.getElementById(id);
+    let s='';
+    for(let v=ymin; v<=ymax; v+=ystep){
+      s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${grid}"/>`;
+      s += `<text x="${L-6}" y="${ys(v)+4}" fill="${ink3}" font-size="10" text-anchor="end">${v}</text>`;
+    }
+    (lines||[]).forEach(([v,label])=>{
+      s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${ink3}" stroke-dasharray="4 3"/>`;
+      s += `<text x="${W-R}" y="${ys(v)-4}" fill="${ink3}" font-size="10" text-anchor="end">${label}</text>`;
+    });
+    const path = data.map((r,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${ys(r[2]).toFixed(1)}`).join('');
+    s += `<path d="${path}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+    marks.forEach(({idx,v,color,label})=>{
+      if(idx<0)return;
+      const above = label.indexOf('低')>=0 ? 14 : -8;
+      s += `<circle cx="${xs(idx)}" cy="${ys(v)}" r="3.5" fill="${color}"/><text x="${xs(idx)}" y="${ys(v)+above}" fill="${color}" font-size="10" text-anchor="middle" font-weight="600">${label}</text>`;
+    });
+    el.innerHTML = s;
+  }
+
+  // 月线数据（arg_max 月末收盘）
+  const PVC=[["2020-01",6460],["2020-02",6230],["2020-03",5040],["2020-04",5485],["2020-05",6060],["2020-06",6165],["2020-07",6575],["2020-08",6625],["2020-09",6610],["2020-10",6855],["2020-11",7580],["2020-12",7085],["2021-01",7375],["2021-02",8480],["2021-03",8640],["2021-04",8805],["2021-05",8650],["2021-06",8750],["2021-07",9215],["2021-08",9335],["2021-09",11840],["2021-10",9335],["2021-11",8604],["2021-12",8422],["2022-01",8841],["2022-02",8547],["2022-03",9300],["2022-04",8602],["2022-05",8389],["2022-06",7362],["2022-07",6953],["2022-08",6267],["2022-09",6161],["2022-10",5583],["2022-11",5958],["2022-12",6220],["2023-01",6462],["2023-02",6373],["2023-03",6267],["2023-04",6001],["2023-05",5652],["2023-06",5840],["2023-07",6325],["2023-08",6309],["2023-09",6162],["2023-10",6051],["2023-11",5879],["2023-12",5929],["2024-01",5815],["2024-02",5906],["2024-03",5781],["2024-04",5962],["2024-05",6551],["2024-06",6014],["2024-07",5659],["2024-08",5599],["2024-09",5637],["2024-10",5452],["2024-11",5177],["2024-12",5314],["2025-01",5177],["2025-02",5189],["2025-03",5063],["2025-04",4917],["2025-05",4759],["2025-06",4935],["2025-07",5122],["2025-08",4911],["2025-09",4871],["2025-10",4743],["2025-11",4546],["2025-12",4794],["2026-01",5004],["2026-02",4763],["2026-03",5478],["2026-04",5280],["2026-05",4926],["2026-06",4339]];
+  const FG=[["2020-01",1499],["2020-02",1389],["2020-03",1291],["2020-04",1269],["2020-05",1431],["2020-06",1478],["2020-07",1686],["2020-08",1839],["2020-09",1725],["2020-10",1726],["2020-11",1858],["2020-12",1837],["2021-01",1785],["2021-02",2059],["2021-03",2139],["2021-04",2378],["2021-05",2713],["2021-06",2810],["2021-07",2887],["2021-08",2636],["2021-09",2246],["2021-10",1879],["2021-11",1868],["2021-12",1718],["2022-01",2252],["2022-02",1927],["2022-03",2132],["2022-04",1831],["2022-05",1759],["2022-06",1671],["2022-07",1528],["2022-08",1439],["2022-09",1504],["2022-10",1401],["2022-11",1389],["2022-12",1644],["2023-01",1628],["2023-02",1521],["2023-03",1669],["2023-04",1757],["2023-05",1410],["2023-06",1545],["2023-07",1671],["2023-08",1769],["2023-09",1696],["2023-10",1634],["2023-11",1773],["2023-12",1908],["2024-01",1844],["2024-02",1632],["2024-03",1456],["2024-04",1568],["2024-05",1709],["2024-06",1538],["2024-07",1352],["2024-08",1255],["2024-09",1256],["2024-10",1373],["2024-11",1252],["2024-12",1339],["2025-01",1380],["2025-02",1228],["2025-03",1178],["2025-04",1086],["2025-05",984],["2025-06",1028],["2025-07",1168],["2025-08",1169],["2025-09",1234],["2025-10",1100],["2025-11",1061],["2025-12",1096],["2026-01",1083],["2026-02",1048],["2026-03",1029],["2026-04",1029],["2026-05",1045],["2026-06",966]];
+  const SR=[["2020-01",5671],["2020-02",5664],["2020-03",5503],["2020-04",5015],["2020-05",5023],["2020-06",5004],["2020-07",4982],["2020-08",5188],["2020-09",5118],["2020-10",5240],["2020-11",5132],["2020-12",5267],["2021-01",5243],["2021-02",5420],["2021-03",5337],["2021-04",5484],["2021-05",5547],["2021-06",5576],["2021-07",5626],["2021-08",5878],["2021-09",5769],["2021-10",5962],["2021-11",5918],["2021-12",5763],["2022-01",5709],["2022-02",5702],["2022-03",5833],["2022-04",5867],["2022-05",6069],["2022-06",5845],["2022-07",5813],["2022-08",5501],["2022-09",5466],["2022-10",5490],["2022-11",5528],["2022-12",5781],["2023-01",5861],["2023-02",5911],["2023-03",6448],["2023-04",6937],["2023-05",6868],["2023-06",6651],["2023-07",6773],["2023-08",6962],["2023-09",6928],["2023-10",6807],["2023-11",6783],["2023-12",6286],["2024-01",6451],["2024-02",6271],["2024-03",6490],["2024-04",6156],["2024-05",6202],["2024-06",6132],["2024-07",6183],["2024-08",5654],["2024-09",5925],["2024-10",5841],["2024-11",6079],["2024-12",5949],["2025-01",5854],["2025-02",5941],["2025-03",6089],["2025-04",5878],["2025-05",5771],["2025-06",5794],["2025-07",5812],["2025-08",5591],["2025-09",5499],["2025-10",5479],["2025-11",5411],["2025-12",5244],["2026-01",5273],["2026-02",5317],["2026-03",5431],["2026-04",5411],["2026-05",5413],["2026-06",5286]];
+
+  drawMonthly('m-pvc', PVC, [["2021-10",13380]], [["2025-12",4204]], 4000, 14000, 2000);
+  drawMonthly('m-fg', FG, [["2021-07",3162]], [["2025-12",934]], 800, 3400, 500);
+  drawMonthly('m-sr', SR, [["2023-05",7202]], [["2020-04",4762]], 4600, 7400, 400);
+
+  const RV=[[6,1,4993,5032,4911],[6,2,4950,5024,4931],[6,3,4943,4967,4870],[6,4,4819,4940,4813],[6,5,4767,4815,4754],[6,8,4778,4802,4719],[6,9,4717,4787,4690],[6,10,4706,4718,4652],[6,11,4716,4735,4644],[6,12,4741,4759,4672],[6,15,4692,4784,4685],[6,16,4637,4705,4617],[6,17,4618,4690,4604],[6,18,4616,4641,4580],[6,22,4535,4657,4526],[6,23,4444,4529,4439],[6,24,4490,4527,4435],[6,25,4469,4540,4458],[6,26,4388,4488,4385],[6,29,4391,4398,4343],[6,30,4456,4472,4334],[7,1,4392,4492,4385],[7,2,4369,4434,4361],[7,3,4453,4478,4376],[7,6,4450,4506,4444],[7,7,4439,4467,4406],[7,8,4480,4509,4413],[7,9,4511,4530,4452],[7,10,4534,4558,4488],[7,13,4488,4590,4486],[7,14,4579,4602,4429],[7,15,4598,4635,4569],[7,16,4590,4638,4581],[7,17,4440,4613,4434],[7,20,4713,4723,4440],[7,21,4587,4680,4545],[7,22,4565,4644,4554],[7,23,4618,4635,4534],[7,24,4656,4665,4595],[7,27,4536,4656,4505],[7,28,4503,4572,4495],[7,29,4523,4567,4485],[7,30,4467,4558,4448],[7,31,4480,4523,4438],[8,3,4451,4514,4444],[8,4,4471,4525,4446],[8,5,4461,4489,4436],[8,6,4529,4548,4450],[8,7,4507,4535,4485],[8,10,4498,4554,4496],[8,11,4556,4562,4477],[8,12,4528,4549,4510],[8,13,4511,4536,4467],[8,14,4496,4516,4474]];
+  const RF=[[6,1,1056,1065,1045],[6,2,1043,1058,1036],[6,3,1049,1054,1041],[6,4,1031,1052,1024],[6,5,1010,1034,1004],[6,8,1004,1012,1000],[6,9,995,1004,993],[6,10,989,999,983],[6,11,991,998,982],[6,12,987,995,983],[6,15,1014,1020,987],[6,16,1004,1018,999],[6,17,996,1015,994],[6,18,978,996,975],[6,22,977,985,973],[6,23,967,979,962],[6,24,973,983,965],[6,25,975,982,970],[6,26,968,978,958],[6,29,978,980,966],[6,30,975,980,964],[7,1,961,972,956],[7,2,966,972,957],[7,3,973,979,962],[7,6,967,982,964],[7,7,952,966,951],[7,8,962,966,951],[7,9,957,964,949],[7,10,965,974,952],[7,13,952,967,950],[7,14,951,956,944],[7,15,949,958,944],[7,16,929,952,927],[7,17,900,931,899],[7,20,890,908,889],[7,21,904,910,891],[7,22,913,918,900],[7,23,899,917,892],[7,24,908,912,891],[7,27,900,914,898],[7,28,888,898,883],[7,29,884,891,881],[7,30,870,886,865],[7,31,875,894,867],[8,3,868,878,866],[8,4,885,890,868],[8,5,885,894,877],[8,6,891,894,879],[8,7,885,890,878],[8,10,889,903,883],[8,11,901,910,883],[8,12,878,905,876],[8,13,871,881,859],[8,14,867,882,866]];
+  const RS=[[6,1,5446,5454,5410],[6,2,5433,5451,5416],[6,3,5438,5455,5427],[6,4,5374,5446,5368],[6,5,5341,5390,5316],[6,8,5330,5341,5312],[6,9,5310,5348,5307],[6,10,5314,5323,5301],[6,11,5291,5322,5277],[6,12,5315,5331,5273],[6,15,5321,5332,5303],[6,16,5317,5335,5307],[6,17,5338,5354,5309],[6,18,5320,5353,5310],[6,22,5345,5346,5304],[6,23,5264,5340,5253],[6,24,5241,5286,5237],[6,25,5210,5243,5198],[6,26,5219,5247,5209],[6,29,5270,5285,5247],[6,30,5260,5304,5260],[7,1,5277,5295,5242],[7,2,5267,5304,5262],[7,3,5307,5316,5246],[7,6,5327,5329,5287],[7,7,5316,5336,5306],[7,8,5271,5315,5262],[7,9,5249,5277,5235],[7,10,5284,5288,5236],[7,13,5255,5279,5248],[7,14,5235,5266,5224],[7,15,5229,5246,5225],[7,16,5158,5232,5152],[7,17,5124,5162,5121],[7,20,5157,5174,5132],[7,21,5169,5182,5147],[7,22,5169,5181,5155],[7,23,5190,5197,5154],[7,24,5158,5189,5151],[7,27,5169,5176,5135],[7,28,5143,5167,5135],[7,29,5120,5150,5080],[7,30,5089,5128,5079],[7,31,5053,5099,5049],[8,3,5057,5077,5050],[8,4,5086,5097,5051],[8,5,5108,5118,5069],[8,6,5122,5130,5108],[8,7,5153,5183,5108],[8,10,5207,5218,5165],[8,11,5203,5226,5196],[8,12,5192,5212,5188],[8,13,5155,5214,5130],[8,14,5167,5187,5146]];
+
+  drawRecent('r-pvc', RV, [{idx:RV.findIndex(r=>r[4]===4334),v:4334,color:up,label:'4334 低'},{idx:RV.findIndex(r=>r[3]===4723),v:4723,color:down,label:'4723 高'}], [[4600,'成本 4600']], 4200, 4900, 100);
+  drawRecent('r-fg', RF, [{idx:RF.findIndex(r=>r[3]===1065),v:1065,color:down,label:'1065 高'},{idx:RF.findIndex(r=>r[4]===859),v:859,color:up,label:'859 新低'}], [[934,'历史低 934']], 840, 1100, 50);
+  drawRecent('r-sr', RS, [{idx:RS.findIndex(r=>r[3]===5455),v:5455,color:down,label:'5455 高'},{idx:RS.findIndex(r=>r[4]===5049),v:5049,color:up,label:'5049 低'}], [[4762,'历史低 4762']], 4700, 5600, 150);
+})();
+</script>

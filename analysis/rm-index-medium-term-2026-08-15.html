@@ -1,0 +1,252 @@
+<title>菜粕指数中长期走势</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --panel: #ffffff;
+    --ink: #1c1a17;
+    --ink-2: #5c574f;
+    --ink-3: #8a8479;
+    --line: #e5e0d8;
+    --accent: #c2472a;
+    --accent-soft: #f4d8cd;
+    --down: #c2472a;
+    --up: #2a7a52;
+    --grid: #ece8e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141210;
+      --panel: #1c1916;
+      --ink: #ece7df;
+      --ink-2: #b3aca0;
+      --ink-3: #7a746a;
+      --line: #2e2a24;
+      --accent: #e2704f;
+      --accent-soft: #3a2620;
+      --up: #58b087;
+      --grid: #26221c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141210; --panel: #1c1916; --ink: #ece7df; --ink-2: #b3aca0;
+    --ink-3: #7a746a; --line: #2e2a24; --accent: #e2704f; --accent-soft: #3a2620;
+    --up: #58b087; --grid: #26221c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6; padding: 32px 20px 64px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: .5px; }
+  .sub { color: var(--ink-3); font-size: 13px; margin: 0 0 24px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 20px 16px; margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .stat-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .stat {
+    flex: 1 1 140px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .stat .k { font-size: 12px; color: var(--ink-3); margin-bottom: 4px; }
+  .stat .v { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+  .stat .d { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .bad { color: var(--down); }
+  .good { color: var(--up); }
+  svg { width: 100%; height: auto; display: block; }
+  .note { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .verdict {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 16px 18px; margin-top: 20px;
+  }
+  .verdict h2 { margin-top: 0; }
+  ul { margin: 8px 0; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+         background: var(--accent-soft); color: var(--accent); font-weight: 600; margin-right: 6px; }
+</style>
+<div class="wrap">
+  <h1>菜粕指数 · 中长期走势跟踪</h1>
+  <p class="sub">连续合约 RM000（2020-01 ~ 2026-06）+ 当前主力 RM2609（至 2026-08-14） · 数据源 DuckDB / 新浪</p>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="k">历史最高</div>
+      <div class="v">4197</div>
+      <div class="d">2022-03（油脂油料牛市顶）</div>
+    </div>
+    <div class="stat">
+      <div class="k">历史最低</div>
+      <div class="v">2086</div>
+      <div class="d">2020-02（疫情底）</div>
+    </div>
+    <div class="stat">
+      <div class="k">当前历史分位</div>
+      <div class="v bad">10%</div>
+      <div class="d">6.5 年区间极端低位</div>
+    </div>
+    <div class="stat">
+      <div class="k">自 2022 顶回撤</div>
+      <div class="v bad">−50%</div>
+      <div class="d">4197 → 2116</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>月线收盘 · 长期趋势（2020–2026）</h2>
+    <svg viewBox="0 0 880 380" role="img" aria-label="菜粕连续合约月线收盘走势">
+      <g id="grid"></g>
+      <g id="series"></g>
+      <g id="topmark"></g>
+      <g id="lowmark"></g>
+    </svg>
+    <p class="note">2022-03 油脂油料牛市见顶 4197 后，4 年阴跌 −50% 至 2024-08 的 2116（距历史底 2086 仅 30 点），随后进入 2200-2800 低位震荡，当前 2281 处于 10% 分位。红色圆点为显著高点，绿色为显著低点。</p>
+  </div>
+
+  <div class="panel">
+    <h2>年度高低点 · 见顶后阴跌结构</h2>
+    <table>
+      <tr><th>年份</th><th class="num">最高</th><th class="num">最低</th><th class="num">年末</th><th>定性</th></tr>
+      <tr><td>2020</td><td class="num">2886</td><td class="num">2086</td><td class="num">2811</td><td>疫情底后修复</td></tr>
+      <tr><td>2021</td><td class="num">3218</td><td class="num">2477</td><td class="num">2905</td><td>高位震荡</td></tr>
+      <tr><td>2022</td><td class="num">4197</td><td class="num">2596</td><td class="num">3165</td><td><span class="tag">大顶</span>油脂牛市见顶</td></tr>
+      <tr><td>2023</td><td class="num">3965</td><td class="num">2728</td><td class="num">2950</td><td>反弹未破前高</td></tr>
+      <tr><td>2024</td><td class="num">2962</td><td class="num">2116</td><td class="num">2400</td><td><span class="tag">二次探底</span>逼近历史底</td></tr>
+      <tr><td>2025</td><td class="num">2822</td><td class="num">2242</td><td class="num">2402</td><td>低位修复震荡</td></tr>
+      <tr><td>2026</td><td class="num">2634</td><td class="num">2202</td><td class="num">2281</td><td><span class="tag">低位磨底</span>10% 分位</td></tr>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>近期日线 · RM2609 主力（2026-06 末 ~ 08-14）</h2>
+    <svg viewBox="0 0 880 300" role="img" aria-label="菜粕主力合约近期日线">
+      <g id="recent"></g>
+    </svg>
+    <p class="note">6 月末低位 2232 企稳后，7/24 受黑海冲突 + 加拿大到港锐减驱动冲高 2472（单日 +3.79%），随后回落至 8/14 的 2297。持仓量 6/22 的 92 万手降至 8/14 的 20 万手——主力移仓（RM2609→RM2701），非多空离场。</p>
+  </div>
+
+  <div class="verdict">
+    <h2>中长期研判</h2>
+    <ul>
+      <li><b>长期趋势：见顶后的阴跌末端，处极端低位。</b> 2022-03 见顶 4197 后 4 年阴跌 −50%，当前 2281 为 6.5 年区间 10% 分位。但与纯碱「0.2% 分位的绝望出清」不同，菜粕 2024-08 的 2116 未破 2020 历史底 2086，是「有底」的极端低位。</li>
+      <li><b>中期结构：二次探底后的低位中枢震荡。</b> 2116 未破 2086（双底成立），但之后反弹高点逐级下移（2790→2634→2435），无趋势反转证据，当前处于低位中枢下沿。</li>
+      <li><b>基本面驱动：</b> 全球菜籽增产（加拿大播种面积新高）+ 中加贸易恢复（关税取消、进口回升）+ 豆粕替代，中长期供需宽松；但油厂菜粕库存仅 2.6 万吨（历史极低）+ 水产旺季刚需形成短期盾牌。</li>
+      <li><b>关键价位：</b> 上方 2435（2026-03 高）→ 2480-2500（机构压力）→ 2800（2025-07 高）为压力；下方 2214（2026-06 低）→ 2116（2024-08 底）→ 2086（历史地板）为支撑。</li>
+      <li><b>操作含义：</b> 极端低位 + 弱驱动，适合「逢低埋伏、不追单边」。低吸 2214-2250，止损 2086，止盈 2435-2500。向上弹性押注加拿大天气/到港节奏，向下有 2086 历史地板 + 低库存双重保护。</li>
+    </ul>
+    <p class="note">定性：<span class="tag">见顶后阴跌</span><span class="tag">极端低位</span><span class="tag">弱驱动震荡</span> — 有底、无驱动，是「低位埋伏」而非「趋势追多」。</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const monthly = [["2020-01",2253],["2020-02",2240],["2020-03",2508],["2020-04",2328],["2020-05",2355],["2020-06",2316],["2020-07",2391],["2020-08",2347],["2020-09",2318],["2020-10",2456],["2020-11",2548],["2020-12",2811],["2021-01",2836],["2021-02",2949],["2021-03",2846],["2021-04",3049],["2021-05",2967],["2021-06",2895],["2021-07",2979],["2021-08",2855],["2021-09",2783],["2021-10",2664],["2021-11",2687],["2021-12",2905],["2022-01",3167],["2022-02",3500],["2022-03",3863],["2022-04",3819],["2022-05",3794],["2022-06",2835],["2022-07",2733],["2022-08",2873],["2022-09",3213],["2022-10",2908],["2022-11",3064],["2022-12",3165],["2023-01",3218],["2023-02",3139],["2023-03",2784],["2023-04",2973],["2023-05",2925],["2023-06",3292],["2023-07",3603],["2023-08",3390],["2023-09",3154],["2023-10",2915],["2023-11",2831],["2023-12",2950],["2024-01",2477],["2024-02",2454],["2024-03",2592],["2024-04",2783],["2024-05",2777],["2024-06",2626],["2024-07",2413],["2024-08",2254],["2024-09",2609],["2024-10",2369],["2024-11",2357],["2024-12",2400],["2025-01",2483],["2025-02",2563],["2025-03",2580],["2025-04",2586],["2025-05",2625],["2025-06",2566],["2025-07",2716],["2025-08",2481],["2025-09",2423],["2025-10",2378],["2025-11",2457],["2025-12",2402],["2026-01",2295],["2026-02",2287],["2026-03",2292],["2026-04",2406],["2026-05",2297],["2026-06",2281]];
+  const tops = [["2021-05",3218],["2022-03",4197],["2023-08",3965]];
+  const lows = [["2020-02",2086],["2024-08",2116]];
+
+  const recent = [
+    [6,22,2271,2304,2261],[6,23,2303,2305,2250],[6,24,2316,2321,2297],[6,25,2266,2317,2251],
+    [6,26,2305,2310,2267],[6,29,2296,2315,2285],[6,30,2247,2294,2246],[7,1,2268,2280,2232],
+    [7,2,2275,2291,2265],[7,3,2257,2287,2255],[7,6,2304,2308,2254],[7,7,2318,2326,2301],
+    [7,8,2305,2333,2297],[7,9,2338,2340,2308],[7,10,2325,2343,2317],[7,13,2295,2353,2290],
+    [7,14,2308,2328,2295],[7,15,2315,2324,2297],[7,16,2308,2336,2304],[7,17,2286,2322,2279],
+    [7,20,2333,2335,2289],[7,21,2342,2356,2329],[7,22,2350,2375,2340],[7,23,2360,2397,2359],
+    [7,24,2467,2472,2364],[7,27,2387,2446,2378],[7,28,2335,2374,2331],[7,29,2337,2350,2329],
+    [7,30,2289,2334,2271],[7,31,2316,2321,2287],[8,3,2319,2322,2294],[8,4,2308,2331,2304],
+    [8,5,2313,2323,2285],[8,6,2307,2320,2298],[8,7,2320,2324,2296],[8,10,2304,2335,2302],
+    [8,11,2305,2318,2289],[8,12,2295,2307,2284],[8,13,2285,2304,2277],[8,14,2297,2312,2279]
+  ]; // [month, day, close, high, low]
+
+  const css = getComputedStyle(document.documentElement);
+  const ink = css.getPropertyValue('--ink').trim();
+  const ink2 = css.getPropertyValue('--ink-2').trim();
+  const ink3 = css.getPropertyValue('--ink-3').trim();
+  const grid = css.getPropertyValue('--grid').trim();
+  const line = css.getPropertyValue('--line').trim();
+  const accent = css.getPropertyValue('--accent').trim();
+  const up = css.getPropertyValue('--up').trim();
+  const down = css.getPropertyValue('--down').trim();
+
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+  // ---- 月线图 ----
+  const W=880, H=380, L=56, R=16, T=18, B=34;
+  const xs = i => L + i*(W-L-R)/(monthly.length-1);
+  const ymin=1900, ymax=4400;
+  const ys = v => T + (ymax-v)*(H-T-B)/(ymax-ymin);
+
+  let g = document.getElementById('grid');
+  let s = '';
+  for(let v=2000; v<=4200; v+=400){
+    s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${grid}" stroke-width="1"/>`;
+    s += `<text x="${L-8}" y="${ys(v)+4}" fill="${ink3}" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  for(let i=0;i<monthly.length;i++){
+    if(monthly[i][0].endsWith('-01')){
+      s += `<text x="${xs(i)}" y="${H-10}" fill="${ink3}" font-size="11" text-anchor="middle">${monthly[i][0].slice(0,4)}</text>`;
+    }
+  }
+  g.innerHTML = s;
+
+  let path = monthly.map((m,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${ys(m[1]).toFixed(1)}`).join('');
+  document.getElementById('series').innerHTML =
+    `<path d="${path}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+
+  let tm = '';
+  tops.forEach(([d,v])=>{
+    const i = monthly.findIndex(m=>m[0]===d);
+    if(i<0) return;
+    const x=xs(i), y=ys(v);
+    tm += `<circle cx="${x}" cy="${y}" r="4" fill="${down}"/>`;
+    tm += `<text x="${x}" y="${y-9}" fill="${down}" font-size="11" text-anchor="middle" font-weight="600">${v}</text>`;
+  });
+  document.getElementById('topmark').innerHTML = tm;
+
+  let lm = '';
+  lows.forEach(([d,v])=>{
+    const i = monthly.findIndex(m=>m[0]===d);
+    if(i<0) return;
+    const x=xs(i), y=ys(v);
+    lm += `<circle cx="${x}" cy="${y}" r="3.5" fill="${up}"/>`;
+    if(d==='2024-08') lm += `<text x="${x}" y="${y+16}" fill="${up}" font-size="11" text-anchor="middle" font-weight="600">${v} 二次探底</text>`;
+    else lm += `<text x="${x}" y="${y-7}" fill="${up}" font-size="10" text-anchor="middle">${v} 历史底</text>`;
+  });
+  document.getElementById('lowmark').innerHTML = lm;
+
+  // ---- 近期日线图 ----
+  const RW=880, RH=300, RL=52, RR=16, RT=16, RB=30;
+  const rxs = i => RL + i*(RW-RL-RR)/(recent.length-1);
+  const rymin=2200, rymax=2520;
+  const rys = v => RT + (rymax-v)*(RH-RT-RB)/(rymax-rymin);
+
+  let rg = document.getElementById('recent');
+  let rs = '';
+  for(let v=2200; v<=2520; v+=40){
+    rs += `<line x1="${RL}" y1="${rys(v)}" x2="${RW-RR}" y2="${rys(v)}" stroke="${grid}"/>`;
+    rs += `<text x="${RL-8}" y="${rys(v)+4}" fill="${ink3}" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  // 关键线: 2116, 2214, 2435
+  [[2116,'2116 二次探底'],[2214,'2214 近期低'],[2435,'2435 压力']].forEach(([v,label])=>{
+    rs += `<line x1="${RL}" y1="${rys(v)}" x2="${RW-RR}" y2="${rys(v)}" stroke="${ink3}" stroke-dasharray="4 3" stroke-width="1"/>`;
+    rs += `<text x="${RW-RR}" y="${rys(v)-4}" fill="${ink3}" font-size="10" text-anchor="end">${label}</text>`;
+  });
+  rg.innerHTML = rs;
+
+  let rpath = recent.map((r,i)=>`${i?'L':'M'}${rxs(i).toFixed(1)},${rys(r[2]).toFixed(1)}`).join('');
+  rg.innerHTML += `<path d="${rpath}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+
+  // 标注低点与高点
+  let low = recent.findIndex(r=>r[4]===2232);
+  let hi = recent.findIndex(r=>r[3]===2472);
+  if(low>=0) rg.innerHTML += `<circle cx="${rxs(low)}" cy="${rys(2232)}" r="3.5" fill="${up}"/><text x="${rxs(low)}" y="${rys(2232)+14}" fill="${up}" font-size="10" text-anchor="middle" font-weight="600">2232</text>`;
+  if(hi>=0) rg.innerHTML += `<circle cx="${rxs(hi)}" cy="${rys(2472)}" r="4" fill="${down}"/><text x="${rxs(hi)}" y="${rys(2472)-8}" fill="${down}" font-size="11" text-anchor="middle" font-weight="600">2472 冲高</text>`;
+})();
+</script>

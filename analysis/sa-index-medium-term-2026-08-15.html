@@ -1,0 +1,250 @@
+<title>纯碱指数中长期走势</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --panel: #ffffff;
+    --ink: #1c1a17;
+    --ink-2: #5c574f;
+    --ink-3: #8a8479;
+    --line: #e5e0d8;
+    --accent: #c2472a;
+    --accent-soft: #f4d8cd;
+    --down: #c2472a;
+    --up: #2a7a52;
+    --grid: #ece8e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141210;
+      --panel: #1c1916;
+      --ink: #ece7df;
+      --ink-2: #b3aca0;
+      --ink-3: #7a746a;
+      --line: #2e2a24;
+      --accent: #e2704f;
+      --accent-soft: #3a2620;
+      --up: #58b087;
+      --grid: #26221c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141210; --panel: #1c1916; --ink: #ece7df; --ink-2: #b3aca0;
+    --ink-3: #7a746a; --line: #2e2a24; --accent: #e2704f; --accent-soft: #3a2620;
+    --up: #58b087; --grid: #26221c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6; padding: 32px 20px 64px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: .5px; }
+  .sub { color: var(--ink-3); font-size: 13px; margin: 0 0 24px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 20px 16px; margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .stat-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .stat {
+    flex: 1 1 140px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .stat .k { font-size: 12px; color: var(--ink-3); margin-bottom: 4px; }
+  .stat .v { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+  .stat .d { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .bad { color: var(--down); }
+  .good { color: var(--up); }
+  svg { width: 100%; height: auto; display: block; }
+  .note { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .verdict {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 16px 18px; margin-top: 20px;
+  }
+  .verdict h2 { margin-top: 0; }
+  ul { margin: 8px 0; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+         background: var(--accent-soft); color: var(--accent); font-weight: 600; margin-right: 6px; }
+</style>
+<div class="wrap">
+  <h1>纯碱指数 · 中长期走势跟踪</h1>
+  <p class="sub">连续合约 SA000（2020-01 ~ 2026-06）+ 当前主力 SA2701（至 2026-08-14） · 数据源 DuckDB / 新浪</p>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="k">历史最高</div>
+      <div class="v">3648</div>
+      <div class="d">2021-10（能耗双控顶）</div>
+    </div>
+    <div class="stat">
+      <div class="k">历史最低收盘</div>
+      <div class="v">1079</div>
+      <div class="d">2026-06-30（当前即最低）</div>
+    </div>
+    <div class="stat">
+      <div class="k">当前历史分位</div>
+      <div class="v bad">0.2%</div>
+      <div class="d">6.5 年绝对底部</div>
+    </div>
+    <div class="stat">
+      <div class="k">自 2021 顶回撤</div>
+      <div class="v bad">−70%</div>
+      <div class="d">3648 → 1085</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>月线收盘 · 长期趋势（2020–2026）</h2>
+    <svg viewBox="0 0 880 380" role="img" aria-label="纯碱连续合约月线收盘走势">
+      <g id="grid"></g>
+      <g id="series"></g>
+      <g id="topmark"></g>
+      <g id="lowmark"></g>
+    </svg>
+    <p class="note">红色圆点为周线分型确认的显著高点，逐级下移（3648 → 3268 → 3068 → 2470 → 1585 → 1330），构成清晰的下降通道。绿色为历史低点，当前 1079 已跌破上市以来全部低点。</p>
+  </div>
+
+  <div class="panel">
+    <h2>年度高低点 · 下台阶结构</h2>
+    <table>
+      <tr><th>年份</th><th class="num">最高</th><th class="num">最低</th><th class="num">年末</th><th>定性</th></tr>
+      <tr><td>2020</td><td class="num">1821</td><td class="num">1288</td><td class="num">1603</td><td>上市初震荡</td></tr>
+      <tr><td>2021</td><td class="num">3648</td><td class="num">1490</td><td class="num">2232</td><td><span class="tag">大顶</span>供应冲击见顶</td></tr>
+      <tr><td>2022</td><td class="num">3268</td><td class="num">2162</td><td class="num">2705</td><td>高位宽幅震荡</td></tr>
+      <tr><td>2023</td><td class="num">3068</td><td class="num">1509</td><td class="num">2067</td><td>首次下台阶</td></tr>
+      <tr><td>2024</td><td class="num">2470</td><td class="num">1318</td><td class="num">1442</td><td>加速下台阶</td></tr>
+      <tr><td>2025</td><td class="num">1585</td><td class="num">1089</td><td class="num">1216</td><td>阴跌探底</td></tr>
+      <tr><td>2026</td><td class="num">1330</td><td class="num">1079</td><td class="num">1085</td><td><span class="tag">创新低</span>破历史底</td></tr>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>近期日线 · SA2701 主力（2026-07 末 ~ 08-14）</h2>
+    <svg viewBox="0 0 880 300" role="img" aria-label="纯碱主力合约近期日线">
+      <g id="recent"></g>
+    </svg>
+    <p class="note">8/4 创 986 低点后底背驰反弹至 1065（8/11），随后回撤至 1023（8/14）。持仓量 7/27 的 33 万手一路增至 8/14 的 82 万手——多空激烈博弈，非缩量回踩。</p>
+  </div>
+
+  <div class="verdict">
+    <h2>中长期研判</h2>
+    <ul>
+      <li><b>长期趋势：仍在下降通道，但已处绝对底部。</b> 2021 年 3648 见顶后 5 年连下 6 个台阶，当前 1085 为 6.5 年历史最低收盘，分位仅 0.2%。这轮下跌本质是产能过剩（远兴/金山新增产能 + 光伏玻璃需求走弱）。</li>
+      <li><b>中期结构：尚未确认反转。</b> 周线高点逐级下移，最后反弹高点 1330（2026-03）未突破，下降趋势线压制仍在。8/4 的 986 底背驰只是日线级别的止跌信号，不构成中期反转证据。</li>
+      <li><b>关键价位：</b> 上方 1065（反弹顶）→ 1150~1180（上半年中枢）→ 1330（年内高点）为三道压力；下方 1016（61.8% 回撤）→ 986（底背驰起点/结构生命线）→ 970 一线。</li>
+      <li><b>对当前持仓的含义：</b> SA2701 多 4 手 @1055 是「极限超跌 + 日线底背驰」的左侧布局，逻辑成立但需承认：<b>中期趋势未反转，这是逆势抢反弹，不是顺势做多</b>。成败取决于 986 能否守住。守住则二买构建、上看 1065/1150；失守则底背驰失效、下探新低。</li>
+    </ul>
+    <p class="note">定性：<span class="tag">中长期空头末端</span><span class="tag">绝对低位</span><span class="tag">日线底背驰</span>  — 值得持有但必须用 986 结构止损硬约束，这是「在历史底部赌反转」而非「在趋势中顺势」。</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const monthly = [["2020-01",1646],["2020-02",1565],["2020-03",1365],["2020-04",1447],["2020-05",1476],["2020-06",1394],["2020-07",1325],["2020-08",1686],["2020-09",1705],["2020-10",1577],["2020-11",1504],["2020-12",1603],["2021-01",1615],["2021-02",1840],["2021-03",1889],["2021-04",2040],["2021-05",2187],["2021-06",2202],["2021-07",2612],["2021-08",2717],["2021-09",3413],["2021-10",2883],["2021-11",2456],["2021-12",2232],["2022-01",2890],["2022-02",2604],["2022-03",3026],["2022-04",2965],["2022-05",3104],["2022-06",2878],["2022-07",2648],["2022-08",2360],["2022-09",2500],["2022-10",2336],["2022-11",2694],["2022-12",2705],["2023-01",2974],["2023-02",2920],["2023-03",2447],["2023-04",2125],["2023-05",1564],["2023-06",1695],["2023-07",2085],["2023-08",1887],["2023-09",1786],["2023-10",1718],["2023-11",2391],["2023-12",2067],["2024-01",1948],["2024-02",1768],["2024-03",1759],["2024-04",2217],["2024-05",2357],["2024-06",2034],["2024-07",1768],["2024-08",1594],["2024-09",1620],["2024-10",1575],["2024-11",1469],["2024-12",1442],["2025-01",1496],["2025-02",1563],["2025-03",1388],["2025-04",1340],["2025-05",1192],["2025-06",1211],["2025-07",1292],["2025-08",1301],["2025-09",1278],["2025-10",1236],["2025-11",1190],["2025-12",1216],["2026-01",1218],["2026-02",1181],["2026-03",1195],["2026-04",1228],["2026-05",1207],["2026-06",1085]];
+  const tops = [["2021-10",3648],["2022-04",3268],["2023-02",3068],["2024-05",2470],["2025-03",1585],["2026-03",1330]];
+  const lows = [["2023-05",1551],["2024-09",1318],["2025-12",1089],["2026-06",1079]];
+
+  const recent = [
+    [7,27,1068,1079,1066],[7,28,1036,1068,1033],[7,29,1017,1038,1015],[7,30,1006,1021,997],
+    [7,31,1007,1024,1003],[8,3,993,1008,991],[8,4,992,1000,986],[8,5,1011,1013,992],
+    [8,6,1013,1019,1008],[8,7,1011,1019,1002],[8,10,1038,1045,1010],[8,11,1060,1065,1035],
+    [8,12,1041,1060,1038],[8,13,1037,1042,1020],[8,14,1023,1043,1023]
+  ]; // [month, day, close, high, low]
+
+  const css = getComputedStyle(document.documentElement);
+  const ink = css.getPropertyValue('--ink').trim();
+  const ink2 = css.getPropertyValue('--ink-2').trim();
+  const ink3 = css.getPropertyValue('--ink-3').trim();
+  const grid = css.getPropertyValue('--grid').trim();
+  const line = css.getPropertyValue('--line').trim();
+  const accent = css.getPropertyValue('--accent').trim();
+  const up = css.getPropertyValue('--up').trim();
+
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+  // ---- 月线图 ----
+  const W=880, H=380, L=56, R=16, T=18, B=34;
+  const xs = i => L + i*(W-L-R)/(monthly.length-1);
+  const ymin=900, ymax=3900;
+  const ys = v => T + (ymax-v)*(H-T-B)/(ymax-ymin);
+
+  let g = document.getElementById('grid');
+  let s = '';
+  for(let v=1000; v<=3800; v+=400){
+    s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${grid}" stroke-width="1"/>`;
+    s += `<text x="${L-8}" y="${ys(v)+4}" fill="${ink3}" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  // 年份刻度
+  for(let i=0;i<monthly.length;i++){
+    if(monthly[i][0].endsWith('-01')){
+      s += `<text x="${xs(i)}" y="${H-10}" fill="${ink3}" font-size="11" text-anchor="middle">${monthly[i][0].slice(0,4)}</text>`;
+    }
+  }
+  g.innerHTML = s;
+
+  // 折线
+  let path = monthly.map((m,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${ys(m[1]).toFixed(1)}`).join('');
+  document.getElementById('series').innerHTML =
+    `<path d="${path}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+
+  // 高点标注
+  let tm = '';
+  tops.forEach(([d,v])=>{
+    const i = monthly.findIndex(m=>m[0]===d);
+    if(i<0) return;
+    const x=xs(i), y=ys(v);
+    tm += `<circle cx="${x}" cy="${y}" r="4" fill="${accent}"/>`;
+    tm += `<text x="${x}" y="${y-9}" fill="${accent}" font-size="11" text-anchor="middle" font-weight="600">${v}</text>`;
+  });
+  document.getElementById('topmark').innerHTML = tm;
+
+  let lm = '';
+  lows.forEach(([d,v])=>{
+    const i = monthly.findIndex(m=>m[0]===d);
+    if(i<0) return;
+    const x=xs(i), y=ys(v);
+    lm += `<circle cx="${x}" cy="${y}" r="3.5" fill="${up}"/>`;
+    if(d==='2026-06') lm += `<text x="${x}" y="${y+16}" fill="${up}" font-size="11" text-anchor="middle" font-weight="600">${v} 历史低</text>`;
+    else lm += `<text x="${x}" y="${y-7}" fill="${up}" font-size="10" text-anchor="middle">${v}</text>`;
+  });
+  document.getElementById('lowmark').innerHTML = lm;
+
+  // ---- 近期日线图 ----
+  const RW=880, RH=300, RL=52, RR=16, RT=16, RB=30;
+  const rxs = i => RL + i*(RW-RL-RR)/(recent.length-1);
+  const rymin=960, rymax=1090;
+  const rys = v => RT + (rymax-v)*(RH-RT-RB)/(rymax-rymin);
+
+  let rg = document.getElementById('recent');
+  let rs = '';
+  for(let v=980; v<=1080; v+=20){
+    rs += `<line x1="${RL}" y1="${rys(v)}" x2="${RW-RR}" y2="${rys(v)}" stroke="${grid}"/>`;
+    rs += `<text x="${RL-8}" y="${rys(v)+4}" fill="${ink3}" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  // 关键线: 986, 1016, 1055, 1065
+  [[986,'#986 底背驰起点'],[1016,'#1016 61.8%回撤'],[1055,'#1055 成本'],[1065,'#1065 反弹顶']].forEach(([v,label])=>{
+    rs += `<line x1="${RL}" y1="${rys(v)}" x2="${RW-RR}" y2="${rys(v)}" stroke="${ink3}" stroke-dasharray="4 3" stroke-width="1"/>`;
+    rs += `<text x="${RW-RR}" y="${rys(v)-4}" fill="${ink3}" font-size="10" text-anchor="end">${label}</text>`;
+  });
+  rg.innerHTML = rs;
+
+  // 日线收盘折线
+  let rpath = recent.map((r,i)=>`${i?'L':'M'}${rxs(i).toFixed(1)},${rys(r[2]).toFixed(1)}`).join('');
+  // 低点连线
+  let lline = recent.map((r,i)=>`${i?'L':'M'}${rxs(i).toFixed(1)},${rys(r[4]).toFixed(1)}`).join('');
+  rg.innerHTML += `<path d="${rpath}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+
+  // 标注986低点与1065高点
+  let lowIdx = recent.findIndex(r=>r[4]===986);
+  let hiIdx = recent.findIndex(r=>r[3]===1065);
+  if(lowIdx>=0) rg.innerHTML += `<circle cx="${rxs(lowIdx)}" cy="${rys(986)}" r="4" fill="${up}"/><text x="${rxs(lowIdx)}" y="${rys(986)+16}" fill="${up}" font-size="11" text-anchor="middle" font-weight="600">986</text>`;
+  if(hiIdx>=0) rg.innerHTML += `<circle cx="${rxs(hiIdx)}" cy="${rys(1065)}" r="4" fill="${accent}"/><text x="${rxs(hiIdx)}" y="${rys(1065)-8}" fill="${accent}" font-size="11" text-anchor="middle" font-weight="600">1065</text>`;
+})();
+</script>

@@ -1,0 +1,192 @@
+<title>焦煤指数中长期走势</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f7f6f3; --panel: #ffffff; --ink: #1c1a17; --ink-2: #5c574f; --ink-3: #8a8479;
+    --line: #e5e0d8; --accent: #2a7a52; --accent-soft: #d5e7dc; --down: #c2472a; --up: #2a7a52; --grid: #ece8e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141210; --panel: #1c1916; --ink: #ece7df; --ink-2: #b3aca0; --ink-3: #7a746a;
+      --line: #2e2a24; --accent: #58b087; --accent-soft: #26372c; --up: #58b087; --grid: #26221c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141210; --panel: #1c1916; --ink: #ece7df; --ink-2: #b3aca0; --ink-3: #7a746a;
+    --line: #2e2a24; --accent: #58b087; --accent-soft: #26372c; --up: #58b087; --grid: #26221c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6; padding: 32px 20px 64px; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: .5px; }
+  .sub { color: var(--ink-3); font-size: 13px; margin: 0 0 24px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 20px 16px; margin-bottom: 20px; }
+  .panel h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .stat-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .stat { flex: 1 1 140px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; }
+  .stat .k { font-size: 12px; color: var(--ink-3); margin-bottom: 4px; }
+  .stat .v { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+  .stat .d { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .bad { color: var(--down); } .good { color: var(--up); }
+  svg { width: 100%; height: auto; display: block; }
+  .note { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .verdict { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 16px 18px; margin-top: 20px; }
+  .verdict h2 { margin-top: 0; }
+  ul { margin: 8px 0; padding-left: 20px; } li { margin-bottom: 6px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 600; margin-right: 6px; }
+</style>
+<div class="wrap">
+  <h1>焦煤指数 · 中长期走势跟踪</h1>
+  <p class="sub">连续合约 jm000（2020-01 ~ 2026-06）+ 当前主力 JM2609（至 2026-08-14） · 数据源 DuckDB / 新浪</p>
+
+  <div class="stat-row">
+    <div class="stat"><div class="k">历史最高</div><div class="v">3878</div><div class="d">2021-10（煤炭危机顶）</div></div>
+    <div class="stat"><div class="k">历史最低</div><div class="v">709</div><div class="d">2025-06（深跌 −82%）</div></div>
+    <div class="stat"><div class="k">当前历史分位</div><div class="v good">21%</div><div class="d">6.5 年区间低位，向上修复中</div></div>
+    <div class="stat"><div class="k">自 2025 底反弹</div><div class="v good">+94%</div><div class="d">709 → 1374</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>月线收盘 · 长期趋势（2020–2026）</h2>
+    <svg viewBox="0 0 880 380" role="img" aria-label="焦煤连续合约月线收盘走势">
+      <g id="grid"></g><g id="series"></g><g id="topmark"></g><g id="lowmark"></g>
+    </svg>
+    <p class="note">2021-10 煤炭危机见顶 3878 后，4 年深跌 −82% 至 2025-06 的 709（历史地板），跌幅居黑色系之最。2025 下半年 V 型反弹，2026 年震荡上行，8 月强劲反弹至 1374，当前 21% 分位。红色圆点为显著高点，绿色为历史底。</p>
+  </div>
+
+  <div class="panel">
+    <h2>年度高低点 · 深跌见底结构</h2>
+    <table>
+      <tr><th>年份</th><th class="num">最高</th><th class="num">最低</th><th class="num">年末</th><th>定性</th></tr>
+      <tr><td>2020</td><td class="num">1744</td><td class="num">1028</td><td class="num">1689</td><td>疫后修复</td></tr>
+      <tr><td>2021</td><td class="num">3878</td><td class="num">1387</td><td class="num">2198</td><td><span class="tag">大顶</span>煤炭危机成本推动</td></tr>
+      <tr><td>2022</td><td class="num">3294</td><td class="num">1762</td><td class="num">1848</td><td>俄乌冲突高位震荡</td></tr>
+      <tr><td>2023</td><td class="num">2179</td><td class="num">1196</td><td class="num">1987</td><td>煤价回归，阴跌启动</td></tr>
+      <tr><td>2024</td><td class="num">1983</td><td class="num">1119</td><td class="num">1162</td><td>单边阴跌</td></tr>
+      <tr><td>2025</td><td class="num">1328</td><td class="num">709</td><td class="num">1112</td><td><span class="tag">历史底</span>−82% 深跌见底</td></tr>
+      <tr><td>2026</td><td class="num">1486</td><td class="num">1043</td><td class="num">1252</td><td><span class="tag">见底反转</span>震荡上行</td></tr>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>近期日线 · JM2609 主力（2026-07 ~ 08-14）</h2>
+    <svg viewBox="0 0 880 300" role="img" aria-label="焦煤主力合约近期日线">
+      <g id="recent"></g>
+    </svg>
+    <p class="note">7 月 1250-1300 震荡后，7/31 回落至 1170，8/3 见近期低点 1170。8/11 起供给偏紧 + 铁水回升驱动强劲反弹，8/14 放量冲高 1388 收 1374（三连阳 +16%）。</p>
+  </div>
+
+  <div class="verdict">
+    <h2>中长期研判</h2>
+    <ul>
+      <li><b>长期趋势：4 年深跌 −82% 后的见底反转。</b> 2021-10 煤炭危机顶 3878 → 2025-06 历史底 709，跌幅居黑色系之最。当前 21% 分位，处反转初期，远未回到历史高位。</li>
+      <li><b>中期结构：供给端被动出清，是几个低位品种里最扎实的。</b> 与尿素（供给历史高位 + 库存累积）截然相反，焦煤通过安监高压 + 限产 + 复产缓慢实现了产量 −7.75% 的被动出清，库存各环节去化。</li>
+      <li><b>基本面驱动：</b> ① 供给偏紧——山西复产不达量、榆林洗煤厂停产排查、523 家矿山开工 67%、十五五规划退出落后产能；② 需求回暖——247 家钢厂铁水 238 万吨止跌回升 + 金九旺季预期；③ 库存去化——矿方低位捂货挺价。</li>
+      <li><b>关键价位：</b> 压力 1388（8/14 高）→ 1486（2026-06 高）→ 1700；支撑 1270（回踩位）→ 1170（8/3 低）→ 1043（2026-04 低）→ 709（历史地板）。</li>
+      <li><b>操作含义：</b> 逢低做多、不追涨。回踩 1270-1300 低吸，止损 1170，目标 1486 → 1700。风险点：进口超预期（蒙煤日均 1380 车高位）、铁水大幅下滑、焦炭第四轮提降负反馈。</li>
+    </ul>
+    <p class="note">定性：<span class="tag">深跌见底</span><span class="tag">供给出清</span><span class="tag">需求回暖</span><span class="tag">反转初期</span> — 是低位品种里基本面最扎实的"见底反转"标的。</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const monthly = [["2020-01",1179],["2020-02",1264],["2020-03",1262],["2020-04",1132],["2020-05",1150],["2020-06",1174],["2020-07",1190],["2020-08",1206],["2020-09",1267],["2020-10",1362],["2020-11",1406],["2020-12",1689],["2021-01",1697],["2021-02",1492],["2021-03",1514],["2021-04",1780],["2021-05",1782],["2021-06",1852],["2021-07",2048],["2021-08",2232],["2021-09",2470],["2021-10",3531],["2021-11",2444],["2021-12",2198],["2022-01",2244],["2022-02",2601],["2022-03",3138],["2022-04",2759],["2022-05",2540],["2022-06",2388],["2022-07",1984],["2022-08",1914],["2022-09",2046],["2022-10",2126],["2022-11",2142],["2022-12",1848],["2023-01",1805],["2023-02",1826],["2023-03",1945],["2023-04",1598],["2023-05",1378],["2023-06",1288],["2023-07",1403],["2023-08",1480],["2023-09",1684],["2023-10",1710],["2023-11",2090],["2023-12",1987],["2024-01",1796],["2024-02",1650],["2024-03",1616],["2024-04",1746],["2024-05",1761],["2024-06",1554],["2024-07",1542],["2024-08",1376],["2024-09",1238],["2024-10",1352],["2024-11",1263],["2024-12",1162],["2025-01",1153],["2025-02",1084],["2025-03",1107],["2025-04",946],["2025-05",844],["2025-06",788],["2025-07",916],["2025-08",1212],["2025-09",1233],["2025-10",1172],["2025-11",1067],["2025-12",1112],["2026-01",1138],["2026-02",1120],["2026-03",1216],["2026-04",1270],["2026-05",1232],["2026-06",1252]];
+  const tops = [["2021-10",3878],["2022-03",3255]];
+  const lows = [["2025-06",709]];
+
+  const recent = [
+    [7,7,1273,1292,1268],[7,8,1293,1309,1269],[7,9,1290,1297,1282],[7,10,1257,1290,1249],
+    [7,13,1239,1258,1236],[7,14,1260,1265,1238],[7,15,1273,1281,1248],[7,16,1261,1278,1253],
+    [7,17,1260,1274,1256],[7,20,1272,1296,1262],[7,21,1275,1280,1233],[7,22,1266,1283,1262],
+    [7,23,1287,1296,1267],[7,24,1285,1293,1276],[7,27,1270,1284,1261],[7,28,1242,1270,1236],
+    [7,29,1248,1261,1229],[7,30,1227,1252,1222],[7,31,1181,1223,1173],[8,3,1182,1189,1170],
+    [8,4,1196,1205,1181],[8,5,1233,1237,1186],[8,6,1235,1244,1219],[8,7,1267,1278,1235],
+    [8,10,1273,1286,1264],[8,11,1343,1348,1276],[8,12,1337,1350,1327],[8,13,1320,1330,1312],
+    [8,14,1374,1388,1323]
+  ]; // [month, day, close, high, low]
+
+  const css = getComputedStyle(document.documentElement);
+  const ink = css.getPropertyValue('--ink').trim();
+  const ink3 = css.getPropertyValue('--ink-3').trim();
+  const grid = css.getPropertyValue('--grid').trim();
+  const accent = css.getPropertyValue('--accent').trim();
+  const up = css.getPropertyValue('--up').trim();
+  const down = css.getPropertyValue('--down').trim();
+
+  // ---- 月线图 ----
+  const W=880, H=380, L=56, R=16, T=18, B=34;
+  const xs = i => L + i*(W-L-R)/(monthly.length-1);
+  const ymin=400, ymax=4100;
+  const ys = v => T + (ymax-v)*(H-T-B)/(ymax-ymin);
+
+  let g = document.getElementById('grid'); let s = '';
+  for(let v=500; v<=4000; v+=500){
+    s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${grid}"/>`;
+    s += `<text x="${L-8}" y="${ys(v)+4}" fill="${ink3}" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  for(let i=0;i<monthly.length;i++){
+    if(monthly[i][0].endsWith('-01')){
+      s += `<text x="${xs(i)}" y="${H-10}" fill="${ink3}" font-size="11" text-anchor="middle">${monthly[i][0].slice(0,4)}</text>`;
+    }
+  }
+  g.innerHTML = s;
+
+  let path = monthly.map((m,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${ys(m[1]).toFixed(1)}`).join('');
+  document.getElementById('series').innerHTML =
+    `<path d="${path}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+
+  let tm = '';
+  tops.forEach(([d,v])=>{
+    const i = monthly.findIndex(m=>m[0]===d); if(i<0) return;
+    const x=xs(i), y=ys(v);
+    tm += `<circle cx="${x}" cy="${y}" r="4" fill="${down}"/>`;
+    tm += `<text x="${x}" y="${y-9}" fill="${down}" font-size="11" text-anchor="middle" font-weight="600">${v}</text>`;
+  });
+  document.getElementById('topmark').innerHTML = tm;
+
+  let lm = '';
+  lows.forEach(([d,v])=>{
+    const i = monthly.findIndex(m=>m[0]===d); if(i<0) return;
+    const x=xs(i), y=ys(v);
+    lm += `<circle cx="${x}" cy="${y}" r="4" fill="${up}"/>`;
+    lm += `<text x="${x}" y="${y+16}" fill="${up}" font-size="11" text-anchor="middle" font-weight="600">${v} 历史底</text>`;
+  });
+  document.getElementById('lowmark').innerHTML = lm;
+
+  // ---- 近期日线图 ----
+  const RW=880, RH=300, RL=52, RR=16, RT=16, RB=30;
+  const rxs = i => RL + i*(RW-RL-RR)/(recent.length-1);
+  const rymin=1100, rymax=1520;
+  const rys = v => RT + (rymax-v)*(RH-RT-RB)/(rymax-rymin);
+
+  let rg = document.getElementById('recent'); let rs = '';
+  for(let v=1100; v<=1500; v+=100){
+    rs += `<line x1="${RL}" y1="${rys(v)}" x2="${RW-RR}" y2="${rys(v)}" stroke="${grid}"/>`;
+    rs += `<text x="${RL-8}" y="${rys(v)+4}" fill="${ink3}" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  [[1043,'1043 支撑'],[1486,'1486 压力']].forEach(([v,label])=>{
+    rs += `<line x1="${RL}" y1="${rys(v)}" x2="${RW-RR}" y2="${rys(v)}" stroke="${ink3}" stroke-dasharray="4 3"/>`;
+    rs += `<text x="${RW-RR}" y="${rys(v)-4}" fill="${ink3}" font-size="10" text-anchor="end">${label}</text>`;
+  });
+  rg.innerHTML = rs;
+
+  let rpath = recent.map((r,i)=>`${i?'L':'M'}${rxs(i).toFixed(1)},${rys(r[2]).toFixed(1)}`).join('');
+  rg.innerHTML += `<path d="${rpath}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+
+  let low = recent.findIndex(r=>r[4]===1170);
+  let hi = recent.findIndex(r=>r[3]===1388);
+  if(low>=0) rg.innerHTML += `<circle cx="${rxs(low)}" cy="${rys(1170)}" r="3.5" fill="${up}"/><text x="${rxs(low)}" y="${rys(1170)+14}" fill="${up}" font-size="10" text-anchor="middle" font-weight="600">1170</text>`;
+  if(hi>=0) rg.innerHTML += `<circle cx="${rxs(hi)}" cy="${rys(1388)}" r="4" fill="${down}"/><text x="${rxs(hi)}" y="${rys(1388)-8}" fill="${down}" font-size="11" text-anchor="middle" font-weight="600">1388</text>`;
+})();
+</script>
