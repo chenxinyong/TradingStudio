@@ -102,6 +102,27 @@ public class PortfolioManager : IPortfolioState
         }
     }
 
+    /// <summary>
+    /// 从 CTP 资金账户恢复真实权益（引擎启动/重连后调用）。
+    /// Balance 是权威总权益（含保证金 + 浮盈）。positionProfit 是 CTP 报告的当前持仓盈亏，
+    /// 必须从现金基中扣除——因为持仓浮盈随后会由 UpdateMarketPrice 按行情 Bar 重新计算，
+    /// 若现金基已含浮盈则会被双重计入。据此现金基 = Balance - positionProfit - MarginUsed，
+    /// 使等式 Equity=Cash+MarginUsed+浮盈 在 Bar 驱动下收敛到 CTP 的 Balance。
+    /// PreBalance（昨结算权益）用作当日盈亏基准，故 TodayPnL = Balance - PreBalance 反映当日真实盈亏。
+    /// StartingCapital 保持不变（配置值 = 账户成立本金），因此 TotalPnL = Equity - StartingCapital 跨重启连续、不丢失累计盈亏。
+    /// 线程安全。
+    /// </summary>
+    public void ReconcileEquity(decimal balance, decimal positionProfit, decimal preBalance)
+    {
+        lock (_sync)
+        {
+            _equity = balance;
+            _cash = balance - positionProfit - _marginUsed;
+            _equityAtDayStart = preBalance > 0 ? preBalance : balance;
+            if (_equity > _peakEquity) _peakEquity = _equity;
+        }
+    }
+
     public SubPortfolio GetSubPortfolio(string strategyId) =>
         _subPortfolios.TryGetValue(strategyId, out var sp) ? sp :
         throw new InvalidOperationException($"Strategy not found: {strategyId}");

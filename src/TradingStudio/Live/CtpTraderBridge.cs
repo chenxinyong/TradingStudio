@@ -29,6 +29,9 @@ public class CtpTraderBridge : IDisposable
     /// <summary>CTP 持仓查询回调：每次扫描到一个品种的持仓时触发。</summary>
     public event Action<CtpPositionInfo>? OnPositionReceived;
 
+    /// <summary>CTP 资金账户查询回调：登录后查询到账户权益时触发。</summary>
+    public event Action<CtpAccountInfo>? OnAccountReceived;
+
     /// <summary>
     /// SHFE (上期所) 和 INE (上能所) 不接受泛型 Close ('1'), 必须区分 CloseToday / CloseYesterday。
     /// </summary>
@@ -133,8 +136,9 @@ public class CtpTraderBridge : IDisposable
                     _log.Information("CTP Trader login OK → ConfirmSettlement");
                     _api.ReqSettlementInfoConfirm(new CTP.ThostFtdcSettlementInfoConfirmField
                     { BrokerID = _opts.BrokerId, InvestorID = _opts.UserId }, ++_requestId);
-                    // 登录后查询所有持仓（启动 + 重连均触发）
+                    // 登录后查询所有持仓 + 资金账户（启动 + 重连均触发）
                     QueryPositions();
+                    QueryAccount();
                 }
                 else _log.Error("CTP Trader login failed [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
             }
@@ -186,6 +190,29 @@ public class CtpTraderBridge : IDisposable
                 catch (Exception ex)
                 {
                     _log.Error(ex, "CTP position mapping error");
+                }
+            }
+            else if (e.EventType == CTP.EnumOnRspType.OnRspQryTradingAccount && e.Param != IntPtr.Zero)
+            {
+                try
+                {
+                    var acc = CTP.Conv.P2S<CTP.ThostFtdcTradingAccountField>(e.Param);
+                    var info = new CtpAccountInfo
+                    {
+                        Balance = acc.Balance,
+                        PreBalance = acc.PreBalance,
+                        PositionProfit = acc.PositionProfit,
+                        CloseProfit = acc.CloseProfit,
+                        Available = acc.Available,
+                        CurrMargin = acc.CurrMargin,
+                    };
+                    _log.Information("[CTP-Account] Balance={Balance:F2} PreBalance={Pre:F2} PosProfit={Pos:F2} CloseProfit={Close:F2} Available={Avail:F2} Margin={Margin:F2}",
+                        info.Balance, info.PreBalance, info.PositionProfit, info.CloseProfit, info.Available, info.CurrMargin);
+                    OnAccountReceived?.Invoke(info);
+                }
+                catch (Exception ex)
+                {
+                    _log.Error(ex, "CTP account mapping error");
                 }
             }
         };
@@ -407,6 +434,27 @@ public class CtpTraderBridge : IDisposable
         catch (Exception ex)
         {
             _log.Error(ex, "CTP QueryPositions failed");
+        }
+    }
+
+    /// <summary>查询 CTP 资金账户（启动登录后 / 重连登录后调用），用于恢复真实权益。</summary>
+    private void QueryAccount()
+    {
+        var api = _api;
+        if (api == null) return;
+
+        try
+        {
+            _log.Information("CTP QueryAccount: requesting trading account...");
+            api.ReqQryTradingAccount(new CTP.ThostFtdcQryTradingAccountField
+            {
+                BrokerID = _opts.BrokerId,
+                InvestorID = _opts.UserId,
+            }, ++_requestId);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "CTP QueryAccount failed");
         }
     }
 

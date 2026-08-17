@@ -166,6 +166,21 @@ public static class LiveComposer
                 }
             };
 
+            // 订阅 CTP 资金账户查询结果 → 恢复真实权益（替代重设 StartingCapital）
+            // 登录后回调一次（Balance=动态权益, PreBalance=昨结算权益），据此重构 PortfolioManager 权益。
+            bridge.OnAccountReceived += acc =>
+            {
+                try
+                {
+                    portfolio.ReconcileEquity((decimal)acc.Balance, (decimal)acc.PositionProfit, (decimal)acc.PreBalance);
+                    Console.Error.WriteLine($"[LiveComposer] CTP账户权益已恢复: Balance={acc.Balance:F2} PosProfit={acc.PositionProfit:F2} PreBalance={acc.PreBalance:F2} → Equity={portfolio.Equity:F2}");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[LiveComposer] CTP账户权益恢复失败: {ex.Message}");
+                }
+            };
+
             services.AddSingleton(bridge);
             try
             {

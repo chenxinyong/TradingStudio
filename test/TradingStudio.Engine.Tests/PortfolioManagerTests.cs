@@ -222,4 +222,56 @@ public class PortfolioManagerTests
         Assert.True(pm.GetPosition("rb")!.UnrealizedPnl > 0);
         Assert.True(pm.Equity > pm.Cash + pm.MarginUsed);
     }
+
+    // ═══ 权益恢复 (进程重启) ═══
+
+    [Fact]
+    public void ReconcileEquity_PreservesTotalPnL_AcrossRestart()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        // 模拟重启：CTP 返回动态权益 993,800（累计亏损 6,200），昨结算 1,000,000，无持仓
+        pm.ReconcileEquity(993_800m, 0m, 1_000_000m);
+
+        Assert.Equal(993_800m, pm.Equity);
+        Assert.Equal(993_800m, pm.Cash);        // 无持仓无保证金 → 现金 = 权益
+        Assert.Equal(-6_200m, pm.TotalPnL);     // 累计盈亏跨重启保留，不再跳回 0
+        Assert.Equal(-6_200m, pm.TodayPnL);     // Balance - PreBalance = 当日真实盈亏
+    }
+
+    [Fact]
+    public void ReconcileEquity_PreservesMarginDecomposition()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 1_000_000);
+        pm.RestorePosition("rb", "s1", 2, 15_000m, 45_000m, DateTime.Today, '2');
+        Assert.Equal(45_000m, pm.MarginUsed);
+
+        // CTP 返回动态权益 1,000,000（含 45,000 占用保证金，无浮盈），重构后现金 = 权益 - 保证金
+        pm.ReconcileEquity(1_000_000m, 0m, 1_000_000m);
+
+        Assert.Equal(1_000_000m, pm.Equity);
+        Assert.Equal(1_000_000m - 45_000m, pm.Cash);
+    }
+
+    [Fact]
+    public void ReconcileEquity_WithFloatingProfit_DoesNotDoubleCount()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 1_000_000);
+        pm.RestorePosition("rb", "s1", 2, 15_000m, 45_000m, DateTime.Today, '2');
+
+        // CTP 报告：动态权益 1,010,000（含 10,000 浮盈），持仓盈亏 10,000，昨结算 1,000,000
+        pm.ReconcileEquity(1_010_000m, 10_000m, 1_000_000m);
+
+        // 现金基 = Balance - PositionProfit - Margin = 955,000（浮盈扣除，避免双重计算）
+        Assert.Equal(955_000m, pm.Cash);
+        Assert.Equal(1_010_000m, pm.Equity);
+
+        // Bar 驱动浮盈补回：收盘 15,500 → 浮盈 = (15500-15000)*2*10 = 10,000
+        var bar = new Bar { InstrumentId = "rb", Close = (long)(15_500 * TickRecord.PriceScale) };
+        pm.UpdateMarketPrice(bar, Reg.Find("rb")!);
+
+        Assert.Equal(10_000d, pm.GetPosition("rb")!.UnrealizedPnl, 1);
+        Assert.Equal(1_010_000m, pm.Equity);    // 收敛到 Balance，浮盈未双重计入
+    }
 }
