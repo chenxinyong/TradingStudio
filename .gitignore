@@ -469,6 +469,7 @@ configs/grid/
 
 # 因子研究输出（大文件，不提交）
 scripts/factor_research/output/
+scripts/factor_research/*.csv
 
 # Local dev certificates
 **/certs/

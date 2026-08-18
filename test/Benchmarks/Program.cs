@@ -15,7 +15,7 @@ string Table = $"bars_{Period}";
 StrategyFactory.Register<DonchianTrendStrategy>("DonchianTrend");
 StrategyFactory.Register<BuyAndHold>("BuyAndHold");
 
-var outPath = @$"C:\Works\ClaudeCode\TradingStudio\scripts\_strategy_matrix.txt";
+var outPath = @$"C:\Works\ClaudeCode\TradingStudio\test\_strategy_matrix.txt";
 using var sw = new StreamWriter(outPath);
 sw.WriteLine($"═══ 策略对比矩阵 ({Period} K线) — {DateTime.Now:yyyy-MM-dd HH:mm} ═══");
 sw.WriteLine($"Top5 品种: {string.Join(", ", insts)}, 100k本金, 固定5元/手");

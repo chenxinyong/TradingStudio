@@ -1,8 +1,8 @@
 # TradingStudio.Mind 测试脚本
-# 用法: .\scripts\test_mind.ps1
+# 用法: .\scripts\research\test_mind.ps1
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot\..
+Set-Location $PSScriptRoot\..\..
 
 Write-Host "════════════════════════════════" -ForegroundColor Cyan
 Write-Host "  TradingStudio.Mind — LLM 分析测试" -ForegroundColor Cyan

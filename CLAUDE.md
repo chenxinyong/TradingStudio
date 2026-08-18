@@ -110,6 +110,7 @@ src/
     ├── TradingStudio.Engine.Tests/ 151 tests — 引擎(端到端黄金验证+每日盯市结算+基准回测+Live模式), 风控/撮合(涨跌停/滑点/爆仓/购买力+DailyRiskTracker), 事件持久化, Portfolio
     ├── TradingStudio.Strategy.Tests/ 14 tests — 缠论 包含/分型/笔/中枢
     ├── ChanLunTest/                手动 demo (Program.cs，非自动化，不计入 281)
+    ├── Benchmarks/                 策略对比矩阵基准 (手动跑，非自动化)
     └── TradingStudio.SignalRContractTest/  手动 demo (SignalR 连通性，非自动化)
 ```
 

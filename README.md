@@ -150,6 +150,7 @@ TradingStudio/
 │   ├── TradingStudio.Engine.Tests/  引擎/端到端黄金/每日盯市/基准回测/风控/爆仓/购买力/事件持久化/Live模式（151 通过）
 │   ├── TradingStudio.Strategy.Tests/ 缠论 分型/笔/中枢（14 通过）
 │   ├── ChanLunTest/                 缠论算法手动 demo（非自动化）
+│   ├── Benchmarks/                  策略对比矩阵基准（非自动化）
 │   └── TradingStudio.SignalRContractTest/ SignalR 连通性 demo（非自动化）
 │
 ├── docs/
