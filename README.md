@@ -211,7 +211,7 @@ Simnow Live 全链路跑通：下单/风控/成交/持仓同步/事件持久化�
 
 ## 相关资源
 
-- [个人交易知识库 (Obsidian)](C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading) — 交易规则、品种研究、每日日志
+- [个人交易知识库 (Obsidian)](C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading) — 交易规则、品种研究（每日股票/期货日志已迁至 `docs/Notes/`）
 - [QuantConnect Lean](https://github.com/QuantConnect/Lean) — 架构设计参考
 
 ---

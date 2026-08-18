@@ -9,6 +9,7 @@ import glob
 from datetime import datetime
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
 DATE = "2026-06-08"
 PREV_DATE = "2026-06-05"  # Previous trading day (Friday)
 
@@ -493,7 +494,7 @@ stock_log += f"""
 """
 
 # Write stock log
-stock_path = os.path.join(VAULT, "01-Daily", "股票", f"{DATE}.md")
+stock_path = os.path.join(NOTES, "股票", f"{DATE}.md")
 with open(stock_path, 'w', encoding='utf-8') as f:
     f.write(stock_log)
 print(f"✅ 股票日志已写入: {stock_path}")
@@ -772,7 +773,7 @@ futures_log += """
 """
 
 # Write futures log
-futures_path = os.path.join(VAULT, "01-Daily", "期货", f"{DATE}.md")
+futures_path = os.path.join(NOTES, "期货", f"{DATE}.md")
 with open(futures_path, 'w', encoding='utf-8') as f:
     f.write(futures_log)
 print(f"✅ 期货日志已写入: {futures_path}")

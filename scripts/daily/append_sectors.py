@@ -9,9 +9,11 @@ import subprocess, os, sys, csv
 from datetime import date
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 RUN_DATE = sys.argv[1] if len(sys.argv) > 1 else date.today().isoformat()
-LOG_PATH = os.path.join(VAULT, "01-Daily", "股票", f"{RUN_DATE}.md")
-CSV_PATH = os.path.join(VAULT, "scripts", "sectors_watch.csv")
+LOG_PATH = os.path.join(NOTES, "股票", f"{RUN_DATE}.md")
+CSV_PATH = os.path.join(SCRIPT_DIR, "sectors_watch.csv")
 
 # 检查日志是否存在
 if not os.path.exists(LOG_PATH):

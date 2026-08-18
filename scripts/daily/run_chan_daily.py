@@ -9,13 +9,14 @@
   - 指数：国证A股 / 创业板 / 科创50（仅周线，min_gap=4）
   - 合约：持仓跟踪里的品种（周线+日线，min_gap=2）
 
-输出：分别追加到 01-Daily/股票/<date>.md 与 01-Daily/期货/<date>.md，
+输出：分别追加到 docs/Notes/股票/<date>.md 与 docs/Notes/期货/<date>.md，
       插入位置在「链接」段之前，若已含缠论段则跳过（幂等）。
 """
 import subprocess, os, sys, re
 from datetime import date
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
 CSHARP = r"c:\Works\ClaudeCode\TradingStudio\tools\ChanAnalysis"
 
 RUN_DATE = sys.argv[1] if len(sys.argv) > 1 else date.today().isoformat()
@@ -93,7 +94,7 @@ def insert_section(log_path, header, banner, blocks):
 
 def main():
     # 1. 指数 → 股票日志
-    stock_log = os.path.join(VAULT, "01-Daily", "股票", f"{RUN_DATE}.md")
+    stock_log = os.path.join(NOTES, "股票", f"{RUN_DATE}.md")
     idx_blocks = []
     print(f"[指数] 缠论分析（周线）")
     for code, name in INDICES:
@@ -112,7 +113,7 @@ def main():
             print(f"  → 已追加到 股票/{RUN_DATE}.md")
 
     # 2. 持仓合约 → 期货日志
-    fut_log = os.path.join(VAULT, "01-Daily", "期货", f"{RUN_DATE}.md")
+    fut_log = os.path.join(NOTES, "期货", f"{RUN_DATE}.md")
     fut_blocks = []
     print(f"[合约] 缠论分析（周线+日线）")
     for code, name in FUTURES:

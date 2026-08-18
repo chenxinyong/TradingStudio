@@ -8,8 +8,9 @@ import subprocess, os, sys, json, re
 from datetime import date
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
 RUN_DATE = sys.argv[1] if len(sys.argv) > 1 else date.today().isoformat()
-LOG_PATH = os.path.join(VAULT, "01-Daily", "期货", f"{RUN_DATE}.md")
+LOG_PATH = os.path.join(NOTES, "期货", f"{RUN_DATE}.md")
 
 if not os.path.exists(LOG_PATH):
     print(f"日志 {LOG_PATH} 不存在，请先运行 full_generator.py")

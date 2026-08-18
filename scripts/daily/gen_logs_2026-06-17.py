@@ -13,6 +13,7 @@ import pandas as pd
 from datetime import date
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
 TODAY = "2026-06-17"
 PREV_TRADING_DAY = "2026-06-16"
 TODAY_DATE = date(2026, 6, 17)
@@ -448,7 +449,7 @@ sl("- 期货日志：[[01-Daily/期货/{}]]".format(TODAY))
 sl("- 本周复盘：待创建")
 
 stock_log = "\n".join(SL)
-stock_path = os.path.join(VAULT, "01-Daily", "股票", "{}.md".format(TODAY))
+stock_path = os.path.join(NOTES, "股票", "{}.md".format(TODAY))
 with open(stock_path, 'w', encoding='utf-8') as f:
     f.write(stock_log)
 print("  Written: 01-Daily/股票/{}.md ({} lines)".format(TODAY, len(SL)))
@@ -699,7 +700,7 @@ fl("- 交易系统：[[04-Research/04-交易系统/期货交易系统]]")
 fl("- 品种研究：待创建")
 
 futures_log = "\n".join(FL)
-futures_path = os.path.join(VAULT, "01-Daily", "期货", "{}.md".format(TODAY))
+futures_path = os.path.join(NOTES, "期货", "{}.md".format(TODAY))
 with open(futures_path, 'w', encoding='utf-8') as f:
     f.write(futures_log)
 print("  Written: 01-Daily/期货/{}.md ({} lines)".format(TODAY, len(FL)))

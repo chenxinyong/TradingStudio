@@ -8,6 +8,7 @@ import json
 import subprocess
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
 DATE = "2026-06-08"
 PREV_DATE = "2026-06-05"
 
@@ -310,7 +311,7 @@ fl.append("- 品种研究：待创建")
 
 futures_log = "\n".join(fl)
 
-futures_path = os.path.join(VAULT, "01-Daily", "期货", "{}.md".format(DATE))
+futures_path = os.path.join(NOTES, "期货", "{}.md".format(DATE))
 os.makedirs(os.path.dirname(futures_path), exist_ok=True)
 with open(futures_path, 'w', encoding='utf-8') as f:
     f.write(futures_log)

@@ -14,6 +14,7 @@ import re
 from datetime import datetime
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
 DATE = "2026-06-08"
 PREV_DATE = "2026-06-05"
 
@@ -594,7 +595,7 @@ L("- 本周复盘：待创建")
 
 stock_log = "\n".join(sl)
 
-stock_path = os.path.join(VAULT, "01-Daily", "股票", f"{DATE}.md")
+stock_path = os.path.join(NOTES, "股票", f"{DATE}.md")
 os.makedirs(os.path.dirname(stock_path), exist_ok=True)
 with open(stock_path, 'w', encoding='utf-8') as f:
     f.write(stock_log)
@@ -828,7 +829,7 @@ FL("- 品种研究：待创建")
 
 futures_log = "\n".join(fl)
 
-futures_path = os.path.join(VAULT, "01-Daily", "期货", f"{DATE}.md")
+futures_path = os.path.join(NOTES, "期货", f"{DATE}.md")
 os.makedirs(os.path.dirname(futures_path), exist_ok=True)
 with open(futures_path, 'w', encoding='utf-8') as f:
     f.write(futures_log)

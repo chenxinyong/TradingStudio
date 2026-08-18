@@ -11,6 +11,7 @@ Complete trading log generator for 2026-06-08
 import subprocess, json, os, re, pickle, sys, time
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
 DATE = sys.argv[1] if len(sys.argv) > 1 else "2026-08-07"
 PREV_DATE = sys.argv[2] if len(sys.argv) > 2 else "2026-08-06"
 
@@ -490,15 +491,15 @@ sl("")
 sl("## 七、链接")
 sl("")
 sl("- 研究框架：[[AI产业链深度分析]]")
-sl("- 期货日志：[[01-Daily/期货/{}]]".format(DATE))
+sl("- 期货日志：[{}](../期货/{}.md)".format(DATE, DATE))
 sl("- 本周复盘：待创建")
 
 stock_log = "\n".join(SL)
-stock_path = os.path.join(VAULT, "01-Daily", "股票", "{}.md".format(DATE))
+stock_path = os.path.join(NOTES, "股票", "{}.md".format(DATE))
 os.makedirs(os.path.dirname(stock_path), exist_ok=True)
 with open(stock_path, 'w', encoding='utf-8') as f:
     f.write(stock_log)
-print("  Written: 01-Daily/股票/{}.md ({} lines)".format(DATE, len(SL)))
+print("  Written: docs/Notes/股票/{}.md ({} lines)".format(DATE, len(SL)))
 
 # ============ GENERATE FUTURES LOG ============
 print("[5/5] Generating futures log...")
@@ -729,20 +730,20 @@ fl("---")
 fl("")
 fl("## 八、链接")
 fl("")
-fl("- 股票日志：[[01-Daily/股票/{}]]".format(DATE))
+fl("- 股票日志：[{}](../股票/{}.md)".format(DATE, DATE))
 fl("- 交易系统：[[04-Research/04-交易系统/期货交易系统]]")
 fl("- 品种研究：待创建")
 
 futures_log = "\n".join(FL)
-futures_path = os.path.join(VAULT, "01-Daily", "期货", "{}.md".format(DATE))
+futures_path = os.path.join(NOTES, "期货", "{}.md".format(DATE))
 os.makedirs(os.path.dirname(futures_path), exist_ok=True)
 with open(futures_path, 'w', encoding='utf-8') as f:
     f.write(futures_log)
-print("  Written: 01-Daily/期货/{}.md ({} lines)".format(DATE, len(FL)))
+print("  Written: docs/Notes/期货/{}.md ({} lines)".format(DATE, len(FL)))
 
 # Summary output
 print("\n" + "=" * 50)
 print("ALL DONE!")
-print("  Stock log: 01-Daily/股票/{}.md".format(DATE))
-print("  Futures log: 01-Daily/期货/{}.md".format(DATE))
+print("  Stock log: docs/Notes/股票/{}.md".format(DATE))
+print("  Futures log: docs/Notes/期货/{}.md".format(DATE))
 print("=" * 50)

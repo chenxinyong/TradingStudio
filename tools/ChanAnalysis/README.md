@@ -39,14 +39,14 @@ dotnet run -- mdindex sz399317 国证A股   # 指数：仅周线
 
 ## 每日自动分析
 
-`scripts/run_chan_daily.py` 编排整个流程：
+`scripts/daily/run_chan_daily.py` 编排整个流程：
 
 ```bash
-python scripts/run_chan_daily.py [YYYY-MM-DD]
+python scripts/daily/run_chan_daily.py [YYYY-MM-DD]
 ```
 
-- **指数**（`mdindex`）：国证A股 / 创业板 / 科创50 → 追加到 `01-Daily/股票/<date>.md`
-- **持仓合约**（`md`）：见脚本顶部 `FUTURES` 配置 → 追加到 `01-Daily/期货/<date>.md`
+- **指数**（`mdindex`）：国证A股 / 创业板 / 科创50 → 追加到 `docs/Notes/股票/<date>.md`
+- **持仓合约**（`md`）：见脚本顶部 `FUTURES` 配置 → 追加到 `docs/Notes/期货/<date>.md`
 - 幂等：已含缠论段则跳过；插入位置在「链接」段之前
 - 持仓换月/平仓后，更新 `run_chan_daily.py` 顶部的 `FUTURES` 列表即可
 
