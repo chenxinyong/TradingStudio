@@ -1,0 +1,282 @@
+<title>纯碱 SA2701 走势跟踪</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --panel: #ffffff;
+    --ink: #1c1a17;
+    --ink-2: #5c574f;
+    --ink-3: #8a8479;
+    --line: #e5e0d8;
+    --accent: #c2472a;
+    --accent-soft: #f4d8cd;
+    --down: #c2472a;
+    --up: #2a7a52;
+    --grid: #ece8e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141210; --panel: #1c1916; --ink: #ece7df; --ink-2: #b3aca0;
+      --ink-3: #7a746a; --line: #2e2a24; --accent: #e2704f; --accent-soft: #3a2620;
+      --up: #58b087; --grid: #26221c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141210; --panel: #1c1916; --ink: #ece7df; --ink-2: #b3aca0;
+    --ink-3: #7a746a; --line: #2e2a24; --accent: #e2704f; --accent-soft: #3a2620;
+    --up: #58b087; --grid: #26221c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6; padding: 32px 20px 64px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: .5px; }
+  .sub { color: var(--ink-3); font-size: 13px; margin: 0 0 24px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 20px 16px; margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .stat-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .stat {
+    flex: 1 1 140px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .stat .k { font-size: 12px; color: var(--ink-3); margin-bottom: 4px; }
+  .stat .v { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+  .stat .d { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .bad { color: var(--down); }
+  .good { color: var(--up); }
+  svg { width: 100%; height: auto; display: block; }
+  .chart-wrap { position: relative; }
+  .tip {
+    position: absolute; pointer-events: none; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+    font-size: 12px; color: var(--ink); display: none; box-shadow: 0 2px 10px rgba(0,0,0,.12);
+    white-space: nowrap; z-index: 5;
+  }
+  .note { font-size: 13px; color: var(--ink-2); margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--ink-3); font-weight: 500; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .verdict {
+    background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 10px; padding: 16px 18px; margin-top: 20px;
+  }
+  .verdict h2 { margin-top: 0; }
+  ul { margin: 8px 0; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+         background: var(--accent-soft); color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+</style>
+<div class="wrap">
+  <h1>纯碱 SA2701 · 走势跟踪</h1>
+  <p class="sub">持仓合约 SA2701 日线（2026-07-28 ~ 08-18） · 数据源 新浪期货 · 缠论结构 + 量价 · 更新 2026-08-18 收盘</p>
+
+  <div class="stat-row">
+    <div class="stat">
+      <div class="k">8/18 收盘</div>
+      <div class="v good">1043</div>
+      <div class="d">+1.16%（前收 1031）</div>
+    </div>
+    <div class="stat">
+      <div class="k">持仓量变化</div>
+      <div class="v good">+41,141</div>
+      <div class="d">增仓上涨 = 多头进场</div>
+    </div>
+    <div class="stat">
+      <div class="k">8/18 高点</div>
+      <div class="v">1048</div>
+      <div class="d">已突破 8/14 顶 1043</div>
+    </div>
+    <div class="stat">
+      <div class="k">持仓均价</div>
+      <div class="v bad">1049.5</div>
+      <div class="d">8 手（4@1055 + 4@1044）</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>日线走势 · 收盘价 + 关键价位</h2>
+    <div class="legend">
+      <span><i style="background:var(--accent)"></i>收盘价</span>
+      <span><i style="background:var(--up)"></i>986 底背驰起点</span>
+      <span><i style="background:var(--ink-3)"></i>回撤位 / 成本 / 前顶</span>
+    </div>
+    <div class="chart-wrap" id="price-wrap">
+      <svg viewBox="0 0 880 320" role="img" aria-label="SA2701 日线收盘走势">
+        <g id="grid"></g>
+        <g id="levels"></g>
+        <g id="series"></g>
+        <g id="marks"></g>
+        <g id="cursor"></g>
+      </svg>
+      <div class="tip" id="tip"></div>
+    </div>
+    <p class="note">8/4 创 986 底背驰低点 → 反弹至 1065（8/11 顶分型）→ 回撤至 1023（8/14，约 53% 回撤）→ 8/17、8/18 连续增仓上涨，8/18 收 1043 重新站上 38.2% 回撤位 1035，测试前顶 1065。</p>
+  </div>
+
+  <div class="panel">
+    <h2>持仓量 OI · 多空博弈</h2>
+    <div class="chart-wrap" id="oi-wrap">
+      <svg viewBox="0 0 880 160" role="img" aria-label="SA2701 持仓量变化">
+        <g id="oi-grid"></g>
+        <g id="oi-bars"></g>
+        <g id="oi-axis"></g>
+      </svg>
+      <div class="tip" id="oi-tip"></div>
+    </div>
+    <p class="note">OI 从 7/27 的 33 万手一路增至 8/18 的 92 万手。8/12~8/14 三日增仓 20 万手已澄清为主力换月（非空头进攻）；8/17（+6.0 万）、8/18（+4.1 万）增仓与价格上涨同步，是真实多头主动信号。</p>
+  </div>
+
+  <div class="panel">
+    <h2>缠论结构（日线）</h2>
+    <table>
+      <tr><th>结构</th><th>方向</th><th class="num">区间</th><th class="num">幅度</th><th>状态</th></tr>
+      <tr><td>向下笔</td><td>↓跌</td><td class="num">1024 → 986</td><td class="num">-3.7%</td><td>07-31 ~ 08-04，已确认</td></tr>
+      <tr><td>向上笔</td><td>↑涨</td><td class="num">986 → 1065</td><td class="num">+8.0%</td><td>08-04 ~ 08-11，已确认</td></tr>
+      <tr><td>回撤段</td><td>↓跌</td><td class="num">1065 → 1023</td><td class="num">-3.9%</td><td>08-11 ~ 08-14，约 53% 回撤</td></tr>
+      <tr><td>当前</td><td>↑涨</td><td class="num">1023 → 1043</td><td class="num">+2.0%</td><td><span class="tag">二买构建中</span></td></tr>
+    </table>
+    <p class="note">1023 &gt; 986，仍是「更高的低点」，向上笔未破坏。回撤结束后的重新增仓上涨 = 二买确认的必经路径；确认标志是突破 1065。</p>
+  </div>
+
+  <div class="panel">
+    <h2>关键价位</h2>
+    <table>
+      <tr><th>类型</th><th class="num">价位</th><th>含义</th></tr>
+      <tr><td>阻力</td><td class="num">1065</td><td>8/11 反弹顶 / 向上笔顶，突破则二买确认 + 打开新空间</td></tr>
+      <tr><td>阻力</td><td class="num">1150</td><td>上半年中枢下沿，中期压力</td></tr>
+      <tr><td>成本</td><td class="num">1049.5</td><td>当前持仓均价（8 手）</td></tr>
+      <tr><td>回撤</td><td class="num">1035</td><td>38.2% 回撤位（986→1065），8/18 已站上</td></tr>
+      <tr><td>回撤</td><td class="num">1016</td><td>61.8% 回撤位，跌破则回撤过深、转弱预警</td></tr>
+      <tr><td>生命线</td><td class="num">986</td><td>底背驰起点 / 结构止损，跌破则向上笔失败</td></tr>
+    </table>
+  </div>
+
+  <div class="verdict">
+    <h2>走势研判</h2>
+    <ul>
+      <li><b>短期：信号反转，多头重新掌握主动。</b> 前三天「增仓下跌」已澄清为主力换月假信号；8/17、8/18 连续两日增仓上涨（OI +6.0万 → +4.1万），价格从 1023 收复至 1043，是真实的空头回补 + 多头进场。</li>
+      <li><b>结构：日线二买构建中，尚未确认。</b> 回踩 1023 未破前低 986（更高的低点）✅，回撤后重新增仓上涨 ✅，但<b>确认标志是突破 1065</b>。8/18 高点 1048 已距 1065 仅 17 点。</li>
+      <li><b>量价：健康度显著改善。</b> 从 8/14 的「增仓下跌=空头打压」翻转为「增仓上涨=多头反击」，这是持仓逻辑由守转攻的关键转折。</li>
+      <li><b>性质：仍是超跌反弹，非趋势反转。</b> 基本面（产能过剩 + 库存累库 + 2027 投产大年）未变，目标区间 1000-1100 压力带，1065/1150 两道压力。1055-1100 应减亏兑现，不恋战做趋势。</li>
+      <li><b>纪律：</b> 突破 1065 → 二买确认，可看 1150；失守 1016（61.8% 回撤）→ 减半预警；失守 986 → 全部离场。加仓等硬信号（日线底分型 + MACD 金叉翻红 + 库存转去库），当前仍「持有等确认」。</li>
+    </ul>
+    <p class="note">定性：<span class="tag">超跌反弹</span><span class="tag">日线二买构建</span><span class="tag">增仓上涨反转</span> — 8/18 是关键转折日，多头从防守转入反击，但需突破 1065 才真正打开空间。</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  // [月, 日, 收盘, 最高, 最低, OI]
+  const recent = [
+    [7,28,1036,1068,1033,366326],[7,29,1017,1038,1015,391295],[7,30,1006,1021,997,410810],
+    [7,31,1007,1024,1003,433769],[8,3,993,1008,991,475891],[8,4,992,1000,986,507445],
+    [8,5,1011,1013,992,509282],[8,6,1013,1019,1008,529250],[8,7,1011,1019,1002,533085],
+    [8,10,1038,1045,1010,565292],[8,11,1060,1065,1035,619063],[8,12,1041,1060,1038,683723],
+    [8,13,1037,1042,1020,744596],[8,14,1023,1043,1023,822742],[8,17,1031,1041,1018,882977],
+    [8,18,1043,1048,1029,924118]
+  ];
+  const labels = recent.map(r => r[0]+'/'+r[1]);
+
+  const css = getComputedStyle(document.documentElement);
+  const ink = css.getPropertyValue('--ink').trim();
+  const ink2 = css.getPropertyValue('--ink-2').trim();
+  const ink3 = css.getPropertyValue('--ink-3').trim();
+  const grid = css.getPropertyValue('--grid').trim();
+  const accent = css.getPropertyValue('--accent').trim();
+  const up = css.getPropertyValue('--up').trim();
+
+  // ---- 价格图 ----
+  const W=880, H=320, L=52, R=16, T=16, B=30;
+  const xs = i => L + i*(W-L-R)/(recent.length-1);
+  const ymin=970, ymax=1090;
+  const ys = v => T + (ymax-v)*(H-T-B)/(ymax-ymin);
+
+  let g = document.getElementById('grid');
+  let s = '';
+  for(let v=980; v<=1080; v+=20){
+    s += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${grid}"/>`;
+    s += `<text x="${L-8}" y="${ys(v)+4}" fill="${ink3}" font-size="11" text-anchor="end">${v}</text>`;
+  }
+  recent.forEach((r,i)=>{ if(i%2===0) s += `<text x="${xs(i)}" y="${H-10}" fill="${ink3}" font-size="10.5" text-anchor="middle">${labels[i]}</text>`; });
+  g.innerHTML = s;
+
+  // 关键价位线
+  let lv = document.getElementById('levels');
+  let ls = '';
+  [[986,'#986 底背驰起点 / 生命线', up],[1016,'#1016 61.8% 回撤', ink3],[1035,'#1035 38.2% 回撤', ink3],[1049.5,'#1049.5 持仓成本', accent],[1065,'#1065 前顶 / 二买确认线', accent]].forEach(([v,label,col])=>{
+    ls += `<line x1="${L}" y1="${ys(v)}" x2="${W-R}" y2="${ys(v)}" stroke="${col}" stroke-dasharray="4 3" stroke-width="1"/>`;
+    ls += `<text x="${W-R}" y="${ys(v)-4}" fill="${col}" font-size="10" text-anchor="end">${label}</text>`;
+  });
+  lv.innerHTML = ls;
+
+  // 收盘折线
+  let path = recent.map((r,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${ys(r[2]).toFixed(1)}`).join('');
+  document.getElementById('series').innerHTML =
+    `<path d="${path}" fill="none" stroke="${accent}" stroke-width="2" stroke-linejoin="round"/>`;
+
+  // 986 低点 + 1065 高点标注
+  let mk = '';
+  const lowIdx = recent.findIndex(r=>r[4]===986);
+  const hiIdx = recent.findIndex(r=>r[3]===1065);
+  if(lowIdx>=0) mk += `<circle cx="${xs(lowIdx)}" cy="${ys(986)}" r="4" fill="${up}"/><text x="${xs(lowIdx)}" y="${ys(986)+16}" fill="${up}" font-size="11" text-anchor="middle" font-weight="600">986</text>`;
+  if(hiIdx>=0) mk += `<circle cx="${xs(hiIdx)}" cy="${ys(1065)}" r="4" fill="${accent}"/><text x="${xs(hiIdx)}" y="${ys(1065)-8}" fill="${accent}" font-size="11" text-anchor="middle" font-weight="600">1065</text>`;
+  // 8/18 收盘点
+  const lastIdx = recent.length-1;
+  mk += `<circle cx="${xs(lastIdx)}" cy="${ys(1043)}" r="4.5" fill="${accent}" stroke="${up}" stroke-width="2"/><text x="${xs(lastIdx)}" y="${ys(1043)-8}" fill="${ink}" font-size="11" text-anchor="middle" font-weight="700">1043</text>`;
+  document.getElementById('marks').innerHTML = mk;
+
+  // ---- OI 柱状图 ----
+  const OW=880, OH=160, OL=52, OR=16, OT=12, OB=26;
+  const oxs = i => OL + i*(OW-OL-OR)/(recent.length-1);
+  const omax = 1000000, omin = 300000;
+  const oys = v => OT + (omax-v)*(OH-OT-OB)/(omax-omin);
+  const bw = (OW-OL-OR)/recent.length * 0.62;
+
+  let og = document.getElementById('oi-grid');
+  let os = '';
+  [400000,600000,800000,1000000].forEach(v=>{
+    os += `<line x1="${OL}" y1="${oys(v)}" x2="${OW-OR}" y2="${oys(v)}" stroke="${grid}"/>`;
+    os += `<text x="${OL-8}" y="${oys(v)+4}" fill="${ink3}" font-size="10" text-anchor="end">${v/10000}万</text>`;
+  });
+  og.innerHTML = os;
+
+  let ob = document.getElementById('oi-bars');
+  let obs = recent.map((r,i)=>{
+    const up2 = i===0 ? r[5] > 0 : r[5] >= recent[i-1][5];
+    const col = up2 ? up : accent;
+    return `<rect x="${(oxs(i)-bw/2).toFixed(1)}" y="${oys(r[5]).toFixed(1)}" width="${bw.toFixed(1)}" height="${(oys(omin)-oys(r[5])).toFixed(1)}" fill="${col}" opacity="0.8"/>`;
+  }).join('');
+  ob.innerHTML = obs;
+  document.getElementById('oi-axis').innerHTML = `<text x="${OW-OR}" y="${OH-8}" fill="${ink3}" font-size="10" text-anchor="end">8/18 OI 92.4 万手</text>`;
+
+  // ---- hover（价格图）----
+  const svg = document.querySelector('#price-wrap svg');
+  const tip = document.getElementById('tip');
+  const wrap = document.getElementById('price-wrap');
+  const cur = document.getElementById('cursor');
+  svg.addEventListener('mousemove', e=>{
+    const rect = svg.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) / rect.width * W;
+    const i = Math.round((mx - L) / ((W-L-R)/(recent.length-1)));
+    if(i<0||i>=recent.length) { tip.style.display='none'; cur.innerHTML=''; return; }
+    const x = xs(i), y = ys(recent[i][2]);
+    cur.innerHTML = `<line x1="${x}" y1="${T}" x2="${x}" y2="${H-B}" stroke="${ink3}" stroke-width="1" stroke-dasharray="3 3"/><circle cx="${x}" cy="${y}" r="4" fill="${accent}"/>`;
+    const px = rect.width * (x/W);
+    tip.innerHTML = `<b>${labels[i]}</b> 收 ${recent[i][2]} · 高 ${recent[i][3]} · 低 ${recent[i][4]} · OI ${(recent[i][5]/10000).toFixed(1)}万`;
+    tip.style.display = 'block';
+    tip.style.left = Math.min(px + 12, rect.width - 200) + 'px';
+    tip.style.top = '12px';
+  });
+  svg.addEventListener('mouseleave', ()=>{ tip.style.display='none'; cur.innerHTML=''; });
+})();
+</script>
