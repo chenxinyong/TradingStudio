@@ -9,7 +9,7 @@ import glob
 from datetime import datetime
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
-NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\trading\Notes"
 DATE = "2026-06-08"
 PREV_DATE = "2026-06-05"  # Previous trading day (Friday)
 

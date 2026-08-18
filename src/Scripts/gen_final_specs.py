@@ -281,7 +281,7 @@ lines.append('')
 lines.append(f'> 共 {total} 个活跃品种，低流动性品种（纤维板FB、胶合板BB、棉纱CY、动力煤ZC、谷物类等）暂不列入策略范围。')
 
 output = '\n'.join(lines)
-output_path = r'C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading\04-Research\04-交易系统\六大交易所合约规格表.md'
+output_path = r'c:\Works\ClaudeCode\TradingStudio\docs\trading\交易系统\六大交易所合约规格表.md'
 with open(output_path, 'w', encoding='utf-8') as f:
     f.write(output)
 

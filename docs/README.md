@@ -121,5 +121,5 @@
 | `contracts/main_contracts/` | 主力合约切换 CSV | 38 |
 | `contracts/all_contracts/` | 全合约上市 CSV | 22 |
 
-> 合约规格的权威数据源是 Obsidian 知识库 `04-Research/04-交易系统/六大交易所合约规格表.md`。
+> 合约规格的权威数据源是 `docs/trading/交易系统/六大交易所合约规格表.md`。
 > `gen_final_specs.py` 通过 AKShare 实时拉取并更新。

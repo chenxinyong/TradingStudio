@@ -5,7 +5,7 @@ import os
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 json_path = os.path.join(script_dir, "stocks.json")
-md_path = os.path.join(script_dir, "..", "04-Research", "04-交易系统", "自选股总表.md")
+md_path = os.path.join(script_dir, "..", "..", "docs", "trading", "交易系统", "自选股总表.md")
 
 with open(json_path, "r", encoding="utf-8") as f:
     data = json.load(f)
@@ -34,7 +34,7 @@ lines.append("")
 lines.append("> {} 标的 | 按9层产业链框架分类 | 更新时间：{}".format(
     "共 {} 支".format(data["meta"]["total"]), data["meta"]["updated"]))
 lines.append(">")
-lines.append("> 数据源：[[04-Research/00-总纲/AI产业链深度分析]] | 扫描脚本：scripts/scan.sh")
+lines.append("> 数据源：[AI产业链深度分析](../行业分析/总纲/AI产业链深度分析.md) | 扫描脚本：scripts/scan.sh")
 lines.append("")
 lines.append("---")
 
@@ -74,7 +74,7 @@ for ln in sorted(layer_stocks.keys()):
     lines.append("")
     if ln in report_name:
         fn, nn = report_name[ln]
-        lines.append("> 深度分析：[[04-Research/01-产业链分层/{}|L{} {}]]".format(fn, ln, lname))
+        lines.append("> 深度分析：[L{} {}](../行业分析/产业链分层/{}.md)".format(ln, lname, fn))
 
 lines.append("")
 lines.append("---")
@@ -88,10 +88,10 @@ hold = len([s for s in data["stocks"] if s["status"] == "持仓"])
 lines.append("**统计**：A类 {} 支 | B类 {} 支 | C类 {} 支 | 持仓 {} 支".format(a_all, b_all, c_all, hold))
 lines.append("")
 lines.append("### 相关笔记")
-lines.append("- [[04-Research/00-总纲/AI产业链深度分析]]")
-lines.append("- [[04-Research/04-交易系统/自选股分级扫描系统]]")
-lines.append("- [[04-Research/04-交易系统/非盯盘交易策略]]")
-lines.append("- [[04-Research/04-交易系统/交易纪律与理性检查]]")
+lines.append("- [AI产业链深度分析](../行业分析/总纲/AI产业链深度分析.md)")
+lines.append("- [自选股分级扫描系统](自选股分级扫描系统.md)")
+lines.append("- [非盯盘交易策略](非盯盘交易策略.md)")
+lines.append("- [交易纪律与理性检查](交易纪律与理性检查.md)")
 lines.append("- 扫描脚本：scripts/scan.sh")
 
 with open(md_path, "w", encoding="utf-8") as f:

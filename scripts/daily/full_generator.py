@@ -11,7 +11,7 @@ Complete trading log generator for 2026-06-08
 import subprocess, json, os, re, pickle, sys, time
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
-NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\trading\Notes"
 DATE = sys.argv[1] if len(sys.argv) > 1 else "2026-08-07"
 PREV_DATE = sys.argv[2] if len(sys.argv) > 2 else "2026-08-06"
 
@@ -287,7 +287,7 @@ sl("")
 sl("# 股票交易日志 - " + DATE)
 sl("")
 sl("> 上班不能盯盘？-> 盘前挂好单，午休看一眼，收盘再复盘。")
-sl("> 策略参考：[[04-Research/04-交易系统/非盯盘交易策略]]")
+sl("> 策略参考：[非盯盘交易策略](../../交易系统/非盯盘交易策略.md)")
 sl("")
 sl("---")
 sl("")
@@ -313,7 +313,7 @@ sl("---")
 sl("")
 sl("## 自选股扫描（5分钟速览）")
 sl("")
-sl("> 扫描方法：[[04-Research/04-交易系统/自选股分级扫描系统]]")
+sl("> 扫描方法：[自选股分级扫描系统](../../交易系统/自选股分级扫描系统.md)")
 sl("")
 
 # Active layers
@@ -472,7 +472,7 @@ sl("")
 sl("### 今日做得不好的 / 违反纪律的地方")
 sl("- [ ] ")
 sl("")
-sl("### 理性检查（来自[[04-Research/04-交易系统/交易纪律与理性检查]]）")
+sl("### 理性检查（来自[交易纪律与理性检查](../../交易系统/交易纪律与理性检查.md)）")
 sl("- [ ] 今天所有操作都有明确理由，没有情绪化交易")
 sl("- [ ] 所有持仓的买入逻辑今天仍然成立")
 sl("- [ ] 没有违反仓位/止损纪律")
@@ -499,7 +499,7 @@ stock_path = os.path.join(NOTES, "股票", "{}.md".format(DATE))
 os.makedirs(os.path.dirname(stock_path), exist_ok=True)
 with open(stock_path, 'w', encoding='utf-8') as f:
     f.write(stock_log)
-print("  Written: docs/Notes/股票/{}.md ({} lines)".format(DATE, len(SL)))
+print("  Written: docs/trading/Notes/股票/{}.md ({} lines)".format(DATE, len(SL)))
 
 # ============ GENERATE FUTURES LOG ============
 print("[5/5] Generating futures log...")
@@ -731,7 +731,7 @@ fl("")
 fl("## 八、链接")
 fl("")
 fl("- 股票日志：[{}](../股票/{}.md)".format(DATE, DATE))
-fl("- 交易系统：[[04-Research/04-交易系统/期货交易系统]]")
+fl("- 交易系统：[期货交易系统](../../交易系统/期货交易系统.md)")
 fl("- 品种研究：待创建")
 
 futures_log = "\n".join(FL)
@@ -739,11 +739,11 @@ futures_path = os.path.join(NOTES, "期货", "{}.md".format(DATE))
 os.makedirs(os.path.dirname(futures_path), exist_ok=True)
 with open(futures_path, 'w', encoding='utf-8') as f:
     f.write(futures_log)
-print("  Written: docs/Notes/期货/{}.md ({} lines)".format(DATE, len(FL)))
+print("  Written: docs/trading/Notes/期货/{}.md ({} lines)".format(DATE, len(FL)))
 
 # Summary output
 print("\n" + "=" * 50)
 print("ALL DONE!")
-print("  Stock log: docs/Notes/股票/{}.md".format(DATE))
-print("  Futures log: docs/Notes/期货/{}.md".format(DATE))
+print("  Stock log: docs/trading/Notes/股票/{}.md".format(DATE))
+print("  Futures log: docs/trading/Notes/期货/{}.md".format(DATE))
 print("=" * 50)

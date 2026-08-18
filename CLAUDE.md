@@ -15,26 +15,28 @@
 
 ## 个人知识库
 
-路径：`C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading`（Obsidian 管理）
+路径：`docs/trading/`（git 管理）— 原 Obsidian vault `C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading` 的交易知识主体于 2026-08-18 迁入；vault 现仅保留 `02-Learning/` 学习笔记。
 
 这是本项目的**交易领域知识来源**，所有交易规则、市场认知、研究结论以此为准。
 
 | 目录 | 内容 | 与 TradingStudio 的关系 |
 |------|------|------------------------|
-| `01-Daily/期货/` → `docs/Notes/期货/` | 每日期货交易日志（已迁 git） | 实盘经验输入，策略迭代的反馈来源 |
-| `01-Daily/股票/` → `docs/Notes/股票/` | 每日股票交易日志（已迁 git） | 股票侧交易认知 |
-| `02-Learning/` | 数学/ML/Python/交易系统学习笔记 | 策略研发的理论基础 |
-| `03-Strategies/` | 策略设计 | 策略规格输入 |
-| `04-Research/00-总纲/` | AI产业链、A股/全球Top分析 | 宏观认知框架 |
-| `04-Research/01-产业链分层/` | L01-L09 产业链分析 | 品种基本面研究 |
-| `04-Research/02-个股研究/` | 20+ 个股深度研究 | 股票侧研究 |
-| `04-Research/04-交易系统/` | 交易纪律、期货交易系统、**六大交易所合约规格表**、自选股系统 | **核心输入**——交易规则和数据规格 |
-| `scripts/` → `scripts/daily/` | Python 分析脚本（已迁 git） | 已有工具，可参考或集成 |
-| `00-Templates/` | 交易日志模板 | 规范化记录 |
+| `docs/trading/Notes/期货/` | 每日期货交易日志 | 实盘经验输入，策略迭代的反馈来源 |
+| `docs/trading/Notes/股票/` | 每日股票交易日志 | 股票侧交易认知 |
+| `docs/trading/交易系统/` | 交易纪律、期货交易系统、**六大交易所合约规格表**、自选股系统 | **核心输入**——交易规则和数据规格 |
+| `docs/trading/策略/` | 策略设计 | 策略规格输入 |
+| `docs/trading/行业分析/总纲/` | AI产业链、A股/全球Top分析 | 宏观认知框架 |
+| `docs/trading/行业分析/产业链分层/` | L01-L09 产业链分析 | 品种基本面研究 |
+| `docs/trading/个股研究/` | 20+ 个股深度研究 | 股票侧研究 |
+| `docs/trading/品种研究/` | 品种基本面研究 | 品种研究 |
+| `docs/trading/因子研究/` | 量化因子研究 | 因子研发输入 |
+| `docs/trading/外部资料/` | 外部参考资料 | 参考 |
+| `docs/trading/模板/` | 交易日志模板 | 规范化记录 |
+| `02-Learning/`（vault） | 数学/ML/Python/交易系统学习笔记 | 策略研发的理论基础 |
 
 **工作约定：** 当需要交易规则、品种特性、市场认知时，先查知识库再动手。知识库里的交易纪律和规则是系统的"需求文档"。
 
-> **2026-08-18 变更**：每日股票/期货交易日志已从 vault `01-Daily/` 迁至本仓库 `docs/Notes/`（`股票/` + `期货/` 子目录），随 git 版本管理。日志生成/追加脚本（`scripts/daily/full_generator.py`、`run_chan_daily.py` 等）已改写到 `docs/Notes/`；vault 仅保留研究/学习笔记。
+> **2026-08-18 变更**：交易知识库（交易规则/策略/个股/行业分析/品种/因子/模板）已从 Obsidian vault 迁至本仓库 `docs/trading/`，随 git 版本管理；vault 仅保留 `02-Learning/` 学习笔记。日志生成/追加脚本（`scripts/daily/full_generator.py`、`run_chan_daily.py` 等）已改写到 `docs/trading/Notes/`。
 
 ---
 

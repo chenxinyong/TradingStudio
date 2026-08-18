@@ -13,7 +13,7 @@ import pandas as pd
 from datetime import date
 
 VAULT = r"C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading"
-NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\Notes"
+NOTES = r"c:\Works\ClaudeCode\TradingStudio\docs\trading\Notes"
 TODAY = "2026-06-17"
 PREV_TRADING_DAY = "2026-06-16"
 TODAY_DATE = date(2026, 6, 17)

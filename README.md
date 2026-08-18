@@ -155,6 +155,7 @@ TradingStudio/
 │
 ├── docs/
 │   ├── design/                设计文档（18 篇，架构/数据/UI/部署/策略）
+│   ├── trading/               交易知识库（交易规则/策略/个股/行业分析/品种研究/每日日志）
 │   └── README.md             文档索引
 │
 ├── configs/                   策略配置 + 批量回测 + 参数扫描
@@ -211,7 +212,7 @@ Simnow Live 全链路跑通：下单/风控/成交/持仓同步/事件持久化�
 
 ## 相关资源
 
-- [个人交易知识库 (Obsidian)](C:\Users\chenx\OneDrive\MyFiles\DialyNotes\Trading) — 交易规则、品种研究（每日股票/期货日志已迁至 `docs/Notes/`）
+- [个人交易知识库](docs/trading/) — 交易规则、策略、个股/行业/品种研究、每日日志（原 Obsidian vault，2026-08-18 迁入 git）
 - [QuantConnect Lean](https://github.com/QuantConnect/Lean) — 架构设计参考
 
 ---

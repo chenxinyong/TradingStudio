@@ -4,7 +4,7 @@
 用法:  python log_generator.py            → 生成今日股票+期货日志
        python log_generator.py 2026-07-24 → 生成指定日期日志
 
-输出: docs/Notes/股票/YYYY-MM-DD.md + docs/Notes/期货/YYYY-MM-DD.md
+输出: docs/trading/Notes/股票/YYYY-MM-DD.md + docs/trading/Notes/期货/YYYY-MM-DD.md
      自动填充指数/板块/异动数据，分析部分留空手动填写
 """
 
@@ -13,10 +13,10 @@ from datetime import datetime
 
 # ============= CONFIG =============
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-STOCK_DIR = os.path.join(BASE_DIR, "docs", "Notes", "股票")
-FUT_DIR   = os.path.join(BASE_DIR, "docs", "Notes", "期货")
+STOCK_DIR = os.path.join(BASE_DIR, "docs", "trading", "Notes", "股票")
+FUT_DIR   = os.path.join(BASE_DIR, "docs", "trading", "Notes", "期货")
 
-# Layer names (9层产业框架，匹配 04-Research/01-产业链分层/)
+# Layer names (9层产业框架，匹配 docs/trading/行业分析/产业链分层/)
 LAYER_NAMES = {
     1: "AI算力基座", 2: "半导体产业链", 3: "大模型与AI应用",
     4: "AI电力设备", 5: "新能源发电与电池材料", 6: "储能与智能电网",
