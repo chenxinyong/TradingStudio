@@ -446,7 +446,8 @@ data/
 *.duckdb
 
 # Tools and scripts
-tools/
+tools/*
+!tools/ChanAnalysis/
 
 # 回测报告产物（大文件，不提交）
 *.report.json
