@@ -507,9 +507,50 @@ public class DuckDBStore : IBarStore, ITickStore
         var cs = _readOnly
             ? $"Data Source={_dbPath};access_mode=read_only"
             : $"Data Source={_dbPath}";
+
+        // 只读连接（回测/参数扫描）遇到并发写锁时重试：检测文件占用 → 等待 → 重试。
+        // DuckDB 单写入者模型下，读写连接会独占文件锁；参数扫描与 daily_import 并发时会撞锁。
+        if (_readOnly)
+            return OpenReadOnlyWithRetry(cs);
+
         var conn = new DuckDBConnection(cs);
         conn.Open();
         return conn;
+    }
+
+    /// <summary>
+    /// 只读连接打开重试：DuckDB 单写入者模型下，若文件正被写入（如 daily_import append），
+    /// 读连接会抛锁冲突异常。等比退避重试，最多 5 次（总等待 ~7.5s），避免参数扫描中途崩溃。
+    /// </summary>
+    private static DuckDBConnection OpenReadOnlyWithRetry(string connectionString)
+    {
+        const int maxAttempts = 5;
+        int[] delaysMs = [500, 1000, 2000, 4000]; // 等比退避
+
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                var conn = new DuckDBConnection(connectionString);
+                conn.Open();
+                return conn;
+            }
+            catch (Exception ex) when (IsLockError(ex) && attempt < maxAttempts - 1)
+            {
+                var delay = attempt < delaysMs.Length ? delaysMs[attempt] : delaysMs[^1];
+                Console.Error.WriteLine($"[DuckDB] 文件占用，{delay}ms 后重试 ({attempt + 1}/{maxAttempts - 1}): {ex.Message.Split('\n')[0]}");
+                Thread.Sleep(delay);
+            }
+        }
+    }
+
+    private static bool IsLockError(Exception ex)
+    {
+        var msg = ex.Message;
+        return msg.Contains("lock", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("another process", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("Conflicting lock", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("Could not set lock", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void CreateTables(DuckDBConnection conn)

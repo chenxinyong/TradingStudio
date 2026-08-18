@@ -40,6 +40,7 @@ public class ParamScanCommand
         var startStr = "";
         var endStr = "";
         var steps = 20;
+        double? minOverride = null, maxOverride = null, stepOverride = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -50,13 +51,17 @@ public class ParamScanCommand
             else if (args[i] is "--start" && i + 1 < args.Length) startStr = args[++i];
             else if (args[i] is "--end" && i + 1 < args.Length) endStr = args[++i];
             else if (args[i] is "--steps" && i + 1 < args.Length) steps = int.Parse(args[++i]);
+            else if (args[i] is "--min" && i + 1 < args.Length) minOverride = double.Parse(args[++i]);
+            else if (args[i] is "--max" && i + 1 < args.Length) maxOverride = double.Parse(args[++i]);
+            else if (args[i] is "--step" && i + 1 < args.Length) stepOverride = double.Parse(args[++i]);
         }
 
         if (string.IsNullOrEmpty(configPath) || string.IsNullOrEmpty(paramName))
         {
-            Console.Error.WriteLine("Usage: TradingStudio param-scan --config <strategy.json> --param <ParamName> [--db <path>] [--steps <N>]");
+            Console.Error.WriteLine("Usage: TradingStudio param-scan --config <strategy.json> --param <ParamName> [--db <path>] [--steps <N>] [--min <v> --max <v> --step <v>]");
             Console.Error.WriteLine("  Default DB: data/bars_history.duckdb (auto-detected)");
             Console.Error.WriteLine("  Default steps: 20");
+            Console.Error.WriteLine("  --min/--max/--step: 覆盖参数扫描范围 (聚焦子区间重跑, 如 --min 150 --max 500 --step 20)");
             return 1;
         }
 
@@ -87,6 +92,20 @@ public class ParamScanCommand
             Console.Error.WriteLine($"Parameter '{paramName}' not found in strategy '{baseConfig.StrategyType}'.");
             Console.Error.WriteLine($"Available: {string.Join(", ", metas.Select(m => $"{m.Name}[{m.Min}..{m.Max}/{m.Step}]"))}");
             return 1;
+        }
+
+        // 可选覆盖扫描范围（如 --min 150 --max 500 --step 20），用于聚焦子区间重跑
+        if (minOverride.HasValue || maxOverride.HasValue || stepOverride.HasValue)
+        {
+            meta = new ParamMeta
+            {
+                Name = meta.Name,
+                Group = meta.Group,
+                Min = minOverride ?? meta.Min,
+                Max = maxOverride ?? meta.Max,
+                Step = stepOverride ?? meta.Step,
+                ValueType = meta.ValueType,
+            };
         }
 
         Console.WriteLine($"\n═══ Parameter Sensitivity Scan ═══");
