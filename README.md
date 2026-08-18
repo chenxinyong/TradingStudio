@@ -160,9 +160,12 @@ TradingStudio/
 │
 ├── configs/                   策略配置 + 批量回测 + 参数扫描
 ├── scripts/                   运维脚本（每日数据导入、交叉验证、因子研究）
+├── reports/                   品种研判可视化报告（HTML）
 ├── data/                      本地数据（bars_live.duckdb、Tick CSV；历史库见 C:\Works\Datas\）
 ├── release/                   发布输出（分 collect/live/backtest 三模式）
-└── memory/                    AI 助手持久化记忆
+├── tools/                     外部工具（ChanAnalysis 缠论 C# 版、UnRAR 解压）
+├── deploy/                    部署配置（appsettings.cloud.*）
+└── dev-notes/                 开发里程碑笔记（2026-06）
 ```
 
 ---
