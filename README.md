@@ -142,8 +142,7 @@ TradingStudio/
 │   ├── TradingStudio.Research/ 研究工具（统计指标 + ScottPlot 可视化）
 │   ├── TradingStudio.Terminal/ WPF 监控客户端（Dashboard + 实时图表 + 回放）
 │   ├── TradingStudio.ToolBox/ 数据工具 CLI（独立控制台，12 命令）
-│   ├── TradingStudio/         引擎主程序（.NET Host + DI + Serilog + CtpLiveFeed/CtpTraderBridge + 3 种运行模式）
-│   └── scripts/               Python 脚本（品种生成、数据导入、交叉验证）
+│   └── TradingStudio/         引擎主程序（.NET Host + DI + Serilog + CtpLiveFeed/CtpTraderBridge + 3 种运行模式）
 │
 ├── test/
 │   ├── TradingStudio.Core.Tests/    核心模型 + 技术指标 + 手续费 + 保证金动态 + RiskTracker（88 通过）
@@ -159,7 +158,7 @@ TradingStudio/
 │   └── README.md             文档索引
 │
 ├── configs/                   策略配置 + 批量回测 + 参数扫描
-├── scripts/                   运维脚本（每日数据导入、交叉验证、因子研究）
+├── scripts/                   运维 + 研究脚本（daily 导入、specs 合约规格、factor_research 因子、chanlun 缠论）
 ├── reports/                   品种研判可视化报告（HTML）
 ├── data/                      本地数据（bars_live.duckdb、Tick CSV；历史库见 C:\Works\Datas\）
 ├── release/                   发布输出（分 collect/live/backtest 三模式）

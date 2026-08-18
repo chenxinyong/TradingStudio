@@ -317,6 +317,6 @@ main ← feat/* ← fix/* ← chore/*
 `gen_final_specs.py` 从 AKShare 拉取合约规格 → 知识库。`gen_symbols_json.py` 生成 `symbols.json`（品种 + 交易规则，75 个品种）。
 
 ```bash
-python src/Scripts/gen_final_specs.py    # 拉取合约规格 → 知识库 md
-python src/Scripts/gen_symbols_json.py   # 生成品种 JSON → src/TradingStudio/symbols.json
+python scripts/specs/gen_final_specs.py    # 拉取合约规格 → 知识库 md
+python scripts/specs/gen_symbols_json.py   # 生成品种 JSON → src/TradingStudio/symbols.json
 ```
