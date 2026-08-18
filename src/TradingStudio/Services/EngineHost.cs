@@ -33,9 +33,22 @@ public class EngineHost : BackgroundService
             {
                 _log.Information("Waiting for next trading session...");
                 _health.Update("Idle", 0, 0, 0, 0, "休市", null, null, null);
-                var wait = _session.WaitUntilNextSession();
-                try { await Task.Delay(wait, ct); }
-                catch (OperationCanceledException) { break; }
+
+                // 分片等待进入交易时段：每片最长 30s，逐片重算剩余时间。
+                // 不能用单次长 Task.Delay —— 系统休眠会冻结计时器，导致错过开盘
+                // （8/18 日盘未启动即此因：机器在 02:30-12:29 休眠，6h 计时器未触发）。
+                // 分片在正常时仍能精确到秒级；休眠唤醒后下一片立即重算并恢复。
+                while (!_session.IsInSession() && !ct.IsCancellationRequested)
+                {
+                    var remaining = _session.WaitUntilNextSession();
+                    var slice = remaining > TimeSpan.FromSeconds(30)
+                        ? TimeSpan.FromSeconds(30)
+                        : remaining;
+                    if (slice <= TimeSpan.Zero) continue;
+                    try { await Task.Delay(slice, ct); }
+                    catch (OperationCanceledException) { break; }
+                }
+                if (ct.IsCancellationRequested) break;
             }
 
             var sessionName = _session.SessionName();

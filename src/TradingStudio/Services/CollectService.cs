@@ -94,7 +94,17 @@ public class CollectService : BackgroundService
                     wait.TotalMinutes, SessionScheduler.BeijingNow.Add(wait).ToString("HH:mm"));
                 _health.Update("Idle", _pipeline.QuoteCount, _store.WrittenCount, _pipeline.TickSkipped,
                     _reconnectCount, "休市", _lastConnect, _lastQuote, _lastHealth);
-                try { await Task.Delay(wait, ct); } catch (OperationCanceledException) { break; } catch { /* retry */ }
+
+                // 分片等待（同 EngineHost）：系统休眠会冻结单次长 Task.Delay，导致错过开盘
+                while (!_scheduler.IsInSession() && !ct.IsCancellationRequested)
+                {
+                    var remaining = _scheduler.WaitUntilNextSession();
+                    var slice = remaining > TimeSpan.FromSeconds(30)
+                        ? TimeSpan.FromSeconds(30)
+                        : remaining;
+                    if (slice <= TimeSpan.Zero) continue;
+                    try { await Task.Delay(slice, ct); } catch (OperationCanceledException) { break; } catch { /* retry */ }
+                }
                 if (ct.IsCancellationRequested) break;
             }
 
