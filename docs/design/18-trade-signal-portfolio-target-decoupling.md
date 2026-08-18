@@ -1,6 +1,43 @@
 # TradeSignal / PortfolioTarget 解耦设计
 
-> 状态: Draft | 日期: 2026-08-07 | 优先级: P3
+> 状态: **v1 已实现（类型 + SimpleTargetCombiner + Rebalancer）· 管线未接线 · 策略未迁移**
+> 日期: 2026-08-07（设计）→ 2026-08-19（状态更新）
+> 优先级: P2（架构补强）
+
+---
+
+## 0. 当前实现状态（与代码对齐，2026-08-19）
+
+| 组件 | 状态 | 位置 |
+|------|------|------|
+| `TradeSignal` (record, 含 `Priority`) | ✅ 已实现 | `src/TradingStudio.Core/Engine/TradeSignal.cs` |
+| `SignalDirection` (Long/Short/Flat/Reduce) | ✅ 已实现 | 同上 |
+| `PortfolioTarget` (class) | ✅ 已实现 | `src/TradingStudio.Core/Engine/PortfolioTarget.cs` |
+| `ITargetCombiner` 接口 | ✅ 已实现 | `src/TradingStudio.Engine/ITargetCombiner.cs` |
+| `SimpleTargetCombiner` (v1) | ✅ 已实现 | `src/TradingStudio.Engine/SimpleTargetCombiner.cs` |
+| `Rebalancer` | ✅ 已实现 | `src/TradingStudio.Engine/Rebalancer.cs` |
+| `EngineStrategyContext.EmitSignal` | ✅ 已实现 | `src/TradingStudio.Engine/EngineStrategyContext.cs:177` |
+| `ExecutionHandler.ProcessSignals` | ✅ 已实现 | `src/TradingStudio.Engine/ExecutionHandler.cs:86` |
+| `SignalChannel` 读写 | ✅ 已实现 | `ExecutionHandler.SignalChannel` + `TradingEngine` 注入 |
+| `WeightedTargetCombiner` | ❌ 未实现 | — |
+| `RiskParityTargetCombiner` | ❌ 未实现 | — |
+| 双轨兼容（MarketBuy → EmitSignal 包装） | ❌ 未实现 | 策略仍直连 `_execution.Submit` |
+| 策略迁移至 `EmitSignal` | ❌ 未迁移 | 4 策略仍用 MarketBuy/MarketSell/ClosePosition |
+
+### ⚠️ 关键差距：管线已写但**未接线**
+
+`ProcessSignals` 的入口守卫是：
+
+```csharp
+if (TargetCombiner == null || Rebalancer == null)
+    return;
+```
+
+但 `ExecutionHandler.TargetCombiner` / `.Rebalancer` 这两个属性**从未被赋值**（grep 全仓无 `new SimpleTargetCombiner` / `new Rebalancer` 的注入点）。因此当前信号管线是**死代码**：策略发出的 `TradeSignal` 写入 `SignalChannel`，但主循环的 `ProcessSignals` 每次都提前返回，信号被丢弃。
+
+**结论**：架构骨架已就位，但「接线 + 迁移」是后续工作（v2/v3/v4）。现有策略走的是旧的 `MarketBuy/MarketSell/ClosePosition` 直连 `ExecutionHandler.Submit` 路径，行为不变。
+
+---
 
 ## 1. 问题陈述
 
@@ -52,207 +89,139 @@ Strategy.OnBar()
 | **目标层** | `List<TradeSignal>` | `List<PortfolioTarget>` | `ITargetCombiner` |
 | **执行层** | `List<PortfolioTarget>` + 当前持仓 | `List<Order>` | `Rebalancer` + `ExecutionHandler` |
 
-## 3. 核心抽象
+## 3. 核心抽象（已实现）
 
 ### 3.1 TradeSignal — 策略发出的抽象意向
+
+> ✅ 已实现为 `record`（不是 `class`），多一个 `Priority` 字段。
 
 ```csharp
 namespace TradingStudio.Core.Engine;
 
 /// <summary>
 /// 策略发出的交易意向 — 不含手数，仅表达方向+信心。
-/// 策略只负责到这里，PositionSizing 由组合层统一处理。
 /// </summary>
-public class TradeSignal
+public record TradeSignal
 {
-    /// <summary>策略ID</summary>
     public string StrategyId { get; init; } = "";
-
-    /// <summary>品种代码</summary>
     public string InstrumentId { get; init; } = "";
-
-    /// <summary>方向意向</summary>
     public SignalDirection Direction { get; init; }
-
-    /// <summary>信号强度 [0, 1]。0=微弱, 1=极强。用于复合信号加权。</summary>
-    public double Conviction { get; init; } = 0.5;
-
-    /// <summary>信号来源说明（人工可读）</summary>
+    public double Conviction { get; init; } = 0.5;   // [0,1] 信号强度
     public string Reason { get; init; } = "";
-
-    /// <summary>信号时间戳</summary>
-    public DateTime Timestamp { get; init; }
-
-    /// <summary>可选: 策略建议的止损价位（组合层可覆盖）</summary>
+    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
     public double? SuggestedStop { get; init; }
-
-    /// <summary>可选: 策略建议的止盈价位（组合层可覆盖）</summary>
     public double? SuggestedTarget { get; init; }
-
-    /// <summary>可选: 期望的最大持仓权重 (占组合 %)</summary>
     public double? MaxWeight { get; init; }
+    public int Priority { get; init; }               // 策略优先级, 越小越优先
 }
 
-public enum SignalDirection
-{
-    /// <summary>做多意向</summary>
-    Long,
-    /// <summary>做空意向</summary>
-    Short,
-    /// <summary>平仓/减仓意向</summary>
-    Flat,
-    /// <summary>减仓意向 (保留部分)</summary>
-    Reduce,
-}
+public enum SignalDirection { Long, Short, Flat, Reduce }
 ```
+
+**关键差异 vs 早期草稿**：`Timestamp` 默认 `UtcNow`（非空）；`Priority` 是新增字段，供 `SimpleTargetCombiner` 冲突消解与排序使用。`record` 语义让 `EmitSignal` 用 `with` 表达式回填 `StrategyId`/`Timestamp`。
 
 ### 3.2 PortfolioTarget — 组合层输出的具体目标
 
+> ✅ 已实现，与草稿一致（class）。
+
 ```csharp
-/// <summary>
-/// 组合层计算后的目标持仓 — 精确到手数和权重。
-/// 当前持仓 vs 目标持仓的差异 → Rebalancer 生成订单。
-/// </summary>
 public class PortfolioTarget
 {
-    /// <summary>品种代码</summary>
     public string InstrumentId { get; init; } = "";
-
-    /// <summary>目标持仓手数: 正=多头, 负=空头, 0=空仓</summary>
-    public int TargetQuantity { get; init; }
-
-    /// <summary>目标占组合权重 [0, 1]</summary>
-    public double TargetWeight { get; init; }
-
-    /// <summary>生成此目标的信号来源（用于审计/调试）</summary>
+    public int TargetQuantity { get; init; }        // 正=多头, 负=空头, 0=空仓
+    public double TargetWeight { get; init; }        // [0,1]
     public List<string> SourceStrategyIds { get; init; } = new();
-
-    /// <summary>合成信号强度 (多个策略的加权平均)</summary>
     public double CompositeConviction { get; init; }
-
-    /// <summary>组合层设置的止损价</summary>
     public double? StopLoss { get; init; }
-
-    /// <summary>组合层设置的止盈价</summary>
     public double? TakeProfit { get; init; }
 }
 ```
 
 ### 3.3 ITargetCombiner — 信号→目标转换策略
 
+> ✅ 接口 + `SimpleTargetCombiner` 已实现。⚠️ `Weighted`/`RiskParity` 未实现。
+
 ```csharp
-/// <summary>
-/// 信号合并器: 将多个策略的信号合并为组合层持仓目标。
-/// 不同实现对应不同的组合管理哲学。
-/// </summary>
 public interface ITargetCombiner
 {
-    /// <summary>
-    /// 将一组 TradeSignal 转换为 PortfolioTarget 列表。
-    /// </summary>
-    /// <param name="signals">所有策略发出的信号</param>
-    /// <param name="portfolio">当前组合状态（权益、现金、现有持仓）</param>
-    /// <param name="registry">品种注册表（合约乘数、保证金率等）</param>
-    /// <returns>目标持仓列表（未提及的品种 = 维持现仓或平仓，取决于实现）</returns>
     List<PortfolioTarget> Combine(
         IReadOnlyList<TradeSignal> signals,
         IPortfolioState portfolio,
         FutureRegistry registry);
 }
-
-/// <summary>简单合并器: 每个品种取优先级最高的策略信号, 等权分配。</summary>
-public class SimpleTargetCombiner : ITargetCombiner
-{
-    public int MaxPositions { get; init; } = 5;
-    public double MaxWeightPerInstrument { get; init; } = 0.20;
-    public int MaxLots { get; init; } = 10;
-    // 实现: 每个品种取 priority 最高的信号, TopN 等权分配
-}
-
-/// <summary>加权合并器: 按 Conviction 加权平均多个策略的同品种信号。</summary>
-public class WeightedTargetCombiner : ITargetCombiner
-{
-    public double MinConviction { get; init; } = 0.3;
-    // 同品种多信号: weightedDir = Σ(conv_i × dir_i) / Σ(conv_i)
-    // weightedDir > 0 → Long, < 0 → Short
-}
-
-/// <summary>风险平价合并器: 按风险贡献均等分配仓位。</summary>
-public class RiskParityTargetCombiner : ITargetCombiner
-{
-    public int LookbackDays { get; init; } = 60;
-    // 1. 计算每个品种的波动率
-    // 2. 分配仓位使得 σ_i × weight_i 均等
-    // 3. 正交化: 如果品种间高度相关，降权其中一个
-}
 ```
 
-### 3.4 Rebalancer — 目标→订单
+#### SimpleTargetCombiner（已实现 v1）
+
+实际冲突消解规则（`SimpleTargetCombiner.cs`）：
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `MaxPositions` | 5 | 最大持仓品种数 |
+| `MaxWeightPerInstrument` | 0.20 | 单品种最大权重 |
+| `MaxLots` | 10 | 单品种最大手数硬上限 |
+| `MinConviction` | 0.1 | 低于此值信号被忽略 |
+
+同品种多信号消解顺序：
+1. **Flat 优先级最高**（强制平仓）
+2. 方向冲突（Long vs Short）→ 取 `Conviction` 更高者
+3. 同方向 → `Priority` 小者优先；同 Priority → `Conviction` 高者
+
+手数计算（**简化 v1**，`SimpleTargetCombiner.cs:85-89`）：
+```csharp
+// TODO v2: 使用 权益 × 权重 / (价格 × 合约乘数 × 保证金率) 精确计算
+lots = Math.Min(MaxLots, Math.Max(1, (int)(weightPerInstrument * 5)));
+```
+当前是「权重 × 5」的粗估，**尚未**接入真实权益/乘数/保证金率 —— 这是 v1 的已知简化。
+
+#### WeightedTargetCombiner / RiskParityTargetCombiner（未实现）
 
 ```csharp
-/// <summary>
-/// 再平衡器: 比较目标持仓与当前持仓，生成增量订单。
-/// 不需要改动 ExecutionHandler — 输出仍然是 Order 对象。
-/// </summary>
+// ⚠️ 以下两个类尚未实现，仅在设计阶段。需要时再建。
+public class WeightedTargetCombiner : ITargetCombiner { /* 按 Conviction 加权平均 */ }
+public class RiskParityTargetCombiner : ITargetCombiner { /* 风险平价分配 */ }
+```
+
+### 3.4 Rebalancer — 目标→订单（已实现）
+
+> ✅ 已实现，比草稿多一个 `MinTradeLots`。
+
+```csharp
 public class Rebalancer
 {
-    /// <summary>
-    /// 生成订单以实现从 currentPositions 到 targets 的转换。
-    /// 每个品种生成至多 2 个订单（平仓 + 开仓），避免过度交易。
-    /// </summary>
+    public double RebalanceThreshold { get; init; } = 0.005;  // 0.5%
+    public double MinTradeWeight { get; init; } = 0.01;        // 1%
+    public int MinTradeLots { get; init; } = 1;                // 最小交易手数
+
     public List<Order> GenerateOrders(
         IReadOnlyList<PortfolioTarget> targets,
         IReadOnlyList<Position> currentPositions,
-        string strategyId)
-    {
-        // Δ = target - current
-        // Δ > 0 → 买入 |Δ| 手
-        // Δ < 0 → 卖出 |Δ| 手
-        // Δ = 0 → 不操作
-        // 先平仓（如果方向改变），再开仓到目标量
-    }
-
-    /// <summary>平仓阈值: 目标权重偏离 < 此值 → 不调仓（避免过度交易）</summary>
-    public double RebalanceThreshold { get; init; } = 0.005;  // 0.5%
-
-    /// <summary>补仓阈值: 只调超过此比例的偏差</summary>
-    public double MinTradeWeight { get; init; } = 0.01;  // 1%
+        string strategyId);
 }
 ```
 
-## 4. 向后兼容的迁移路径
+核心逻辑 `Δ = target - current`：
+- `|Δ| < MinTradeLots` → 不交易
+- 方向翻转（多→空 / 空→多）→ 先平仓（`CreateCloseOrder`）
+- `Δ > 0` → 加仓 Buy；`Δ < 0` → 减仓 Sell（`IsCloseOrder = true`）
 
-### Phase 1: 双轨运行（不改现有策略）
+## 4. 迁移路径（当前进度：Phase 1 双轨未做，Phase 2 未开始）
+
+### Phase 1: 双轨运行（❌ 未实现）
+
+设计意图：`MarketBuy/MarketSell` 内部转为 `TradeSignal` + `SimpleTargetCombiner`，让现有策略无感切换。
+
+**实际状态**：未实现。`EngineStrategyContext.MarketBuy/MarketSell/ClosePosition` 仍直接调用 `_execution.Submit`（`EngineStrategyContext.cs:75-133`），**没有**路由到信号管线。策略走的是旧路径。
+
+### Phase 2: 策略主动迁移（❌ 未开始，`EmitSignal` 已就绪）
+
+策略改用 `EmitSignal()`：
 
 ```csharp
-// StrategyContext 新增抽象信号接口:
-public virtual void EmitSignal(TradeSignal signal) { }  // 新: 策略用这个
-
-// 现有 MarketBuy/MarketSell 内部转为 TradeSignal + SimpleTargetCombiner:
-public virtual OrderTicket MarketBuy(string inst, int qty, string? tag = null)
-{
-    // 兼容包装: 把 MarketBuy(qty) 转为 TradeSignal + 固定手数
-    var signal = new TradeSignal
-    {
-        StrategyId = StrategyId, InstrumentId = inst,
-        Direction = SignalDirection.Long, Conviction = 1.0,
-        MaxWeight = qty * ...,  // 从手数反推权重
-    };
-    EmitSignal(signal);
-    // → TargetCombiner → Rebalancer → ExecutionHandler
-}
-```
-
-**关键**: 现有策略的 `MarketBuy/ClosePosition` 调用无需修改，内部路由到新管线。
-
-### Phase 2: 策略主动迁移
-
-策略改用 `EmitSignal()`:
-```csharp
-// Old:
+// Old: 直连下单（手数由策略自己算）
 _ctx.MarketBuy(bar.InstrumentId, Quantity, "金叉做多");
 
-// New:
+// New: 只发信号，仓位由组合层统一处理
 _ctx.EmitSignal(new TradeSignal
 {
     InstrumentId = bar.InstrumentId,
@@ -263,44 +232,58 @@ _ctx.EmitSignal(new TradeSignal
 });
 ```
 
-### Phase 3: 多策略组合优化
+**迁移前置条件**（缺一不可）：
+1. 在组合根注入 `SimpleTargetCombiner` + `Rebalancer`（当前 `ExecutionHandler.TargetCombiner/.Rebalancer` 为 null）
+2. 确认 v1 手数计算的「权重 × 5」粗估是否需要升级为权益×乘数×保证金率精确计算
+3. 逐个策略迁移，回测对比迁移前后绩效（信号质量 vs 信号+仓位综合表现分离）
+
+**迁移注意事项**（`MarketBuy` → `EmitSignal` 语义差异）：
+
+| 维度 | `MarketBuy/MarketSell`（旧） | `EmitSignal`（新） |
+|------|------------------------------|--------------------|
+| 返回值 | `OrderTicket`（可查 `Status`/`OrderId`） | `void`（fire-and-forget） |
+| 手数 | 策略显式传入 `qty` | 策略不传，由 combiner 定 |
+| 反馈 | 同步拿到 Reject/Fill 结果 | 异步（走 channel），无即时反馈 |
+| 减仓语义 | `ClosePosition` 只能全平 | `Flat`（全平）/ `Reduce`（减半） |
+| 风控位置 | `Submit` 内 `CheckPreOrder` | 同样走 `Submit`，风控不变 |
+
+**含义**：迁移后策略失去「下单即时反馈」和「精确手数控制」。适合「方向明确、仓位由组合层统一」的策略（如横截面/因子策略）；不适合「手数精确、需立即处理拒单」的策略（如单品种缠论）。迁移应逐策略评估，而非一刀切。
+
+### Phase 3: 多策略组合优化（未开始）
 
 ```json
-// Live 模式配置: strategy-combiner.json
 {
   "combiner": "RiskParity",
   "maxPositions": 8,
-  "rebalanceInterval": "1d",
   "strategies": [
-    { "id": "sma-macd-ag", "priority": 1, "riskBudget": 0.30 },
-    { "id": "intraday-mom", "priority": 2, "riskBudget": 0.50 },
-    { "id": "composite-factor", "priority": 3, "riskBudget": 0.20 }
+    { "id": "sma-macd-ag", "priority": 1, "riskBudget": 0.30 }
   ]
 }
 ```
 
-## 5. 对现有代码的影响
+## 5. 对现有代码的影响（实际 vs 草稿）
 
-| 文件 | 变更 | 破坏性 |
-|------|------|--------|
-| `StrategyContext.cs` | 新增 `EmitSignal(TradeSignal)` 虚方法 | 无 |
-| `EngineStrategyContext.cs` | 实现 `EmitSignal` → 写入 SignalChannel | 无 |
-| `ExecutionHandler.cs` | 新增 `SignalChannel` reader + `ITargetCombiner` | 无 |
-| **新增** `TradeSignal.cs` | Core/Engine/ 新文件 | 无 |
-| **新增** `PortfolioTarget.cs` | Core/Engine/ 新文件 | 无 |
-| **新增** `ITargetCombiner.cs` | Engine/ 接口 + 3 个实现 | 无 |
-| **新增** `Rebalancer.cs` | Engine/ 新文件 | 无 |
-| `TradingEngine.cs` | 构造时注入 `ITargetCombiner` + `Rebalancer` | 无 |
-| 各策略 | 可选改用 `EmitSignal()` | 无 (兼容) |
+| 文件 | 草稿计划 | 实际状态 |
+|------|----------|----------|
+| `StrategyContext.cs` | 新增 `EmitSignal` 虚方法 | ✅ 已加 |
+| `EngineStrategyContext.cs` | 实现 `EmitSignal` → 写 SignalChannel | ✅ 已实现 (`:177`) |
+| `ExecutionHandler.cs` | SignalChannel + TargetCombiner + Rebalancer | ✅ 字段就位，⚠️ 未赋值 |
+| `TradeSignal.cs` | Core/Engine/ 新文件 | ✅ 已建（record + Priority） |
+| `PortfolioTarget.cs` | Core/Engine/ 新文件 | ✅ 已建 |
+| `ITargetCombiner.cs` | 接口 + 3 实现 | ⚠️ 接口 + 1 实现（Simple） |
+| `Rebalancer.cs` | 新文件 | ✅ 已建 |
+| `TradingEngine.cs` | 注入 combiner + rebalancer | ⚠️ 传 SignalChannel.Writer + 调 ProcessSignals，但未注入 combiner |
+| 各策略 | 可选改用 EmitSignal | ❌ 0 个迁移（4 策略仍用 Market*） |
 
-## 6. 实现优先级
+## 6. 实现优先级（更新）
 
-| 迭代 | 内容 | 工时估算 |
-|------|------|----------|
-| **v1** | `TradeSignal` + `SimpleTargetCombiner` + `Rebalancer` + 双轨兼容 | 2-3 h |
-| **v2** | `WeightedTargetCombiner` + 回测验证 | 1 h |
-| **v3** | `RiskParityTargetCombiner` + 风险预算配置 | 2 h |
-| **v4** | 策略迁移（逐个改为 `EmitSignal`） | 按需 |
+| 迭代 | 内容 | 状态 |
+|------|------|------|
+| **v1** | `TradeSignal` + `SimpleTargetCombiner` + `Rebalancer` | ✅ 已完成（类型层） |
+| **v1.5** | 组合根接线 + 双轨兼容 + 回测验证信号管线 | ❌ 未做（管线当前是死代码） |
+| **v2** | `WeightedTargetCombiner` + 回测验证 | ❌ 未做 |
+| **v3** | `RiskParityTargetCombiner` + 风险预算配置 | ❌ 未做 |
+| **v4** | 策略迁移（逐个改为 `EmitSignal`） | ❌ 未做 |
 
 ## 7. 设计原则
 

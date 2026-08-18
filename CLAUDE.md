@@ -61,17 +61,29 @@ TradingStudio.Terminal              — 监控与管理界面
 
 > **实际实现映射（与代码对齐）**：`Risk` / `Execution` / `Backtest` 三层目前统一在 `TradingStudio.Engine` 内，未拆为独立项目；另有 `TradingStudio.Research`（统计/可视化）与 `TradingStudio`（.NET Host 主程序）。CTP 适配在 `TradingStudio/Live/`（CtpLiveFeed / CtpTraderBridge，基于 FtdcNet.CTP NuGet P/Invoke）；C++/CLI 旧版已删除，`TradingStudio.Ctp` 占位项目也已清理。
 
+### 信号管线（信号/仓位解耦，v1 骨架）
+
+```
+Strategy.EmitSignal(TradeSignal)  →  SignalChannel  →  ITargetCombiner.Combine  →  Rebalancer.GenerateOrders  →  ExecutionHandler.Submit
+        (只发信号, 不含手数)                (有界通道 128)     (冲突消解 + 仓位计算)          (Δ=目标-当前 → 增量订单)          (风控 + 下单)
+```
+
+- 设计文档：[18-trade-signal-portfolio-target-decoupling.md](docs/design/18-trade-signal-portfolio-target-decoupling.md)
+- **状态**：`TradeSignal`（record + Priority）/ `PortfolioTarget` / `ITargetCombiner` / `SimpleTargetCombiner` / `Rebalancer` / `EmitSignal` / `ProcessSignals` 均已实现；但 `ExecutionHandler.TargetCombiner/.Rebalancer` **尚未接线**（组合根未注入），信号管线当前是死代码。
+- **迁移**：现有策略仍走 `MarketBuy/MarketSell/ClosePosition` 直连 `Submit`，0 个策略迁移至 `EmitSignal`。迁移前需先接线 combiner + rebalancer。
+
 ### 当前实现 (2026-08-07)
 
 ```
 src/
-├── TradingStudio.Core/    核心模型 + 抽象 (Models, Strategy, Risk, Indicators, Position)
-│   └── Models/            Exchange, Future, FutureRegistry, TickRecord, Bar, ContractCodeGenerator
+├── TradingStudio.Core/    核心模型 + 抽象 (Models, Strategy, Risk, Indicators, Position, Engine)
+│   ├── Models/            Exchange, Future, FutureRegistry, TickRecord, Bar, ContractCodeGenerator
+│   └── Engine/            TradeSignal (record, 信号), PortfolioTarget (目标), SignalDirection
 ├── TradingStudio.Data/    数据聚合 + 存储
 │   ├── Aggregation/       BarAggregator, DailyBarAggregator, MultiBarAggregator
 │   ├── Import/            CsvTickImporter, TickImportService, JinshuyuanImportService
 │   └── Storage/           DuckDBStore, SqliteBarStore, TickCsvWriter, BuildPeriodsService
-├── TradingStudio.Engine/    回测/实盘引擎 (TradingEngine, ExecutionHandler, PortfolioManager, RiskController, StrategyContainer, StrategyParam\<T\>)
+├── TradingStudio.Engine/    回测/实盘引擎 (TradingEngine, ExecutionHandler, PortfolioManager, RiskController, StrategyContainer, StrategyParam\<T\>, ITargetCombiner, SimpleTargetCombiner, Rebalancer)
 ├── TradingStudio.Strategy/  策略库 (ChanLun 缠论: 分型/笔/中枢, DonchianTrend, SmaMacd, MtfChanLun)
 │   └── Engine/Examples/     更多策略 (MaCross, BollingerReversion, IntradayMomentum, CrossSectionalIntradayMom, CompositeFactor, MaCrossMultiTf)
 ├── TradingStudio.Mind/      LLM 模块 (Anthropic/OpenAI 客户端, BacktestAnalyst, ChanLunAnalyst)
