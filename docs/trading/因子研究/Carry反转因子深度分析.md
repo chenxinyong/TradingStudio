@@ -109,5 +109,5 @@ IC 量级中等，但**经济上极其可交易**（见下），与 VWAP_Dev 的
 ## 数据来源
 
 - `scripts/factor_research/carry_csmom_factor.py` — Carry + CSMom 因子计算、IC、分组回测
-- `scripts/tmp/carry_robustness.py` — 稳健性检验
-- `scripts/tmp/carry_validate.py` — 回补确认 + 前端敏感性 + 滚动 OOS
+- `scripts/tmp/carry_robustness.py` — 稳健性检验（脚本已清理）
+- `scripts/tmp/carry_validate.py` — 回补确认 + 前端敏感性 + 滚动 OOS（脚本已清理）
