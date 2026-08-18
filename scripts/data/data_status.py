@@ -2,9 +2,9 @@
 import duckdb, os, sqlite3
 
 BASE = os.path.dirname(__file__)
-HISTORY = os.path.join(BASE, "..", "data", "bars_history.duckdb")
-LIVE_DB  = os.path.join(BASE, "..", "src", "TradingStudio", "bin", "Debug", "bars_live.db")
-TICK_DIR = os.path.join(BASE, "..", "src", "TradingStudio", "TickData")
+HISTORY = os.path.join(BASE, "..", "..", "data", "bars_history.duckdb")
+LIVE_DB  = os.path.join(BASE, "..", "..", "src", "TradingStudio", "bin", "Debug", "bars_live.db")
+TICK_DIR = os.path.join(BASE, "..", "..", "src", "TradingStudio", "TickData")
 
 def hdr(title):
     print(f"\n{'='*60}")
@@ -45,7 +45,7 @@ else:
 # ── Live DB ──
 hdr("LIVE DB: bars_live (collect/live)")
 live_found = False
-for path in [LIVE_DB, os.path.join(BASE, "..", "src", "TradingStudio", "bars_live.db")]:
+for path in [LIVE_DB, os.path.join(BASE, "..", "..", "src", "TradingStudio", "bars_live.db")]:
     if os.path.exists(path):
         live_found = True
         sz = os.path.getsize(path) / 1e6

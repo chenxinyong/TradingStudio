@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-BASE = Path(__file__).parent.parent
+BASE = Path(__file__).parent.parent.parent
 PROJECT = BASE / "src" / "TradingStudio"
 DB = BASE / "data" / "bars_history.duckdb"
 CONFIG_DIR = BASE / "configs" / "bollinger_top30"

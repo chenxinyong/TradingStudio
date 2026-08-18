@@ -24,7 +24,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # ---- paths ----
-$RepoRoot = Split-Path -Parent $PSScriptRoot
+$RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $ToolBoxExe = Join-Path $RepoRoot "src\TradingStudio.ToolBox\bin\Release\net10.0\TradingStudio.ToolBox.exe"
 if (-not (Test-Path $ToolBoxExe)) {
     $ToolBoxExe = Join-Path $RepoRoot "src\TradingStudio.ToolBox\bin\Release\net10.0\win-x64\TradingStudio.ToolBox.exe"

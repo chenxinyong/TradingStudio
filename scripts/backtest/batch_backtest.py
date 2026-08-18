@@ -9,7 +9,7 @@ from datetime import datetime
 # Fix Windows GBK encoding
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PROJECT = REPO_ROOT / "src" / "TradingStudio" / "TradingStudio.csproj"
 HISTORY_DB = REPO_ROOT / "data" / "bars_history.duckdb"
 

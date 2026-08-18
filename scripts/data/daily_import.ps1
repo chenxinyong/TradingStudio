@@ -15,7 +15,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $scriptDir = $PSScriptRoot
-$repoRoot = Resolve-Path "$scriptDir\.."
+$repoRoot = Resolve-Path "$scriptDir\..\.."
 
 # 路径初始化
 $toolBoxDir = "$repoRoot\src\TradingStudio.ToolBox\bin\Debug\net10.0"

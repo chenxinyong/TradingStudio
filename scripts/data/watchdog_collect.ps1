@@ -1,7 +1,7 @@
 # Collect 看门狗 — 崩溃自动重启，7×24 守护
 param([int]$HeartbeatSec = 30)
 
-$proj = "$PSScriptRoot\..\src\TradingStudio"
+$proj = "$PSScriptRoot\..\..\src\TradingStudio"
 $count = 0
 
 while ($true) {

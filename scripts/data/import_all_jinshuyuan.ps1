@@ -76,11 +76,11 @@ $LogFile = Join-Path $PSScriptRoot "import_$(Get-Date -Format 'yyyyMMdd_HHmmss')
 
 # 查找 TradingStudio.ToolBox.exe
 $ExePaths = @(
-    (Join-Path $PSScriptRoot "..\src\TradingStudio.ToolBox\bin\Release\net10.0\TradingStudio.ToolBox.exe"),
-    (Join-Path $PSScriptRoot "..\src\TradingStudio.ToolBox\bin\x64\Release\net10.0\TradingStudio.ToolBox.exe"),
-    (Join-Path $PSScriptRoot "..\dist\ToolBox\TradingStudio.ToolBox.exe"),
-    (Join-Path $PSScriptRoot "..\src\TradingStudio\bin\x64\Release\net10.0\TradingStudio.exe"),
-    (Join-Path $PSScriptRoot "..\dist\Server\TradingStudio.exe")
+    (Join-Path $PSScriptRoot "..\..\src\TradingStudio.ToolBox\bin\Release\net10.0\TradingStudio.ToolBox.exe"),
+    (Join-Path $PSScriptRoot "..\..\src\TradingStudio.ToolBox\bin\x64\Release\net10.0\TradingStudio.ToolBox.exe"),
+    (Join-Path $PSScriptRoot "..\..\dist\ToolBox\TradingStudio.ToolBox.exe"),
+    (Join-Path $PSScriptRoot "..\..\src\TradingStudio\bin\x64\Release\net10.0\TradingStudio.exe"),
+    (Join-Path $PSScriptRoot "..\..\dist\Server\TradingStudio.exe")
 )
 $ToolBoxExe = $null
 foreach ($p in $ExePaths) {

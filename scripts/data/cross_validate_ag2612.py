@@ -30,7 +30,7 @@ VOL_THRESHOLD = 0.03  # 3% — 成交量差异可能较大（数据源不同）
 TIME_TOL_SEC = 60  # 时间对齐容差
 
 # 数据路径
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DB_PATH = REPO_ROOT / "src" / "TradingStudio" / "data" / "bars_live.duckdb"
 OUT_DIR = REPO_ROOT / "data" / "crosscheck"
 OURS_CSV = OUT_DIR / f"{INSTRUMENT}_5min_ours.csv"

@@ -158,7 +158,7 @@ TradingStudio/
 │   └── README.md             文档索引
 │
 ├── configs/                   策略配置 + 批量回测 + 参数扫描
-├── scripts/                   运维 + 研究脚本（daily 导入、specs 合约规格、factor_research 因子、chanlun 缠论）
+├── scripts/                   运维 + 研究脚本（data 导入·验证、backtest 批量回测、viz 可视化、research 品种研究、chanlun 缠论、daily 日志、specs 合约规格、factor_research 因子）
 ├── reports/                   品种研判可视化报告（HTML）
 ├── data/                      本地数据（bars_live.duckdb、Tick CSV；历史库见 C:\Works\Datas\）
 ├── release/                   发布输出（分 collect/live/backtest 三模式）

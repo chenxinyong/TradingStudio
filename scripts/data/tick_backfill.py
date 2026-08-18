@@ -7,9 +7,9 @@ import subprocess, os, sys, time, glob, re, json, shutil
 from pathlib import Path
 
 # ─── 配置 ───
-UNRAR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "tools", "UnRAR.exe"))
+UNRAR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "tools", "UnRAR.exe"))
 RAR_BASE = r"C:\Works\Datas\Jinshuyuan"
-OUT_BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "tick"))
+OUT_BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "tick"))
 RAR_PASSWORD = "www.jinshuyuan.net"
 DRY_RUN = "--dry-run" in sys.argv
 
@@ -34,7 +34,7 @@ def load_target_contracts():
        返回 {variety_code: set(contract_ids)}"""
     import duckdb
     target = {}
-    cont_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "continuous"))
+    cont_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "continuous"))
     for f in sorted(os.listdir(cont_dir)):
         if not f.endswith('.duckdb'): continue
         v = f.replace('_continuous.duckdb', '')
@@ -199,7 +199,7 @@ def main():
     print()
 
     # 进度文件
-    progress_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "tick_backfill_progress.txt"))
+    progress_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "tick_backfill_progress.txt"))
     os.makedirs(os.path.dirname(progress_file), exist_ok=True)
     completed = set()
     if os.path.exists(progress_file):

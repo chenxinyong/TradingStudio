@@ -9,13 +9,13 @@
 #>
 
 param(
-    [string]$DbPath = "$PSScriptRoot\..\data\bars_history.db",
+    [string]$DbPath = "$PSScriptRoot\..\..\data\bars_history.db",
     [string]$ApiKey = "157145f8520657fefcc45fe897153118",
     [string]$DataDir = "$env:TEMP\jinshuyuan_daily"
 )
 
 $ErrorActionPreference = "Stop"
-$ToolBox = "$PSScriptRoot\..\src\TradingStudio.ToolBox\bin\Release\net10.0\TradingStudio.ToolBox.exe"
+$ToolBox = "$PSScriptRoot\..\..\src\TradingStudio.ToolBox\bin\Release\net10.0\TradingStudio.ToolBox.exe"
 
 Write-Host "=== Jinshuyuan Daily Update ===" -ForegroundColor Cyan
 Write-Host "  Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"

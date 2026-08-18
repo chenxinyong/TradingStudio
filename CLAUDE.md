@@ -103,7 +103,7 @@ src/
 │   ├── Options/             CollectOptions
 │   ├── appsettings.json     Serilog + CTP + DuckDB 默认配置
 │   └── symbols.json         品种数据
-├── scripts/                 daily_import.ps1, data_status.py, gen_symbols_json.py
+├── scripts/                 data/ 导入·验证, backtest/ 批量回测, viz/ 可视化, research/ 品种研究, chanlun/ 缠论, daily/ 日志, specs/ 合约规格, factor_research/ 因子
 └── test/
     ├── TradingStudio.Core.Tests/   88 tests — TickRecord, Bar, CsvTickRecord, 技术指标数学, 手续费, 保证金动态调整
     ├── TradingStudio.Data.Tests/   28 tests — BarAggregator, MultiBarAggregator, CsvTickImporter, K线一致性, 垃圾bar过滤
@@ -138,7 +138,7 @@ PeriodMaintainer (每 5min / 收盘):
 ### 日终补齐
 
 ```powershell
-.\scripts\daily_import.ps1 -TickDataDir .\src\TradingStudio\data\TickData
+.\scripts\data\daily_import.ps1 -TickDataDir .\src\TradingStudio\data\TickData
   → 金数源 RAR 下载 + 导入 → append 历史库 → build-periods 多周期 → verify 验证
 ```
 

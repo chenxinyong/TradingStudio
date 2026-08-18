@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot\..
+Set-Location $PSScriptRoot\..\..
 
 Write-Host "═══════════════════════════════════" -ForegroundColor Cyan
 Write-Host "  TradingStudio — 回测 + AI 分析" -ForegroundColor Cyan

@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Continue"
-$repoRoot = Resolve-Path "$PSScriptRoot\.."
+$repoRoot = Resolve-Path "$PSScriptRoot\..\.."
 $toolBoxDir = "$repoRoot\src\TradingStudio.ToolBox\bin\Debug\net10.0"
 $dailyDir = "C:\Works\Datas\Jinshuyuan\Daily"
 $historyDb = "$repoRoot\data\bars_history.duckdb"

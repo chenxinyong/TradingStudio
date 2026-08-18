@@ -7,7 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot\..
+Set-Location $PSScriptRoot\..\..
 
 $reports = Get-ChildItem -Path configs -Recurse -Filter "*.report.json" |
     Where-Object { $_.Name -notmatch "\.analysis\." } |
