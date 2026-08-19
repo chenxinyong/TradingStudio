@@ -149,15 +149,29 @@ public class CtpTraderBridge : IDisposable
                 // 确认结算单成功 → 此时才发持仓/账户查询（正确时序，避免查询被 CTP 拒绝）
                 if (e.RspInfo == null || e.RspInfo.ErrorID == 0)
                 {
-                    _log.Information("CTP SettlementInfo confirm OK → QueryPositions + QueryAccount");
+                    _log.Information("CTP SettlementInfo confirm OK → QueryPositions");
                     QueryPositions();
-                    QueryAccount();
+                    // 注意：QueryAccount 不在此处发。CTP 一次只能有一个未处理查询，
+                    // 需等持仓查询全部返回（OnRspQryInvestorPosition IsLast=true）后串行发出，
+                    // 否则 ReqQryTradingAccount 返回 -2（未处理请求过多，8/19 实测）。
                 }
                 else
                     _log.Error("CTP SettlementInfo confirm failed [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
             }
-            else if (e.EventType == CTP.EnumOnRspType.OnRspQryInvestorPosition && e.Param != IntPtr.Zero)
+            else if (e.EventType == CTP.EnumOnRspType.OnRspQryInvestorPosition)
             {
+                // 持仓查询结束（IsLast=true，CTP 对空结果也回一条终止响应）→ 串行发账户查询
+                // （CTP 一次只能有一个未处理查询，否则 ReqQryTradingAccount 返回 -2）
+                if (e.IsLast)
+                {
+                    _log.Information("CTP QueryPositions done (IsLast) → QueryAccount");
+                    QueryAccount();
+                }
+
+                // 终止响应的 Param 可能为空，仅当有数据时才解析
+                if (e.Param == IntPtr.Zero)
+                    return;
+
                 try
                 {
                     var pf = CTP.Conv.P2S<CTP.ThostFtdcInvestorPositionField>(e.Param);
