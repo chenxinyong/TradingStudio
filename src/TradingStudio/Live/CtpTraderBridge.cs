@@ -134,13 +134,27 @@ public class CtpTraderBridge : IDisposable
                     _reconnectAttempts = 0;  // 复位重连计数
                     _pendingReconnect = false;
                     _log.Information("CTP Trader login OK → ConfirmSettlement");
-                    _api.ReqSettlementInfoConfirm(new CTP.ThostFtdcSettlementInfoConfirmField
+                    // CTP 规范：登录后必须先 ReqSettlementInfoConfirm，等 OnRspSettlementInfoConfirm 确认后
+                    // 才能发 ReqQry*（查询持仓/账户）。此前在 login 回调里立即查询，账户查询响应常被丢弃，
+                    // 导致 Equity 恢复失效（8/18 实测 OnRspQryTradingAccount 从不触发）。
+                    var cfmRet = _api.ReqSettlementInfoConfirm(new CTP.ThostFtdcSettlementInfoConfirmField
                     { BrokerID = _opts.BrokerId, InvestorID = _opts.UserId }, ++_requestId);
-                    // 登录后查询所有持仓 + 资金账户（启动 + 重连均触发）
+                    if (cfmRet != 0)
+                        _log.Error("CTP ReqSettlementInfoConfirm failed, ret={Ret}", cfmRet);
+                }
+                else _log.Error("CTP Trader login failed [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
+            }
+            else if (e.EventType == CTP.EnumOnRspType.OnRspSettlementInfoConfirm)
+            {
+                // 确认结算单成功 → 此时才发持仓/账户查询（正确时序，避免查询被 CTP 拒绝）
+                if (e.RspInfo == null || e.RspInfo.ErrorID == 0)
+                {
+                    _log.Information("CTP SettlementInfo confirm OK → QueryPositions + QueryAccount");
                     QueryPositions();
                     QueryAccount();
                 }
-                else _log.Error("CTP Trader login failed [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
+                else
+                    _log.Error("CTP SettlementInfo confirm failed [{Code}] {Msg}", e.RspInfo.ErrorID, e.RspInfo.ErrorMsg);
             }
             else if (e.EventType == CTP.EnumOnRspType.OnRspQryInvestorPosition && e.Param != IntPtr.Zero)
             {
@@ -154,15 +168,16 @@ public class CtpTraderBridge : IDisposable
                     if (datePosition != 0 && !string.IsNullOrEmpty(pf.InstrumentID))
                     {
                         // 均价优先级: PositionCost/datePosition → OpenAmount/datePosition → OpenCost → SettlementPrice → 0
-                        // SHFE/INE 的 PositionCost = Σ(开仓价×手数×交易单位) 已含合约乘数，
-                        // 需除以 TradingUnit 得到与行情 Bar 同量纲的单位价格。
+                        // CTP 的 PositionCost/OpenAmount/OpenCost 对所有交易所都含合约乘数（= 成交价×手数×交易单位），
+                        // 需除以 TradingUnit 得到与行情 Bar 同量纲的单位价格。SettlementPrice 已是单位价格，不需除。
+                        // （8/18 实测 CZCE v2609 PosCost=45930=4593×2×5：若只对 SHFE/INE 除乘数会得出 22965 的错误均价）
                         double avgPrice = 0;
                         int absPos = Math.Abs(datePosition);
                         double unitDiv = 1;
                         if (_registry != null)
                         {
                             var fut = _registry.Resolve(pf.InstrumentID);
-                            if (fut != null && RequiresExplicitClose(fut.Exchange))
+                            if (fut != null)
                                 unitDiv = (double)fut.TradingUnit;
                         }
                         if (absPos != 0 && pf.PositionCost > 0)
@@ -424,12 +439,14 @@ public class CtpTraderBridge : IDisposable
         try
         {
             _log.Information("CTP QueryPositions: requesting all positions...");
-            api.ReqQryInvestorPosition(new CTP.ThostFtdcQryInvestorPositionField
+            var ret = api.ReqQryInvestorPosition(new CTP.ThostFtdcQryInvestorPositionField
             {
                 BrokerID = _opts.BrokerId,
                 InvestorID = _opts.UserId,
                 // InstrumentID 留空 = 查询所有品种
             }, ++_requestId);
+            if (ret != 0)
+                _log.Error("CTP ReqQryInvestorPosition failed, ret={Ret}", ret);
         }
         catch (Exception ex)
         {
@@ -446,11 +463,13 @@ public class CtpTraderBridge : IDisposable
         try
         {
             _log.Information("CTP QueryAccount: requesting trading account...");
-            api.ReqQryTradingAccount(new CTP.ThostFtdcQryTradingAccountField
+            var ret = api.ReqQryTradingAccount(new CTP.ThostFtdcQryTradingAccountField
             {
                 BrokerID = _opts.BrokerId,
                 InvestorID = _opts.UserId,
             }, ++_requestId);
+            if (ret != 0)
+                _log.Error("CTP ReqQryTradingAccount failed, ret={Ret}", ret);
         }
         catch (Exception ex)
         {

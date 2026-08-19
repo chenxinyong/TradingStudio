@@ -70,6 +70,15 @@ public class TradingEngine
         var globalTrades = new List<Trade>();
         var tradesLock = new object();
 
+        // Live 模式：平仓成交立即落盘 trades 表（回测模式在 RunAsync 末尾批量写）
+        void RecordTrade(Trade? trade)
+        {
+            if (trade == null) return;
+            lock (tradesLock) globalTrades.Add(trade);
+            if (_options.IsLive && _eventStore != null)
+                _eventStore.WriteTrades(new[] { trade });
+        }
+
         var barHistories = new Dictionary<string, List<Bar>>();                       // key=StrategyId
         var strategyInstruments = new Dictionary<string, HashSet<string>>();          // 策略→品种映射
 
@@ -184,7 +193,7 @@ public class TradingEngine
                         if (isFill)
                         {
                             trade = _portfolio.ProcessFill(fill, _registry);
-                            lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
+                            RecordTrade(trade);
                             _dailyTracker?.RecordPnl((double)(trade?.PnL ?? 0), (double)_portfolio.Equity);
                             _feedback.RecordFill(fill, fill.StrategyId);
                         }
@@ -216,7 +225,7 @@ public class TradingEngine
                     foreach (var fill in tickFills)
                     {
                         var trade = _portfolio.ProcessFill(fill, _registry);
-                        lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
+                        RecordTrade(trade);
                         _feedback.RecordFill(fill, fill.StrategyId);
                         if (trade != null) { _feedback.RecordTrade(trade, fill.StrategyId); _dailyTracker?.RecordPnl((double)trade.PnL, (double)_portfolio.Equity); }
                         _strategies.DispatchOrderEvent(fill);
@@ -232,7 +241,7 @@ public class TradingEngine
                         foreach (var fill in newFills)
                         {
                             var trade = _portfolio.ProcessFill(fill, _registry);
-                            lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
+                            RecordTrade(trade);
                             _feedback.RecordFill(fill, fill.StrategyId);
                             if (trade != null) _feedback.RecordTrade(trade, fill.StrategyId);
                             _strategies.DispatchOrderEvent(fill);
@@ -261,7 +270,7 @@ public class TradingEngine
                         foreach (var fill in _portfolio.CheckMarginCall(bar))
                         {
                             var liqTrade = _portfolio.ProcessFill(fill, _registry);
-                            lock (tradesLock) { if (liqTrade != null) globalTrades.Add(liqTrade); }
+                            RecordTrade(liqTrade);
                             _feedback.RecordFill(fill, fill.StrategyId);
                             if (liqTrade != null) _feedback.RecordTrade(liqTrade, fill.StrategyId);
                             _strategies.DispatchOrderEvent(fill);
@@ -282,7 +291,7 @@ public class TradingEngine
                         foreach (var fill in barFills)
                         {
                             var trade = _portfolio.ProcessFill(fill, _registry);
-                            lock (tradesLock) { if (trade != null) globalTrades.Add(trade); }
+                            RecordTrade(trade);
                             _feedback.RecordFill(fill, fill.StrategyId);
                             if (trade != null) _feedback.RecordTrade(trade, fill.StrategyId);
                             _strategies.DispatchOrderEvent(fill);
