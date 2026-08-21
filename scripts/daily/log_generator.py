@@ -4,7 +4,7 @@
 用法:  python log_generator.py            → 生成今日股票+期货日志
        python log_generator.py 2026-07-24 → 生成指定日期日志
 
-输出: docs/trading/Notes/股票/YYYY-MM-DD.md + docs/trading/Notes/期货/YYYY-MM-DD.md
+输出: docs/trading/Notes/股票/YYYY-MM/YYYY-MM-DD.md + docs/trading/Notes/期货/YYYY-MM/YYYY-MM-DD.md（按月归档）
      自动填充指数/板块/异动数据，分析部分留空手动填写
 """
 
@@ -498,14 +498,18 @@ def main():
 
     # Generate stock log
     stock_content = generate_stock_log(date_str, data)
-    stock_path = os.path.join(STOCK_DIR, f"{date_str}.md")
+    stock_dir = os.path.join(STOCK_DIR, date_str[:7])   # 按月归档 YYYY-MM
+    os.makedirs(stock_dir, exist_ok=True)
+    stock_path = os.path.join(stock_dir, f"{date_str}.md")
     with open(stock_path, "w", encoding="utf-8") as f:
         f.write(stock_content)
     print(f"  ✅ 股票日志: {stock_path}", file=sys.stderr)
 
     # Generate futures log
     futures_content = generate_futures_log(date_str)
-    futures_path = os.path.join(FUT_DIR, f"{date_str}.md")
+    fut_dir = os.path.join(FUT_DIR, date_str[:7])
+    os.makedirs(fut_dir, exist_ok=True)
+    futures_path = os.path.join(fut_dir, f"{date_str}.md")
     # Don't overwrite existing futures log (user may have filled it)
     if not os.path.exists(futures_path):
         with open(futures_path, "w", encoding="utf-8") as f:

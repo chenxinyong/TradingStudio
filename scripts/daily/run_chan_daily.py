@@ -9,7 +9,7 @@
   - 指数：国证A股 / 创业板 / 科创50（仅周线，min_gap=4）
   - 合约：持仓跟踪里的品种（周线+日线，min_gap=2）
 
-输出：分别追加到 docs/trading/Notes/股票/<date>.md 与 docs/trading/Notes/期货/<date>.md，
+输出：分别追加到 docs/trading/Notes/股票/YYYY-MM/<date>.md 与 docs/trading/Notes/期货/YYYY-MM/<date>.md，
       插入位置在「链接」段之前，若已含缠论段则跳过（幂等）。
 """
 import subprocess, os, sys, re
@@ -60,7 +60,7 @@ def run_csharp(mode, code, name):
 def insert_section(log_path, header, banner, blocks):
     """把缠论段插入日志「链接」段之前；已存在则跳过；返回 True 表示已写入。"""
     if not os.path.exists(log_path):
-        print(f"  日志 {log_path} 不存在，请先运行 full_generator.py")
+        print(f"  日志 {log_path} 不存在，请先运行 log_generator.py")
         return False
 
     with open(log_path, "r", encoding="utf-8") as f:
@@ -94,7 +94,7 @@ def insert_section(log_path, header, banner, blocks):
 
 def main():
     # 1. 指数 → 股票日志
-    stock_log = os.path.join(NOTES, "股票", f"{RUN_DATE}.md")
+    stock_log = os.path.join(NOTES, "股票", RUN_DATE[:7], f"{RUN_DATE}.md")
     idx_blocks = []
     print(f"[指数] 缠论分析（周线）")
     for code, name in INDICES:
@@ -113,7 +113,7 @@ def main():
             print(f"  → 已追加到 股票/{RUN_DATE}.md")
 
     # 2. 持仓合约 → 期货日志
-    fut_log = os.path.join(NOTES, "期货", f"{RUN_DATE}.md")
+    fut_log = os.path.join(NOTES, "期货", RUN_DATE[:7], f"{RUN_DATE}.md")
     fut_blocks = []
     print(f"[合约] 缠论分析（周线+日线）")
     for code, name in FUTURES:
