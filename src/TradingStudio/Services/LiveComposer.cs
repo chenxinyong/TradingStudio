@@ -114,6 +114,9 @@ public static class LiveComposer
             // 正确做法：累加两条记录的 NetPosition 得到总净持仓，然后一次性恢复。
             var ctpPosBuffer = new Dictionary<string, CtpPositionInfo>(StringComparer.OrdinalIgnoreCase);
             var ctpPosFlushCts = new CancellationTokenSource();
+            // 缓存最近一次 CTP 账户快照，供持仓恢复后二次对账（见 FlushCtpPositions）。
+            // 修复：RestorePosition 恢复持仓时 UnrealizedPnl=0，浮亏蒸发 → Session 起始权益虚高 510。
+            (decimal Balance, decimal PositionProfit, decimal PreBalance)? lastAccountSnapshot = null;
             bridge.OnPositionReceived += info =>
             {
                 try
@@ -155,7 +158,7 @@ public static class LiveComposer
                         try
                         {
                             await Task.Delay(2000, flushToken);
-                            FlushCtpPositions(ctpPosBuffer, portfolio, instrumentStrategyMap);
+                            FlushCtpPositions(ctpPosBuffer, portfolio, instrumentStrategyMap, lastAccountSnapshot);
                         }
                         catch (OperationCanceledException) { }
                     }, flushToken);
@@ -172,7 +175,9 @@ public static class LiveComposer
             {
                 try
                 {
-                    portfolio.ReconcileEquity((decimal)acc.Balance, (decimal)acc.PositionProfit, (decimal)acc.PreBalance);
+                    var accSnap = (Balance: (decimal)acc.Balance, PositionProfit: (decimal)acc.PositionProfit, PreBalance: (decimal)acc.PreBalance);
+                    lastAccountSnapshot = accSnap;
+                    portfolio.ReconcileEquity(accSnap.Balance, accSnap.PositionProfit, accSnap.PreBalance);
                     Console.Error.WriteLine($"[LiveComposer] CTP账户权益已恢复: Balance={acc.Balance:F2} PosProfit={acc.PositionProfit:F2} PreBalance={acc.PreBalance:F2} → Equity={portfolio.Equity:F2}");
                 }
                 catch (Exception ex)
@@ -306,7 +311,8 @@ public static class LiveComposer
     }
 
     private static void FlushCtpPositions(Dictionary<string, CtpPositionInfo> buffer,
-        PortfolioManager portfolio, Dictionary<string, string> instrumentStrategyMap)
+        PortfolioManager portfolio, Dictionary<string, string> instrumentStrategyMap,
+        (decimal Balance, decimal PositionProfit, decimal PreBalance)? lastAccountSnapshot)
     {
         foreach (var (instId, info) in buffer)
         {
@@ -330,6 +336,16 @@ public static class LiveComposer
             }
         }
         buffer.Clear();
+
+        // 二次对账：持仓已恢复（_marginUsed 正确），用账户快照重算现金基与权益。
+        // 修复「RestorePosition 恢复持仓时 UnrealizedPnl=0 → 浮亏蒸发 → Session 起始权益虚高」：
+        // 首次 ReconcileEquity（账户回调先于持仓恢复）用 _marginUsed=0 算现金基，浮亏被多加回；
+        // 此处用正确的 _marginUsed 重算，使 _equity=Balance 且 _cash=Balance−Margin 精确吻合 CTP。
+        if (lastAccountSnapshot is { } acc)
+        {
+            portfolio.ReconcileEquity(acc.Balance, acc.PositionProfit, acc.PreBalance);
+            Console.Error.WriteLine($"[LiveComposer] 持仓恢复后二次对账: Balance={acc.Balance:F2} → Equity={portfolio.Equity:F2} Cash={portfolio.Cash:F2} Margin={portfolio.MarginUsed:F2}");
+        }
     }
 
     private static TradingStudio.Core.Strategy.StrategyConfig? TryLoadConfig(string path, FutureRegistry registry)
