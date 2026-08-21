@@ -507,6 +507,27 @@ public class CtpTraderBridge : IDisposable
     /// <summary>已发送首个 Submitted 事件的 OrderRef 集合（防同 Ref 多状态重复写入 DuckDB）</summary>
     private readonly HashSet<long> _submittedEmitted = new();
 
+    /// <summary>
+    /// 会话开始时调用：确保交易通道就绪。若未就绪，打断当前退避等待、复位退避并立即重连。
+    /// 解决「进程启动时盘前连接被前置机踢下线，重连退避已涨到 300s，导致开盘后迟迟不就绪、订单被拒」的问题。
+    /// </summary>
+    public void EnsureConnected()
+    {
+        if (_disposed || IsReady) return;
+
+        _log.Warning("CTP Trader not ready — forcing reconnect at session start");
+        _reconnectDelay = 0;      // 退避复位，下次从 5s 起步
+        _reconnectAttempts = 0;
+
+        // 打断当前退避等待：取消旧 token 会让正在 Delay 的重连抛 OperationCanceledException，
+        // 其 finally 因 !IsReady 自动再次 ScheduleReconnect（此时退避已复位为 5s）。
+        _reconnectCts?.Cancel();
+        _reconnectCts = new CancellationTokenSource();
+
+        if (!_reconnecting)
+            ScheduleReconnect();
+    }
+
     private async void ScheduleReconnect()
     {
         if (_reconnecting)
@@ -523,7 +544,7 @@ public class CtpTraderBridge : IDisposable
         _api = null;
 
         _reconnectDelay = Math.Min(300, _reconnectDelay == 0 ? 5 : _reconnectDelay * 2);
-        _log.Information("CTP Trader reconnecting in {Delay}s (attempt #{Attempt})...", _reconnectDelay, _reconnectAttempts);
+        _log.Warning("CTP Trader reconnecting in {Delay}s (attempt #{Attempt})...", _reconnectDelay, _reconnectAttempts);
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(_reconnectDelay), _reconnectCts?.Token ?? CancellationToken.None);

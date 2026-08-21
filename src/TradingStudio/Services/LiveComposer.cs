@@ -294,7 +294,13 @@ public static class LiveComposer
             sp.GetService<Microsoft.Extensions.Logging.ILogger<OrderEventPump>>()));
         services.AddHostedService(sp => sp.GetRequiredService<OrderEventPump>());
 
-        services.AddHostedService<EngineHost>();
+        services.AddHostedService(sp => new EngineHost(
+            sp.GetRequiredService<TradingEngine>(),
+            sp.GetRequiredService<SessionScheduler>(),
+            sp.GetRequiredService<HealthMonitor>(),
+            sp.GetRequiredService<PortfolioManager>(),
+            sp.GetRequiredService<Serilog.ILogger>(),
+            sp.GetService<CtpTraderBridge>()));
         services.AddHostedService<LiveDataCollector>();
         services.AddHostedService<PeriodMaintainer>();
     }

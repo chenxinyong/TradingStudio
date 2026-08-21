@@ -1,4 +1,5 @@
 using TradingStudio.Engine;
+using TradingStudio.Live;
 using Serilog;
 
 namespace TradingStudio.Services;
@@ -13,16 +14,19 @@ public class EngineHost : BackgroundService
     private readonly HealthMonitor _health;
     private readonly PortfolioManager _portfolio;
     private readonly Serilog.ILogger _log;
+    private readonly CtpTraderBridge? _trader;
     private int _crashCount;
 
     public EngineHost(TradingEngine engine, SessionScheduler session,
-                      HealthMonitor health, PortfolioManager portfolio, Serilog.ILogger log)
+                      HealthMonitor health, PortfolioManager portfolio, Serilog.ILogger log,
+                      CtpTraderBridge? trader = null)
     {
         _engine = engine;
         _session = session;
         _health = health;
         _portfolio = portfolio;
         _log = log.ForContext<EngineHost>();
+        _trader = trader;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -57,6 +61,10 @@ public class EngineHost : BackgroundService
             _crashCount = 0;
             _log.Information("Session [{Session}] starting, Equity={Equity:C}", sessionName, sessionStartEquity);
 
+            // 会话开始：确保交易通道就绪。若盘前连接被前置机踢下线、重连退避已涨到 300s，
+            // 这里打断退避并立即重连，避免开盘后订单因「CTP not ready」被拒。
+            _trader?.EnsureConnected();
+
             using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var sessionEnd = _session.GetSessionEndTime();
             if (sessionEnd.HasValue)
@@ -74,7 +82,20 @@ public class EngineHost : BackgroundService
             {
                 _health.Update("Running", 0, 0, 0, 0, sessionName, DateTime.Now, null, null,
                     equity: sessionStartEquity);
-                await _engine.RunAsync(sessionCts.Token);
+
+                // 会话运行期间挂「交易通道就绪看门狗」：若 CTP 交易桥接长时间未就绪，
+                // 打 Error 告警，避免「订单被静默拒绝」持续几小时才被发现。
+                using var watchdogCts = CancellationTokenSource.CreateLinkedTokenSource(sessionCts.Token);
+                var watchdog = WatchTraderReadinessAsync(watchdogCts.Token);
+                try
+                {
+                    await _engine.RunAsync(sessionCts.Token);
+                }
+                finally
+                {
+                    watchdogCts.Cancel();
+                    try { await watchdog; } catch { /* 看门狗自身异常不影响主循环 */ }
+                }
 
                 // ── 会话正常结束 → 打印摘要 ──
                 var endEquity = GetPortfolioEquity();
@@ -123,6 +144,43 @@ public class EngineHost : BackgroundService
         _log.Information("  PnL: {PnL:C} ({Pct:P2})  Trades: {Trades}",
             pnl, startEquity > 0 ? pnl / startEquity : 0, GetTradeCount());
         _log.Information("══════════════════════════════════════");
+    }
+
+    /// <summary>
+    /// 交易通道就绪看门狗：会话运行期间每 30s 检查一次 CTP 交易桥接的 IsReady。
+    /// 若连续未就绪 ≥ 5 分钟，打 Error 告警并更新 health 状态，之后每 5 分钟重报一次。
+    /// </summary>
+    private async Task WatchTraderReadinessAsync(CancellationToken ct)
+    {
+        var trader = _trader;
+        if (trader == null) return;
+
+        DateTimeOffset? downSince = null;
+        DateTimeOffset? lastAlert = null;
+
+        while (!ct.IsCancellationRequested)
+        {
+            try { await Task.Delay(TimeSpan.FromSeconds(30), ct); }
+            catch (OperationCanceledException) { break; }
+
+            if (trader.IsReady)
+            {
+                if (downSince != null)
+                    _log.Information("CTP 交易通道已恢复就绪（此前未就绪 {Min:F1} 分钟）",
+                        (DateTimeOffset.UtcNow - downSince.Value).TotalMinutes);
+                downSince = null;
+                continue;
+            }
+
+            downSince ??= DateTimeOffset.UtcNow;
+            var down = DateTimeOffset.UtcNow - downSince.Value;
+            if (down < TimeSpan.FromMinutes(5)) continue;
+            if (lastAlert != null && DateTimeOffset.UtcNow - lastAlert.Value < TimeSpan.FromMinutes(5)) continue;
+
+            _log.Error("⚠️ CTP 交易通道未就绪已持续 {Min:F0} 分钟 — 会话中所有新订单将被拒绝，请检查交易前置机连接", down.TotalMinutes);
+            _health.Update("TraderDown", 0, 0, 0, 0, _session.SessionName(), null, null, DateTime.Now);
+            lastAlert = DateTimeOffset.UtcNow;
+        }
     }
 
     private decimal GetPortfolioEquity() => _portfolio.Equity;
