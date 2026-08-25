@@ -564,8 +564,13 @@ public class ExecutionHandler : IExecutionHandler
         // 手续费：优先固定元/手，否则合约价值百分比（默认万1）
         var fee = future.OpenFee(fillPrice, fillQty);
 
-        // 滑点 = |成交价 - Open| × 手数（市价单跨价差，限价/止损单执行偏差）
-        var slipPerLot = Math.Abs(fillPrice - (decimal)bar.OpenDouble);
+        // 滑点 = 不利成交偏差 × 手数
+        // 市价单: 恒不利（买在 Open 上、卖在 Open 下），滑点 = |成交价 - Open|
+        // 止损单: 恒不利（max/min 取更不利价），滑点 = |成交价 - Open|
+        // 限价单: 按限价成交，无穿越价差；限价优于 Open 属「价格改善」，不计成本
+        var slipPerLot = order.Type == OrderType.Limit
+            ? 0m
+            : Math.Abs(fillPrice - (decimal)bar.OpenDouble);
         var slippage = slipPerLot * fillQty * future.TradingUnit;
 
         order.FilledQuantity += fillQty;
