@@ -106,6 +106,15 @@ internal class EngineStrategyContext : StrategyContext
         => ClosePosition(instrumentId, "");
 
     public override OrderTicket ClosePosition(string instrumentId, string exitReason)
+        => ClosePositionCore(instrumentId, OrderType.Market, null, exitReason);
+
+    /// <summary>限价平仓：以 limitPrice 挂限价单平掉现有仓位（IsCloseOrder=true，绕过反向开仓拦截）。</summary>
+    public override OrderTicket ClosePositionLimit(string instrumentId, decimal limitPrice, string exitReason = "")
+        => ClosePositionCore(instrumentId, OrderType.Limit, limitPrice, exitReason);
+
+    public override bool CancelOrder(long orderId) => _execution.Cancel(orderId);
+
+    private OrderTicket ClosePositionCore(string instrumentId, OrderType type, decimal? limitPrice, string exitReason)
     {
         if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
         var pos = _portfolio.GetPosition(instrumentId);
@@ -120,15 +129,15 @@ internal class EngineStrategyContext : StrategyContext
         var ticket = _execution.Submit(new Order
         {
             InstrumentId = instrumentId, Direction = direction,
-            Type = OrderType.Market, Quantity = quantity,
+            Type = type, Quantity = quantity, LimitPrice = limitPrice,
             Tag = pos.Quantity > 0 ? "平多" : "平空",
             IsCloseOrder = true,
             PositionCreatedDate = DateOnly.FromDateTime(pos.CreatedTime.DateTime),
             IsCloseToday = isCloseToday,
             ExitReason = exitReason,
         }, StrategyId, _portfolio);
-        _log.LogInformation("[{Strategy}] ClosePosition {Inst} x{Qty} {Reason} → {Status}",
-            StrategyId, instrumentId, quantity, exitReason, ticket.Status);
+        _log.LogInformation("[{Strategy}] ClosePosition {Inst} x{Qty} {Type} {Reason} → {Status}",
+            StrategyId, instrumentId, quantity, type, exitReason, ticket.Status);
         return ticket;
     }
 

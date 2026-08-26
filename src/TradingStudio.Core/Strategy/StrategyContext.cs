@@ -44,6 +44,8 @@ public class StrategyContext
         ClosePosition(instrumentId, "");
     public virtual OrderTicket ClosePosition(string instrumentId, string exitReason) =>
         throw new NotImplementedException();
+    public virtual OrderTicket ClosePositionLimit(string instrumentId, decimal limitPrice, string exitReason = "") =>
+        throw new NotImplementedException();
     public virtual OrderTicket LimitBuy(string instrumentId, int quantity, decimal limitPrice) =>
         throw new NotImplementedException();
     public virtual OrderTicket LimitSell(string instrumentId, int quantity, decimal limitPrice) =>

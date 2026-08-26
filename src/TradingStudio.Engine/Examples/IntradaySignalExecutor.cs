@@ -44,6 +44,7 @@ public class IntradaySignalExecutor : IStrategy
     private readonly Dictionary<string, AtrIndicator> _atrs = new();
     private readonly Dictionary<string, double> _lastPrices = new();
     private readonly Dictionary<string, long> _dailyVolumes = new();
+    private readonly Dictionary<string, long> _pendingCloseOrders = new(); // instrumentId → 限价平仓 orderId
     private DateOnly _currentDay;
 
     private struct SignalInfo
@@ -84,6 +85,7 @@ public class IntradaySignalExecutor : IStrategy
         {
             _currentDay = day;
             _dailyVolumes.Clear();
+            _pendingCloseOrders.Clear();   // 清理昨日残留的限价平仓单记录
         }
         _dailyVolumes.TryGetValue(inst, out var prevVol);
         _dailyVolumes[inst] = prevVol + bar.Volume;
@@ -97,10 +99,16 @@ public class IntradaySignalExecutor : IStrategy
             EnterPositions(day);
         }
 
-        // ── 14:45: 市价平仓 ──
+        // ── 14:30: 限价平仓（避免市价滑点，未成交由 14:45 兜底）──
+        if (time.Hour == 14 && time.Minute == 30)
+        {
+            CloseAllPositionsLimit();
+        }
+
+        // ── 14:45: 市价兜底平仓（限价未成交的仓位）──
         if (time.Hour == 14 && time.Minute == 45)
         {
-            CloseAllPositions();
+            CloseAllPositionsMarket();
         }
     }
 
@@ -162,19 +170,44 @@ public class IntradaySignalExecutor : IStrategy
             _ctx.Log($"{day:yyyy-MM-dd}: {count}开仓, 跳过{skippedVol}低量+{skippedLiq}仓位不足");
     }
 
-    private void CloseAllPositions()
+    private void CloseAllPositionsLimit()
     {
         int count = 0;
         foreach (var pos in _ctx.Positions)
         {
-            if (pos.Quantity != 0)
+            if (pos.Quantity == 0) continue;
+
+            // 限价平仓价 = 当前 bar 收盘价（_lastPrices 在 OnBar 顶部已更新为 14:30 bar 收盘）
+            _lastPrices.TryGetValue(pos.InstrumentId, out var lastPrice);
+            if (lastPrice <= 0) continue;   // 无参考价 → 留给 14:45 市价兜底
+
+            var ticket = _ctx.ClosePositionLimit(pos.InstrumentId, (decimal)lastPrice, "EOD");
+            if (ticket.Status != OrderStatus.Rejected)
             {
-                _ctx.ClosePosition(pos.InstrumentId, "EOD");
+                _pendingCloseOrders[pos.InstrumentId] = ticket.OrderId;
                 count++;
             }
         }
         if (count > 0)
-            _ctx.Log($"平仓: {count} 个品种");
+            _ctx.Log($"限价平仓: {count} 个品种");
+    }
+
+    private void CloseAllPositionsMarket()
+    {
+        int count = 0;
+        foreach (var pos in _ctx.Positions)
+        {
+            if (pos.Quantity == 0) continue;
+
+            // 撤销未成交的限价平仓单（若有），改市价兜底
+            if (_pendingCloseOrders.Remove(pos.InstrumentId, out var orderId))
+                _ctx.CancelOrder(orderId);
+
+            _ctx.ClosePosition(pos.InstrumentId, "EOD");
+            count++;
+        }
+        if (count > 0)
+            _ctx.Log($"市价兜底平仓: {count} 个品种");
     }
 
     // ═══════════════════════════════════════════════════════════════
