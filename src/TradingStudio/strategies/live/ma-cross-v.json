@@ -1,7 +1,7 @@
 {
   "StrategyId": "ma-cross-v",
   "StrategyType": "MaCross",
-  "Instruments": ["v2609"],
+  "Instruments": ["v2701"],
   "PrimaryBarType": "bars_1min",
   "AllocatedCapital": 200000,
   "MaxPositionPerInstrument": 2,
