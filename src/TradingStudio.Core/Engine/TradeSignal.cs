@@ -36,6 +36,9 @@ public record TradeSignal
     /// <summary>可选: 期望的最大持仓权重 (占组合 %)</summary>
     public double? MaxWeight { get; init; }
 
+    /// <summary>可选: 信号生成时的参考价（组合层据此精确计算手数）。缺省时组合层回退到粗估。</summary>
+    public double? ReferencePrice { get; init; }
+
     /// <summary>策略优先级 (越小越优先，用于冲突消解)</summary>
     public int Priority { get; init; }
 }

@@ -82,10 +82,7 @@ public class SimpleTargetCombiner : ITargetCombiner
             }
             else
             {
-                // 简化 v1: 按权重×5 估算手数，不超过 MaxLots 上限
-                // TODO v2: 使用 权益 × 权重 / (价格 × 合约乘数 × 保证金率) 精确计算
-                lots = Math.Min(MaxLots, Math.Max(1, (int)(weightPerInstrument * 5)));
-                if (lots < 1) lots = 1;
+                lots = ComputeLots(signal, future, portfolio.Equity, weightPerInstrument);
             }
 
             // 多空方向
@@ -110,6 +107,26 @@ public class SimpleTargetCombiner : ITargetCombiner
         }
 
         return targets;
+    }
+
+    /// <summary>
+    /// 手数计算：
+    /// v2 精确 — 手数 = 权益 × 权重 / (参考价 × 合约乘数 × 保证金率)，向下取整，控制在 [1, MaxLots]。
+    /// v1 回退 — 信号缺参考价（或品种参数缺失）时，用「权重 × 5」粗估。
+    /// </summary>
+    private int ComputeLots(TradeSignal signal, Future future, decimal equity, double weight)
+    {
+        if (signal.ReferencePrice is double price && price > 0
+            && future.TradingUnit > 0 && future.MarginRate > 0)
+        {
+            var marginPerLot = (decimal)price * future.TradingUnit * future.MarginRate;
+            if (marginPerLot > 0)
+            {
+                var exact = equity * (decimal)weight / marginPerLot;
+                return Math.Clamp((int)Math.Floor(exact), 1, MaxLots);
+            }
+        }
+        return Math.Min(MaxLots, Math.Max(1, (int)(weight * 5)));
     }
 
     /// <summary>同品种两个信号冲突消解</summary>

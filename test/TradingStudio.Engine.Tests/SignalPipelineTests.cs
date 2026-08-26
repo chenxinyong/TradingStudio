@@ -127,6 +127,42 @@ public class SignalPipelineTests
         Assert.Contains("s2", targets[0].SourceStrategyIds); // higher conviction signal wins
     }
 
+    [Fact]
+    public void Combiner_WithReferencePrice_ComputesExactLots()
+    {
+        // rb: TradingUnit=10, MarginRate=0.08
+        // 权益 100000, 权重 0.20, 参考价 3500 → marginPerLot = 3500×10×0.08 = 2800
+        // exact = 100000×0.20/2800 = 7.14 → floor 7
+        var combiner = new SimpleTargetCombiner { MaxPositions = 5, MaxLots = 10 };
+        var signal = MakeSignal("rb", SignalDirection.Long, conviction: 0.8) with { ReferencePrice = 3500 };
+        var targets = combiner.Combine([signal], new FakePortfolio(100_000), MakeRegistry());
+
+        Assert.Single(targets);
+        Assert.Equal(7, targets[0].TargetQuantity);
+    }
+
+    [Fact]
+    public void Combiner_WithReferencePrice_RespectsMaxLots()
+    {
+        var combiner = new SimpleTargetCombiner { MaxPositions = 5, MaxLots = 3 };
+        var signal = MakeSignal("rb", SignalDirection.Long, conviction: 0.8) with { ReferencePrice = 3500 };
+        var targets = combiner.Combine([signal], new FakePortfolio(100_000), MakeRegistry());
+
+        Assert.Single(targets);
+        Assert.Equal(3, targets[0].TargetQuantity); // floor(7.14)=7 → clamp 到 MaxLots=3
+    }
+
+    [Fact]
+    public void Combiner_WithoutReferencePrice_FallsBackToRoughEstimate()
+    {
+        var combiner = new SimpleTargetCombiner { MaxPositions = 5, MaxLots = 10 };
+        var signal = MakeSignal("rb", SignalDirection.Long, conviction: 0.8); // 无 ReferencePrice
+        var targets = combiner.Combine([signal], new FakePortfolio(100_000), MakeRegistry());
+
+        Assert.Single(targets);
+        Assert.Equal(1, targets[0].TargetQuantity); // 回退 v1: 权重×5 = 0.20×5 = 1
+    }
+
     // ═══ Rebalancer ═══
 
     [Fact]

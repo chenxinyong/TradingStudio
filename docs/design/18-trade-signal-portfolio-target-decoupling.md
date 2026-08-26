@@ -1,7 +1,7 @@
 # TradeSignal / PortfolioTarget 解耦设计
 
-> 状态: **v1 已实现（类型 + SimpleTargetCombiner + Rebalancer）· 管线未接线 · 策略未迁移**
-> 日期: 2026-08-07（设计）→ 2026-08-19（状态更新）
+> 状态: **v1 已实现（类型 + SimpleTargetCombiner + Rebalancer）· 手数计算已升级 v2 精确 · 管线未接线 · 策略未迁移**
+> 日期: 2026-08-07（设计）→ 2026-08-19（状态更新）→ 2026-08-26（手数精确化）
 > 优先级: P2（架构补强）
 
 ---
@@ -112,6 +112,7 @@ public record TradeSignal
     public double? SuggestedStop { get; init; }
     public double? SuggestedTarget { get; init; }
     public double? MaxWeight { get; init; }
+    public double? ReferencePrice { get; init; }     // 参考价, 组合层据此精确计算手数
     public int Priority { get; init; }               // 策略优先级, 越小越优先
 }
 
@@ -167,12 +168,13 @@ public interface ITargetCombiner
 2. 方向冲突（Long vs Short）→ 取 `Conviction` 更高者
 3. 同方向 → `Priority` 小者优先；同 Priority → `Conviction` 高者
 
-手数计算（**简化 v1**，`SimpleTargetCombiner.cs:85-89`）：
+手数计算（`SimpleTargetCombiner.ComputeLots`，v2 已升级）：
 ```csharp
-// TODO v2: 使用 权益 × 权重 / (价格 × 合约乘数 × 保证金率) 精确计算
-lots = Math.Min(MaxLots, Math.Max(1, (int)(weightPerInstrument * 5)));
+// v2 精确: 手数 = 权益 × 权重 / (参考价 × 合约乘数 × 保证金率), 向下取整, clamp [1, MaxLots]
+// 信号缺 ReferencePrice（或品种参数缺失）→ 回退 v1「权重 × 5」粗估
+lots = ComputeLots(signal, future, portfolio.Equity, weightPerInstrument);
 ```
-当前是「权重 × 5」的粗估，**尚未**接入真实权益/乘数/保证金率 —— 这是 v1 的已知简化。
+`TradeSignal.ReferencePrice`（新增可选字段）提供价格来源：信号带参考价时精确计算；缺省时回退到粗估，保证向后兼容。
 
 #### WeightedTargetCombiner / RiskParityTargetCombiner（未实现）
 
@@ -234,7 +236,7 @@ _ctx.EmitSignal(new TradeSignal
 
 **迁移前置条件**（缺一不可）：
 1. 在组合根注入 `SimpleTargetCombiner` + `Rebalancer`（当前 `ExecutionHandler.TargetCombiner/.Rebalancer` 为 null）
-2. 确认 v1 手数计算的「权重 × 5」粗估是否需要升级为权益×乘数×保证金率精确计算
+2. ~~确认 v1 手数计算的「权重 × 5」粗估是否需要升级为权益×乘数×保证金率精确计算~~ ✅ 已升级（`ComputeLots` + `ReferencePrice`，2026-08-26）
 3. 逐个策略迁移，回测对比迁移前后绩效（信号质量 vs 信号+仓位综合表现分离）
 
 **迁移注意事项**（`MarketBuy` → `EmitSignal` 语义差异）：
