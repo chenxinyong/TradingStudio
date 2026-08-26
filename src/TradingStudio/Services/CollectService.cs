@@ -265,6 +265,7 @@ public class CollectService : BackgroundService
                     _reconnectCount, session, _lastConnect, _lastQuote, _lastHealth);
                 _log.Information("quotes={Quotes} bars={Bars} reconnect={Reconnects} skipped={Skipped} filtered={Filtered} [{Session}]",
                     _pipeline.QuoteCount, _store.WrittenCount, _reconnectCount, _pipeline.TickSkipped, _pipeline.AggFiltered, session);
+                CheckDiskSpace();
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
@@ -272,6 +273,35 @@ public class CollectService : BackgroundService
                 // 一次异常（如 health.json 被外部占用）不能永久杀死健康日志循环
                 try { _log.Error(ex, "HealthLoop 异常，继续运行"); } catch { }
             }
+        }
+    }
+
+    /// <summary>
+    /// 数据盘剩余空间检查。低于 10GB 预警、低于 2GB 报错。
+    /// 磁盘写满会让 DuckDB WAL 无法落盘（2026-08-24 事故根因），提前告警留出清理/扩容窗口。
+    /// </summary>
+    private void CheckDiskSpace()
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(_cfg.Database));
+            if (string.IsNullOrEmpty(root)) return;
+
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady) return;
+
+            const double warnGb = 10;
+            const double critGb = 2;
+            var freeGb = drive.AvailableFreeSpace / 1024.0 / 1024 / 1024;
+
+            if (freeGb < critGb)
+                _log.Error("磁盘剩余空间仅 {Free:F1} GB（{Root}），写入将失败！请立即清理/扩容", freeGb, root);
+            else if (freeGb < warnGb)
+                _log.Warning("磁盘剩余空间不足 {Free:F1} GB（{Root}），请关注", freeGb, root);
+        }
+        catch (Exception ex)
+        {
+            _log.Debug(ex, "磁盘空间检查失败");
         }
     }
 

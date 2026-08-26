@@ -34,6 +34,11 @@ public class DuckDBStore : IBarStore, ITickStore
     private long _barWritten;
     private long _tickWritten;
 
+    /// <summary>bar/tick 连续写入失败次数（共享退避：两者失败通常同源——磁盘满/DB 锁）。成功写入后归零。</summary>
+    private int _writeFailureStreak;
+    /// <summary>上次写入错误报告时间（限频，避免磁盘满等持续故障刷屏）。</summary>
+    private DateTime _lastWriteErrorReport;
+
     public long WrittenCount => Interlocked.Read(ref _barWritten);
     public long TickCount => Interlocked.Read(ref _tickWritten);
 
@@ -140,6 +145,29 @@ public class DuckDBStore : IBarStore, ITickStore
         else Console.Error.WriteLine($"[DuckDBStore] {what} 写入失败: {ex.Message}");
     }
 
+    /// <summary>
+    /// 写入失败统一处理：限频报告 + 指数退避。
+    /// 磁盘写满等持续故障下，避免 BarWriteLoop/TickWriteLoop 疯狂重试刷屏、CPU 空转
+    /// （曾出现磁盘满后 2 分钟刷数百条 Failed to commit）。
+    /// </summary>
+    private async Task HandleWriteFailure(string what, Exception ex, CancellationToken ct)
+    {
+        var streak = Interlocked.Increment(ref _writeFailureStreak);
+
+        // 限频：前 3 次立即报告，之后每 30s 最多一条（持续故障不需要每条都刷）
+        var now = DateTime.Now;
+        if (streak <= 3 || (now - _lastWriteErrorReport).TotalSeconds >= 30)
+        {
+            _lastWriteErrorReport = now;
+            ReportWriteError($"{what}（连续失败 {streak} 次）", ex);
+        }
+
+        // 退避：1s→2s→4s→…→60s 封顶；成功写入后 streak 归零
+        var delayMs = Math.Min(60_000, 1000 * (int)Math.Pow(2, Math.Min(streak, 6)));
+        try { await Task.Delay(delayMs, ct); }
+        catch (OperationCanceledException) { throw; }
+    }
+
     private async Task BarWriteLoop(CancellationToken ct)
     {
         var batch = new List<Bar>(64);
@@ -151,9 +179,13 @@ public class DuckDBStore : IBarStore, ITickStore
             if (batch.Count > 0)
             {
                 // 单批失败只丢本批（Tick CSV 全量原始落盘可重建），循环必须存活
-                try { await WriteBatchAsync(batch, ct); }
+                try
+                {
+                    await WriteBatchAsync(batch, ct);
+                    Interlocked.Exchange(ref _writeFailureStreak, 0);   // 成功写入 → 退避归零
+                }
                 catch (OperationCanceledException) { throw; }
-                catch (Exception ex) { ReportWriteError($"bar batch({batch.Count})", ex); }
+                catch (Exception ex) { await HandleWriteFailure($"bar batch({batch.Count})", ex, ct); }
             }
         }
     }
@@ -355,9 +387,10 @@ public class DuckDBStore : IBarStore, ITickStore
                 {
                     foreach (var g in batch.GroupBy(x => x.Symbol))
                         await WriteTicksBatchAsync(g.Select(x => x.Tick), g.Key, ct);
+                    Interlocked.Exchange(ref _writeFailureStreak, 0);   // 成功写入 → 退避归零
                 }
                 catch (OperationCanceledException) { throw; }
-                catch (Exception ex) { ReportWriteError($"tick batch({batch.Count})", ex); }
+                catch (Exception ex) { await HandleWriteFailure($"tick batch({batch.Count})", ex, ct); }
             }
         }
     }

@@ -335,7 +335,10 @@ public class BuildPeriodsService
                 SELECT 1 FROM bars_1min ex
                 WHERE ex.instrument_id = db.cont_id
                   AND ex.bar_time = b1.bar_time
-            )";
+            )
+            -- 硬兜底：WHERE NOT EXISTS 与采集线程并发写入同一张表时存在竞态，
+            -- 曾出现 ap000 08-19 00:59 主键冲突导致连续合约构建反复失败。主键约束是权威防线。
+            ON CONFLICT (instrument_id, bar_time) DO NOTHING";
         var rows = await cmd.ExecuteNonQueryAsync(ct);
         return rows;
     }
