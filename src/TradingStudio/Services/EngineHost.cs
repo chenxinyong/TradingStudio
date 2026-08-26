@@ -56,14 +56,17 @@ public class EngineHost : BackgroundService
             }
 
             var sessionName = _session.SessionName();
+
+            // 会话开始：先确保交易通道就绪，再取权益快照。
+            // 盘中重启时 Trader 未就绪、_portfolio.Equity 仍是默认值（策略资本之和），
+            // 若先取快照会把 PnL 基准算错（8/26 盘中重启误报 +1178 虚假盈利，实为 -70）。
+            _trader?.EnsureConnected();
+            await WaitForEquityReconciledAsync(ct);
+
             var sessionStartEquity = GetPortfolioEquity();
             _health.SetSessionStartEquity(sessionStartEquity);
             _crashCount = 0;
             _log.Information("Session [{Session}] starting, Equity={Equity:C}", sessionName, sessionStartEquity);
-
-            // 会话开始：确保交易通道就绪。若盘前连接被前置机踢下线、重连退避已涨到 300s，
-            // 这里打断退避并立即重连，避免开盘后订单因「CTP not ready」被拒。
-            _trader?.EnsureConnected();
 
             using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var sessionEnd = _session.GetSessionEndTime();
@@ -180,6 +183,23 @@ public class EngineHost : BackgroundService
             _log.Error("⚠️ CTP 交易通道未就绪已持续 {Min:F0} 分钟 — 会话中所有新订单将被拒绝，请检查交易前置机连接", down.TotalMinutes);
             _health.Update("TraderDown", 0, 0, 0, 0, _session.SessionName(), null, null, DateTime.Now);
             lastAlert = DateTimeOffset.UtcNow;
+        }
+    }
+
+    /// <summary>
+    /// 等待账户权益从 CTP 恢复到位（ReconcileEquity 至少调用过一次），带超时兜底。
+    /// 盘中重启时 EnsureConnected 触发的重连最多约 30s、登录后 QueryAccount 回调约 2s，总超时给 40s。
+    /// 无交易通道（回测/纯行情）或权益已恢复时立即返回，避免卡住 session 启动。
+    /// </summary>
+    private async Task WaitForEquityReconciledAsync(CancellationToken ct)
+    {
+        if (_trader == null || _portfolio.EquityReconciled) return;
+
+        var deadline = DateTime.UtcNow.AddSeconds(40);
+        while (!_portfolio.EquityReconciled && DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
+        {
+            try { await Task.Delay(500, ct); }
+            catch (OperationCanceledException) { return; }
         }
     }
 

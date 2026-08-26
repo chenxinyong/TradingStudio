@@ -22,10 +22,13 @@ public class PortfolioManager : IPortfolioState
     public decimal MarginUsed { get { lock (_sync) return _marginUsed; } private set { lock (_sync) _marginUsed = value; } }
     public decimal StartingCapital { get; }
     public decimal PeakEquity { get { lock (_sync) return _peakEquity; } private set { lock (_sync) _peakEquity = value; } }
+    /// <summary>是否已从 CTP 恢复过真实权益（ReconcileEquity 至少调用过一次）。盘中重启时据此等待权益到位再固化 session 基准。</summary>
+    public bool EquityReconciled { get { lock (_sync) return _equityReconciled; } }
     /// <summary>当日盈亏 = 当前权益 − 上一次每日结算后的权益基准（含持仓浮动 + 当日已实现）。</summary>
     public decimal TodayPnL { get { lock (_sync) return _equity - _equityAtDayStart; } }
     public decimal TotalPnL => Equity - StartingCapital;
     private decimal _cash, _equity, _marginUsed, _peakEquity, _equityAtDayStart;
+    private bool _equityReconciled;   // 是否已从 CTP 恢复过真实权益（见 EquityReconciled 属性）
 
     public Position? GetPosition(string instrumentId)
     {
@@ -120,6 +123,7 @@ public class PortfolioManager : IPortfolioState
             _cash = balance - positionProfit - _marginUsed;
             _equityAtDayStart = preBalance > 0 ? preBalance : balance;
             if (_equity > _peakEquity) _peakEquity = _equity;
+            _equityReconciled = true;
         }
     }
 
