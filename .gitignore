@@ -476,3 +476,6 @@ scripts/chanlun/output/
 
 # Local dev certificates
 **/certs/
+
+# Obsidian 本地配置（workspace/插件状态，非知识库内容）
+.obsidian/

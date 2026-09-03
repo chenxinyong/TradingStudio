@@ -56,6 +56,7 @@ public class CtpTraderBridge : IDisposable
     {
         _reconnectCts = new CancellationTokenSource();
         ConnectInternal();
+        StartOrderWatchdog();
     }
 
     private void ConnectInternal()
@@ -266,10 +267,17 @@ public class CtpTraderBridge : IDisposable
                 }
                 _lastOrderRtn[refId] = (ord.OrderStatus, ord.VolumeTraded);
 
+                // 超时监控：回填撤单定位字段，订单进入终态（成交/撤单）时移除
+                UpdatePendingOrder(refId, ord);
+
                 // 防重复写入：同一个 OrderRef 只写入第一个 Submitted 事件。
                 // CTP 会多次回调 OnRtnOrder（报单已提交→全部成交），全部映射为 Submitted，
                 // 若都写入则 DuckDB PK (order_id, type, event_time) 冲突。
-                if (!_submittedEmitted.Add(refId))
+                // 非 Submitted 状态（Canceled 撤单等）必须放行，否则策略永远收不到撤单通知、
+                // 无法据此重发平仓单（9/2 实盘 #16 单未成交无人管的根因之一）。
+                var evt = ConvertOrder(ord);
+                if (evt == null) return;
+                if (evt.Type == OrderEventType.Submitted && !_submittedEmitted.Add(refId))
                 {
                     _log.Debug("[CTP-Trader] OnRtnOrder Submitted skipped (already emitted): {Inst} Status={Status} Ref={Ref}",
                         ord.InstrumentID, ord.OrderStatus, ord.OrderRef);
@@ -278,7 +286,7 @@ public class CtpTraderBridge : IDisposable
                 {
                     _log.Information("[CTP-Trader] OnRtnOrder: {Inst} Status={Status} Ref={Ref} VolTraded={Vol} Msg={Msg}",
                         ord.InstrumentID, ord.OrderStatus, ord.OrderRef, ord.VolumeTraded, ord.StatusMsg);
-                    var evt = ConvertOrder(ord); if (evt != null) _fillWriter.TryWrite(evt);
+                    _fillWriter.TryWrite(evt);
                 }
             }
             else if (e.EventType == CTP.EnumOnRtnType.OnRtnTrade && e.Param != IntPtr.Zero)
@@ -335,9 +343,21 @@ public class CtpTraderBridge : IDisposable
             if (snapPrice > 0)
             {
                 var tick = futures?.TickSize > 0 ? (double)futures.TickSize : 1;
-                limitPrice = order.Direction == OrderDirection.Buy
-                    ? snapPrice + tick * 3  // 买单略高于市价
-                    : snapPrice - tick * 3; // 卖单略低于市价
+                if (order.IsCloseOrder && futures != null && futures.PriceLimitPct > 0)
+                {
+                    // 平仓是风控动作：用涨跌停价挂单确保成交，避免开盘跳空时 ±3跳 限价单
+                    // 挂在缺口上方不成交、持仓继续裸奔（9/2 实盘 #16 平仓卖单未成交的根因）。
+                    var limitPct = (double)futures.PriceLimitPct;
+                    limitPrice = order.Direction == OrderDirection.Buy
+                        ? snapPrice * (1 + limitPct)   // 平空买单：涨停价
+                        : snapPrice * (1 - limitPct);  // 平多卖单：跌停价
+                }
+                else
+                {
+                    limitPrice = order.Direction == OrderDirection.Buy
+                        ? snapPrice + tick * 3  // 开仓买单略高于市价
+                        : snapPrice - tick * 3; // 开仓卖单略低于市价
+                }
             }
         }
         var req = new CTP.ThostFtdcInputOrderField
@@ -354,6 +374,19 @@ public class CtpTraderBridge : IDisposable
             CombHedgeFlag_0 = CTP.EnumHedgeFlagType.Speculation, IsAutoSuspend = 0, UserForceClose = 0,
         };
         int result = api.ReqOrderInsert(req, ++_requestId);
+        if (result == 0)
+        {
+            lock (_sync)
+            {
+                _pendingOrders[order.OrderId] = new PendingOrder
+                {
+                    OrderId = order.OrderId,
+                    InstrumentId = order.InstrumentId,
+                    ExchangeId = futures?.Exchange.ToCtp() ?? "",
+                    SubmittedAt = DateTimeOffset.UtcNow,
+                };
+            }
+        }
         _log.Information("CTP InsertOrder: #{Id} {Dir} {Inst} x{Qty} Offset={Offset} (result={Result})",
             order.OrderId, order.Direction, order.InstrumentId, order.Quantity, offsetFlag, result);
     }
@@ -507,6 +540,22 @@ public class CtpTraderBridge : IDisposable
     /// <summary>已发送首个 Submitted 事件的 OrderRef 集合（防同 Ref 多状态重复写入 DuckDB）</summary>
     private readonly HashSet<long> _submittedEmitted = new();
 
+    /// <summary>未成交订单超时监控：下单后记录，超时未成交则自动撤单。</summary>
+    private sealed class PendingOrder
+    {
+        public long OrderId;
+        public string InstrumentId = "";
+        public string ExchangeId = "";
+        public DateTimeOffset SubmittedAt;
+        public int FrontId;          // 撤单定位（OnRtnOrder 回填）
+        public int SessionId;
+        public string OrderSysId = "";
+    }
+
+    private readonly Dictionary<long, PendingOrder> _pendingOrders = new();
+    private CancellationTokenSource? _watchdogCts;
+    private static readonly TimeSpan PendingOrderTimeout = TimeSpan.FromSeconds(15);
+
     /// <summary>
     /// 会话开始时调用：确保交易通道就绪。若未就绪，打断当前退避等待、复位退避并立即重连。
     /// 解决「进程启动时盘前连接被前置机踢下线，重连退避已涨到 300s，导致开盘后迟迟不就绪、订单被拒」的问题。
@@ -574,9 +623,86 @@ public class CtpTraderBridge : IDisposable
         }
     }
 
+    /// <summary>
+    /// 未成交订单超时看门狗：每 5s 扫描，超过 15s 仍未成交的订单自动撤单。
+    /// 撤单后订单以 Cancelled 状态流入 FillChannel（见 OnRtnOrder），策略据此重发。
+    /// 解决「市价单被转限价单、开盘跳空挂单不成交、无人兜底」的问题（9/2 实盘 #16 单）。
+    /// </summary>
+    private void StartOrderWatchdog()
+    {
+        if (_watchdogCts != null) return;
+        _watchdogCts = new CancellationTokenSource();
+        var token = _watchdogCts.Token;
+        _ = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try { await Task.Delay(TimeSpan.FromSeconds(5), token); }
+                catch (OperationCanceledException) { return; }
+
+                List<PendingOrder> expired;
+                lock (_sync)
+                {
+                    var now = DateTimeOffset.UtcNow;
+                    expired = _pendingOrders.Values
+                        .Where(p => now - p.SubmittedAt > PendingOrderTimeout)
+                        .ToList();
+                    foreach (var p in expired) _pendingOrders.Remove(p.OrderId);
+                }
+                foreach (var p in expired) CancelPendingOrder(p);
+            }
+        }, token);
+    }
+
+    /// <summary>超时撤单：删除未成交订单，让策略在下一根 Bar 用最新价重发。</summary>
+    private void CancelPendingOrder(PendingOrder p)
+    {
+        CTP.FtdcTdAdapter? api;
+        lock (_sync) api = _api;
+        if (api == null) return;
+        try
+        {
+            var req = new CTP.ThostFtdcInputOrderActionField
+            {
+                BrokerID = _opts.BrokerId,
+                InvestorID = _opts.UserId,
+                UserID = _opts.UserId,
+                InstrumentID = p.InstrumentId,
+                ExchangeID = p.ExchangeId,
+                OrderRef = p.OrderId.ToString(),
+                OrderSysID = p.OrderSysId,
+                FrontID = p.FrontId,
+                SessionID = p.SessionId,
+                ActionFlag = CTP.EnumActionFlagType.Delete,
+            };
+            var ret = api.ReqOrderAction(req, ++_requestId);
+            _log.Warning("CTP CancelOrder #{Id} {Inst} 超时未成交({Age:F0}s) → 撤单 (result={Ret})",
+                p.OrderId, p.InstrumentId, (DateTimeOffset.UtcNow - p.SubmittedAt).TotalSeconds, ret);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(ex, "CTP CancelOrder failed #{Id} {Inst}", p.OrderId, p.InstrumentId);
+        }
+    }
+
+    /// <summary>回填撤单定位字段，并在订单进入终态（全部成交/已撤销）时移除超时监控。</summary>
+    private void UpdatePendingOrder(long refId, CTP.ThostFtdcOrderField ord)
+    {
+        lock (_sync)
+        {
+            if (!_pendingOrders.TryGetValue(refId, out var p)) return;
+            if (p.FrontId == 0 && ord.FrontID != 0) p.FrontId = ord.FrontID;
+            if (p.SessionId == 0 && ord.SessionID != 0) p.SessionId = ord.SessionID;
+            if (p.OrderSysId.Length == 0 && !string.IsNullOrEmpty(ord.OrderSysID)) p.OrderSysId = ord.OrderSysID;
+            if (ord.OrderStatus == CTP.EnumOrderStatusType.AllTraded
+                || ord.OrderStatus == CTP.EnumOrderStatusType.Canceled)
+                _pendingOrders.Remove(refId);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
-        lock (_sync) { if (_disposed) return; _disposed = true; _reconnectCts?.Cancel(); _reconnectCts?.Dispose(); _api?.Release(); _api = null; }
+        lock (_sync) { if (_disposed) return; _disposed = true; _reconnectCts?.Cancel(); _reconnectCts?.Dispose(); _watchdogCts?.Cancel(); _watchdogCts?.Dispose(); _api?.Release(); _api = null; }
     }
 }
