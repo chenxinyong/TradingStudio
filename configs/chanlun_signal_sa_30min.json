@@ -1,0 +1,24 @@
+{
+  "StrategyId": "ChanLunSignal-SA-30min",
+  "StrategyType": "ChanLunSignal",
+  "Description": "SA 缠论买卖点策略: 背驰+一二三类买卖点(30min)，无前视",
+  "Version": 1,
+  "Instruments": ["rb000"],
+  "PrimaryBarType": "bars_1min",
+  "BarPeriodMinutes": 15,
+  "AllocatedCapital": 1000000,
+  "MaxDrawdownPct": 0.30,
+  "MaxPositionPerInstrument": 50,
+  "Priority": 0,
+  "SessionFilter": "All",
+  "SkipAuction": true,
+  "Parameters": {
+    "MinBiLen": 5,
+    "AtrPeriod": 20,
+    "StopAtrMult": 2.0,
+    "RiskPerTrade": 0.02,
+    "MaxMarginRatio": 0.6,
+    "AllowShort": true,
+    "UseB2B3": true
+  }
+}
