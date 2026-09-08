@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""临时脚本：新强联 300850 中长期（月线+周线+日线）缠论分析。
+"""临时脚本：上海洗霸 603200 中长期（月线+周线+日线）缠论分析。
 拉前复权完整历史 → 聚合月/周/日 → 用 chanlun_core 跑缠论 → 打印结构。"""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import akshare as ak
 from chanlun_core import Bar, analyze
 
-SYM = "sh601600"
+SYM = "sh603200"
 
 def fetch_qfq():
     df = ak.stock_zh_a_daily(symbol=SYM, adjust="qfq")

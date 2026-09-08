@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import akshare as ak
 from chanlun_core import Bar, analyze
 
-SYM = "sh601600"
+SYM = "sz300378"
 
 def fetch_qfq():
     df = ak.stock_zh_a_daily(symbol=SYM, adjust="qfq")
