@@ -55,7 +55,7 @@ def main():
 
             if price <= STOP_LINE:
                 if last_state != 'below':
-                    print(f"🔴 白银 AG2612 已破铁位 {STOP_LINE}！现价 {price:.0f}，周线底背驰失败，2 手 @16530.5 无条件止损")
+                    print(f"🔴 白银 AG2612 已破铁位 {STOP_LINE}！现价 {price:.0f}，周线底背驰失败，2 手 @16621.5 无条件止损")
                     last_state = 'below'
             elif price >= BREAK_LINE:
                 if last_state != 'above':
