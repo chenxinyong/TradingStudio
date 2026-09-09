@@ -360,6 +360,12 @@ public class CtpTraderBridge : IDisposable
                 }
             }
         }
+        // 对齐到最小变动价位：平仓单的涨跌停价 = snapPrice×(1±limitPct) 会产生非 tick 整数倍的小数
+        // （如 ag 16411×0.91=14934.01，tick=1），SHFE/INE 严格要求价格是 tick 整数倍，
+        // 否则拒单"价格非最小单位的倍数"（9/10 实盘 ag2612 平仓卖单 6 次被拒的根因）。
+        // 与回测 ExecutionHandler.MatchBar 的涨跌停价对齐逻辑保持一致。
+        if (futures != null && futures.TickSize > 0 && limitPrice > 0)
+            limitPrice = (double)futures.RoundToTick((decimal)limitPrice);
         var req = new CTP.ThostFtdcInputOrderField
         {
             BrokerID = _opts.BrokerId, InvestorID = _opts.UserId, UserID = _opts.UserId,
