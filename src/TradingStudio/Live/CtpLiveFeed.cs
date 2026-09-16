@@ -14,6 +14,7 @@ public class CtpLiveFeed : IDataFeed, IDisposable
 {
     private readonly CtpMdOptions _opts;
     private readonly Serilog.ILogger _log;
+    private readonly TradingStudio.Engine.TickSnapshot? _snapshot;
     private CTP.FtdcMdAdapter? _api;
     private bool _disposed;
 
@@ -33,8 +34,8 @@ public class CtpLiveFeed : IDataFeed, IDisposable
     public DateTime EndTime => _endTime;
     public bool IsConnected { get; private set; }
 
-    public CtpLiveFeed(CtpMdOptions opts, Serilog.ILogger? log = null)
-    { _opts = opts; _log = (log ?? Serilog.Log.Logger).ForContext<CtpLiveFeed>(); }
+    public CtpLiveFeed(CtpMdOptions opts, Serilog.ILogger? log = null, TradingStudio.Engine.TickSnapshot? snapshot = null)
+    { _opts = opts; _log = (log ?? Serilog.Log.Logger).ForContext<CtpLiveFeed>(); _snapshot = snapshot; }
 
     public void Initialize(DateTime s, DateTime e, IReadOnlyList<string> i)
     { _startTime = s; _endTime = e; _instruments = i; }
@@ -101,6 +102,8 @@ public class CtpLiveFeed : IDataFeed, IDisposable
                         var tick = FromFtdcQuote(q);
                         var instId = ContractCodeGenerator.Normalize(q.InstrumentID);
                         var td = ParseTradingDay(q.TradingDay ?? "");
+                        // 涨跌停价旁路写入快照：供交易侧平仓单挂涨跌停价用（交易所已按 tick 取整的权威价）。
+                        _snapshot?.UpdateLimits(instId, q.UpperLimitPrice, q.LowerLimitPrice);
                         merged.Writer.TryWrite((instId, tick, td));
                         PersistChannel.Writer.TryWrite((instId, tick, td));
                         tracker?.FeedTick(instId, q);

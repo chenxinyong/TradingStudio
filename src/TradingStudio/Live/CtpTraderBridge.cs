@@ -86,7 +86,10 @@ public class CtpTraderBridge : IDisposable
                 IsReady = false;
                 _log.Warning("CTP Trader disconnected (0x{Reason:X})", e.Reason);
                 _fillWriter.TryWrite(new OrderEvent { Type = OrderEventType.Rejected, Message = "CTP交易连接断开", Time = DateTimeOffset.UtcNow });
-                ScheduleReconnect();
+                // 不能在 CTP 回调线程里同步 Release 旧 API（会死锁/阻塞，9/15 实盘 09:19 断开后
+                // 交易通道 370 分钟未重连的根因），改用后台线程触发重连，让 Release/ConnectInternal
+                // 在回调线程之外执行（与 CtpLiveFeed 行情侧「回调只设标志、循环里重连」同理）。
+                _ = Task.Run(() => ScheduleReconnect());
             }
         };
 
@@ -347,10 +350,15 @@ public class CtpTraderBridge : IDisposable
                 {
                     // 平仓是风控动作：用涨跌停价挂单确保成交，避免开盘跳空时 ±3跳 限价单
                     // 挂在缺口上方不成交、持仓继续裸奔（9/2 实盘 #16 平仓卖单未成交的根因）。
+                    // 涨跌停价必须用交易所权威值（quote 的 Upper/LowerLimitPrice，基于昨结算价），
+                    // 不能用 snapPrice×(1±limitPct)：暴跌时 snapPrice 已跌破昨结算价，算出的跌停价
+                    // 会击穿真实跌停板 → DCE 拒单"价格跌破跌停板"（9/16 实盘 v2701 平仓卖单 8 次被拒的根因）。
                     var limitPct = (double)futures.PriceLimitPct;
+                    double upper = 0, lower = 0;
+                    _snapshot?.TryGetLimits(order.InstrumentId, out upper, out lower);
                     limitPrice = order.Direction == OrderDirection.Buy
-                        ? snapPrice * (1 + limitPct)   // 平空买单：涨停价
-                        : snapPrice * (1 - limitPct);  // 平多卖单：跌停价
+                        ? (upper > 0 ? upper : snapPrice * (1 + limitPct))   // 平空买单：涨停价
+                        : (lower > 0 ? lower : snapPrice * (1 - limitPct));  // 平多卖单：跌停价
                 }
                 else
                 {

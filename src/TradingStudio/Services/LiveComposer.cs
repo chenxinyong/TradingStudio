@@ -39,7 +39,7 @@ public static class LiveComposer
         services.AddSingleton(activityTracker);
         services.AddSingleton<IDataFeed>(sp =>
         {
-            var feed = new CtpLiveFeed(mdOpts, sp.GetRequiredService<Serilog.ILogger>());
+            var feed = new CtpLiveFeed(mdOpts, sp.GetRequiredService<Serilog.ILogger>(), sp.GetRequiredService<TickSnapshot>());
             feed.ActivityTracker = activityTracker;
             foreach (var inst in _pendingStrategyInstruments) feed.StrategyInstruments.Add(inst);
             return feed;
