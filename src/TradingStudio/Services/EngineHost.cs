@@ -113,12 +113,16 @@ public class EngineHost : BackgroundService
                 _log.Information("══════════════════════════════════");
                 _health.Update("Idle", 0, 0, 0, 0, "休市", null, null, null,
                     equity: endEquity, positions: GetPositionCount());
+                _trader?.Disconnect();  // 收盘断开交易通道并挂起重连
             }
             catch (OperationCanceledException) when (sessionCts.IsCancellationRequested && !ct.IsCancellationRequested)
             {
                 _log.Information("Session ended [{Session}]: scheduled close", sessionName);
                 LogSessionEnd(sessionName, sessionStartEquity);
                 _health.Update("Idle", 0, 0, 0, 0, "休市", null, null, null);
+                // 收盘断开交易通道并挂起重连，避免前置机稍后踢线后 ScheduleReconnect 无限重连
+                // （9/17 实盘 16:06 起 0x1001 连续 40+ 次重连刷屏 3 小时的根因）。
+                _trader?.Disconnect();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (Exception ex)

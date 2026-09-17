@@ -23,6 +23,10 @@ public class CtpTraderBridge : IDisposable
     private bool _reconnecting;
     private bool _disposed;
 
+    // 会话结束挂起：收盘后交易前置机不接收交易连接，此时断开并禁止重连，
+    // 直到下个会话 EnsureConnected 清除。用 volatile 保证 CTP 回调线程/后台重连线程/宿主机线程可见。
+    private volatile bool _suspended;
+
     public bool IsReady { get { lock (_sync) return _isReady; } private set { lock (_sync) _isReady = value; } }
     private bool _isReady;
 
@@ -52,11 +56,22 @@ public class CtpTraderBridge : IDisposable
                 .CreateLogger().ForContext<CtpTraderBridge>();
     }
 
-    public void Connect()
+    /// <summary>
+    /// 启动交易桥接。默认立即连接（盘中启动）；connectNow=false 时（休市/盘后启动）只启动看门狗并挂起，
+    /// 不建立连接 —— 避免休市期间连接被前置机踢线后 ScheduleReconnect 无限重连（与 9/17 16:06 后重连循环同源）。
+    /// 下个会话 EngineHost 调 EnsureConnected 会清除挂起并连接。
+    /// </summary>
+    public void Connect(bool connectNow = true)
     {
         _reconnectCts = new CancellationTokenSource();
-        ConnectInternal();
         StartOrderWatchdog();
+        if (!connectNow)
+        {
+            _suspended = true;
+            _log.Information("CTP Trader started suspended (outside session) — will connect at next session start");
+            return;
+        }
+        ConnectInternal();
     }
 
     private void ConnectInternal()
@@ -89,7 +104,10 @@ public class CtpTraderBridge : IDisposable
                 // 不能在 CTP 回调线程里同步 Release 旧 API（会死锁/阻塞，9/15 实盘 09:19 断开后
                 // 交易通道 370 分钟未重连的根因），改用后台线程触发重连，让 Release/ConnectInternal
                 // 在回调线程之外执行（与 CtpLiveFeed 行情侧「回调只设标志、循环里重连」同理）。
-                _ = Task.Run(() => ScheduleReconnect());
+                // 会话结束挂起期（_suspended）不触发重连：收盘后前置机不接收交易连接，
+                // 否则会像 9/17 实盘 16:06 那样 0x1001 无限重连刷屏 3 小时。
+                if (!_suspended)
+                    _ = Task.Run(() => ScheduleReconnect());
             }
         };
 
@@ -576,7 +594,9 @@ public class CtpTraderBridge : IDisposable
     /// </summary>
     public void EnsureConnected()
     {
-        if (_disposed || IsReady) return;
+        if (_disposed) return;
+        _suspended = false;   // 会话开始：恢复重连能力（清除上个会话 Disconnect 设置的挂起标志）
+        if (IsReady) return;
 
         _log.Warning("CTP Trader not ready — forcing reconnect at session start");
         _reconnectDelay = 0;      // 退避复位，下次从 5s 起步
@@ -593,6 +613,7 @@ public class CtpTraderBridge : IDisposable
 
     private async void ScheduleReconnect()
     {
+        if (_suspended || _disposed) return;  // 会话结束挂起期不重连（9/17 16:06 后无限重连根因）
         if (_reconnecting)
         {
             _log.Debug("CTP Trader reconnect already in progress, will retry after current attempt");
@@ -628,8 +649,8 @@ public class CtpTraderBridge : IDisposable
         finally
         {
             _reconnecting = false;
-            // 仍未就绪或被请求重新连接 → 继续循环
-            if (!_disposed && (_pendingReconnect || !IsReady))
+            // 仍未就绪或被请求重新连接 → 继续循环（会话结束挂起期不再重连）
+            if (!_disposed && !_suspended && (_pendingReconnect || !IsReady))
             {
                 _pendingReconnect = false;
                 ScheduleReconnect();
@@ -712,6 +733,27 @@ public class CtpTraderBridge : IDisposable
                 || ord.OrderStatus == CTP.EnumOrderStatusType.Canceled)
                 _pendingOrders.Remove(refId);
         }
+    }
+
+    /// <summary>
+    /// 会话结束时调用：主动断开交易通道并挂起重连。
+    /// 收盘后交易前置机不接收交易连接，若不断开，前置机稍后（如 9/17 实盘 16:06）把连接踢下线，
+    /// ScheduleReconnect 会以 0x1001 无限重连刷屏数小时。断开后 IsReady=false、_suspended=true，
+    /// 重连被彻底挂起，直到下个会话 EnsureConnected 清除标志并重新连接。
+    /// 注意：本方法从 EngineHost 的会话线程调用，不在 CTP 回调线程内，同步 Release 是安全的。
+    /// </summary>
+    public void Disconnect()
+    {
+        lock (_sync)
+        {
+            if (_disposed) return;
+            _suspended = true;
+            _isReady = false;
+            _reconnectCts?.Cancel();
+            try { _api?.Release(); } catch { }
+            _api = null;
+        }
+        _log.Information("CTP Trader disconnected (session end, reconnect suspended)");
     }
 
     public void Dispose()

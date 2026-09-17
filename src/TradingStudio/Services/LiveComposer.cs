@@ -105,8 +105,10 @@ public static class LiveComposer
                 AuthCode = config["Live:AuthCode"] ?? "0000000000000000",
                 AppId = config["Live:AppId"] ?? "simnow_client_test",
             };
-            var bridgeLogger = builder.Services.BuildServiceProvider().GetRequiredService<Serilog.ILogger>();
-            var tickSnapshot = builder.Services.BuildServiceProvider().GetRequiredService<TickSnapshot>();
+            var bridgeSp = builder.Services.BuildServiceProvider();
+            var bridgeLogger = bridgeSp.GetRequiredService<Serilog.ILogger>();
+            var tickSnapshot = bridgeSp.GetRequiredService<TickSnapshot>();
+            var sessionScheduler = bridgeSp.GetRequiredService<SessionScheduler>();
             var bridge = new CtpTraderBridge(execution.FillChannel, traderOpts, bridgeLogger, registry, tickSnapshot);
 
             // 订阅 CTP 持仓查询结果 → 恢复到 PortfolioManager（异步，登录完成后触发）
@@ -189,8 +191,11 @@ public static class LiveComposer
             services.AddSingleton(bridge);
             try
             {
-                bridge.Connect();
-                Console.Error.WriteLine("[LiveComposer] CtpTraderBridge.Connect() called — FtdcNet.CTP P/Invoke");
+                // 仅交易时段内启动才立即连接；休市/盘后启动则挂起，等开盘 EngineHost 调 EnsureConnected 连接，
+                // 避免休市期间连接被前置机踢线后无限重连（9/17 16:06 后重连循环同源）。
+                var inSession = sessionScheduler.IsInSession();
+                bridge.Connect(inSession);
+                Console.Error.WriteLine($"[LiveComposer] CtpTraderBridge.Connect(connectNow={inSession}) called — FtdcNet.CTP P/Invoke");
             }
             catch (Exception ex)
             {
