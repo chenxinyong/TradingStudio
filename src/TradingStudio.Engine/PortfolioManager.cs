@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
 using TradingStudio.Core.Risk;
@@ -10,10 +12,11 @@ namespace TradingStudio.Engine;
 /// </summary>
 public class PortfolioManager : IPortfolioState
 {
-    private readonly Dictionary<string, Position> _positions = new();      // key = instId
+    private readonly Dictionary<(string StrategyId, string InstrumentId), Position> _positions = new();
     private readonly SortedDictionary<string, SubPortfolio> _subPortfolios = new();
     private readonly List<Trade> _trades = new();
     private readonly object _sync = new();  // 保护 _positions / _subPortfolios / _trades / Cash / MarginUsed / Equity / PeakEquity 并发访问
+    private readonly ILogger _log;
 
     // IPortfolioState — 属性读写均加锁（实盘中 FillChannel 线程和事件循环线程并发访问）
     // 注：lock 内对属性的读写因 Monitor 可重入而安全（方法体已持锁时，getter/setter 重入同一锁）
@@ -24,20 +27,40 @@ public class PortfolioManager : IPortfolioState
     public decimal PeakEquity { get { lock (_sync) return _peakEquity; } private set { lock (_sync) _peakEquity = value; } }
     /// <summary>是否已从 CTP 恢复过真实权益（ReconcileEquity 至少调用过一次）。盘中重启时据此等待权益到位再固化 session 基准。</summary>
     public bool EquityReconciled { get { lock (_sync) return _equityReconciled; } }
+    /// <summary>持仓对账状态。Mismatch 时风控拒绝新开仓（平仓放行）。</summary>
+    public ReconcileStatus ReconcileStatus { get { lock (_sync) return _reconcileStatus; } }
     /// <summary>当日盈亏 = 当前权益 − 上一次每日结算后的权益基准（含持仓浮动 + 当日已实现）。</summary>
     public decimal TodayPnL { get { lock (_sync) return _equity - _equityAtDayStart; } }
     public decimal TotalPnL => Equity - StartingCapital;
     private decimal _cash, _equity, _marginUsed, _peakEquity, _equityAtDayStart;
     private bool _equityReconciled;   // 是否已从 CTP 恢复过真实权益（见 EquityReconciled 属性）
+    private ReconcileStatus _reconcileStatus = ReconcileStatus.NotReconciled;
 
-    public Position? GetPosition(string instrumentId)
+    public PositionSnapshot? GetPosition(string strategyId, string instrumentId)
     {
-        lock (_sync) return _positions.GetValueOrDefault(instrumentId);
+        lock (_sync)
+            return _positions.TryGetValue((strategyId, instrumentId), out var pos) ? ToSnapshot(pos) : null;
     }
-    public IReadOnlyList<Position> AllPositions
+    public IReadOnlyList<PositionSnapshot> AllPositions
     {
-        get { lock (_sync) return _positions.Values.ToList(); }
+        get { lock (_sync) return _positions.Values.Select(ToSnapshot).ToList(); }
     }
+
+    /// <summary>把可变 Position 投影为不可变 PositionSnapshot。调用方须已持 _sync 锁。</summary>
+    private static PositionSnapshot ToSnapshot(Position p) => new()
+    {
+        InstrumentId = p.InstrumentId,
+        StrategyId = p.StrategyId,
+        QuantityToday = p.QuantityToday,
+        QuantityYesterday = p.QuantityYesterday,
+        AvgPrice = p.AvgPrice,
+        MarketPrice = p.MarketPrice,
+        UnrealizedPnl = p.UnrealizedPnl,
+        Margin = p.Margin,
+        Commission = p.Commission,
+        CreatedTime = p.CreatedTime,
+        PositionDate = p.PositionDate,
+    };
     public IReadOnlyList<Order> ActiveOrders => []; // Phase 2b
     public IReadOnlyList<Trade> TradeHistory
     {
@@ -48,48 +71,63 @@ public class PortfolioManager : IPortfolioState
         get
         {
             lock (_sync)
-                return _subPortfolios.Values.Select(sp => new SubPortfolioState
-                {
-                    StrategyId = sp.StrategyId,
-                    AllocatedCapital = sp.AllocatedCapital,
-                    Equity = sp.Equity,
-                    PeakEquity = sp.PeakEquity,
-                    TodayPnL = sp.TodayPnL,
-                }).ToList();
+                return _subPortfolios.Values.Select(Snapshot).ToList();
         }
     }
 
-    public PortfolioManager(decimal totalCapital)
+    public PortfolioManager(decimal totalCapital, ILogger<PortfolioManager>? logger = null)
     {
         StartingCapital = totalCapital;
         _cash = totalCapital;
         _equity = totalCapital;
         _peakEquity = totalCapital;
         _equityAtDayStart = totalCapital;
+        _log = logger ?? NullLogger<PortfolioManager>.Instance;
     }
 
     /// <summary>
-    /// 从 CTP 恢复已有持仓（引擎启动/重连后调用）。
-    /// 仅在 _positions 中不存在该合约时才注入，避免覆盖引擎已管理的仓位。
-    /// 仓位已存在时，会用 CTP 的 PositionDate 更新（权威来源，跨越时段后今/昨可能变化）。
+    /// 从 CTP 恢复已有持仓（引擎启动/重连后调用），今/昨仓分别传入。
+    /// 仅在 _positions 中不存在该 (策略, 合约) 键时才注入，避免覆盖引擎已管理的仓位。
+    /// 仓位已存在时（盘中重连），用 CTP 的今/昨持仓与均价对账，漂移置 Mismatch。
     /// 线程安全。
     /// </summary>
-    public bool RestorePosition(string instrumentId, string strategyId, int quantity,
+    public bool RestorePosition(string instrumentId, string strategyId,
+        int quantityToday, int quantityYesterday,
         decimal avgPrice, decimal margin, DateTime createdTime, char positionDate = '\0')
     {
         lock (_sync)
         {
-            if (_positions.TryGetValue(instrumentId, out var existing))
+            var key = (strategyId, instrumentId);
+            if (_positions.TryGetValue(key, out var existing))
             {
                 // 更新 PositionDate — CTP 权威来源（跨时段后今仓可能变昨仓）
                 if (positionDate != '\0') existing.PositionDate = positionDate;
+
+                // 对账：本地账本 vs CTP 权威持仓。今/昨数量必须精确一致（含方向），均价允许 0.5% 相对偏差。
+                // 不一致 = 本地账本与交易所事实脱节，置 Mismatch 由风控阻断后续新开仓（平仓放行）。
+                // 断线期间漏成交/重复成交导致的账本漂移在此被兜住（安全侧，默认 block 不 repair）。
+                var qtyMismatch = existing.QuantityToday != quantityToday
+                               || existing.QuantityYesterday != quantityYesterday;
+                var priceDeviation = (existing.AvgPrice != 0 && avgPrice != 0)
+                    ? Math.Abs(existing.AvgPrice - avgPrice) / Math.Abs(existing.AvgPrice)
+                    : 0m;
+                var priceMismatch = priceDeviation > 0.005m;
+
+                if (qtyMismatch || priceMismatch)
+                {
+                    _reconcileStatus = ReconcileStatus.Mismatch;
+                    _log.LogError("[Reconcile] {Inst} 持仓对账不一致: 本地 Today={LocalToday} Yesterday={LocalYesterday} AvgPx={LocalPx} | CTP Today={CtpToday} Yesterday={CtpYesterday} AvgPx={CtpPx} Margin={CtpMargin}",
+                        instrumentId, existing.QuantityToday, existing.QuantityYesterday, existing.AvgPrice,
+                        quantityToday, quantityYesterday, avgPrice, margin);
+                }
                 return false;
             }
 
             var pos = new Position
             {
                 InstrumentId = instrumentId,
-                Quantity = quantity,
+                QuantityToday = quantityToday,
+                QuantityYesterday = quantityYesterday,
                 AvgPrice = avgPrice,
                 Margin = margin,
                 Commission = 0,
@@ -97,7 +135,7 @@ public class PortfolioManager : IPortfolioState
                 StrategyId = strategyId,
                 PositionDate = positionDate,
             };
-            _positions[instrumentId] = pos;
+            _positions[key] = pos;
             MarginUsed += margin;
             Cash -= margin;
             Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
@@ -105,40 +143,91 @@ public class PortfolioManager : IPortfolioState
         }
     }
 
+    /// <summary>开始一轮持仓对账：清除上一轮的 Mismatch 标志（CTP 持仓查询开始前调用）。</summary>
+    public void BeginReconcile()
+    {
+        lock (_sync) _reconcileStatus = ReconcileStatus.NotReconciled;
+    }
+
+    /// <summary>结束一轮持仓对账：若本轮未发现 Mismatch，标记为 Ok。</summary>
+    public void EndReconcile()
+    {
+        lock (_sync)
+        {
+            if (_reconcileStatus == ReconcileStatus.NotReconciled)
+                _reconcileStatus = ReconcileStatus.Ok;
+        }
+    }
+
     /// <summary>
     /// 从 CTP 资金账户恢复真实权益（引擎启动/重连后调用）。
-    /// Balance 是权威总权益（含保证金 + 浮盈）。positionProfit 是 CTP 报告的当前持仓盈亏，
+    /// Balance 是权威总权益（含保证金 + 浮盈）。PositionProfit 是 CTP 报告的当前持仓盈亏，
     /// 必须从现金基中扣除——因为持仓浮盈随后会由 UpdateMarketPrice 按行情 Bar 重新计算，
-    /// 若现金基已含浮盈则会被双重计入。据此现金基 = Balance - positionProfit - MarginUsed，
+    /// 若现金基已含浮盈则会被双重计入。据此现金基 = Balance - PositionProfit - CurrMargin，
     /// 使等式 Equity=Cash+MarginUsed+浮盈 在 Bar 驱动下收敛到 CTP 的 Balance。
+    /// CurrMargin 是 CTP 权威占用保证金：对账时刻采信它覆盖本地各持仓 margin 之和；对账后
+    /// ProcessFill/SettleDaily 会按「各持仓 margin 之和」重算 _marginUsed（预期——恢复本地追踪）。
     /// PreBalance（昨结算权益）用作当日盈亏基准，故 TodayPnL = Balance - PreBalance 反映当日真实盈亏。
     /// StartingCapital 保持不变（配置值 = 账户成立本金），因此 TotalPnL = Equity - StartingCapital 跨重启连续、不丢失累计盈亏。
     /// 线程安全。
     /// </summary>
-    public void ReconcileEquity(decimal balance, decimal positionProfit, decimal preBalance)
+    public void ReconcileEquity(BrokerAccountSnapshot snap)
     {
         lock (_sync)
         {
-            _equity = balance;
-            _cash = balance - positionProfit - _marginUsed;
-            _equityAtDayStart = preBalance > 0 ? preBalance : balance;
+            _equity = snap.Balance;
+            _marginUsed = snap.CurrMargin;
+            _cash = snap.Balance - snap.PositionProfit - snap.CurrMargin;
+            _equityAtDayStart = snap.PreBalance > 0 ? snap.PreBalance : snap.Balance;
             if (_equity > _peakEquity) _peakEquity = _equity;
             _equityReconciled = true;
         }
     }
 
-    public SubPortfolio GetSubPortfolio(string strategyId) =>
-        _subPortfolios.TryGetValue(strategyId, out var sp) ? sp :
-        throw new InvalidOperationException($"Strategy not found: {strategyId}");
+    /// <summary>取单策略分账只读快照（锁内构造，消除锁外读取 sub.Equity 竞态）。策略不存在抛异常。</summary>
+    public SubPortfolioState GetSubPortfolio(string strategyId)
+    {
+        lock (_sync)
+        {
+            if (!_subPortfolios.TryGetValue(strategyId, out var sp))
+                throw new InvalidOperationException($"Strategy not found: {strategyId}");
+            return Snapshot(sp);
+        }
+    }
 
-    public bool TryGetSubPortfolio(string strategyId, out SubPortfolio? sp)
-        => _subPortfolios.TryGetValue(strategyId, out sp);
+    /// <summary>取单策略分账只读快照（锁内构造）。策略不存在返回 false。</summary>
+    public bool TryGetSubPortfolio(string strategyId, out SubPortfolioState? sp)
+    {
+        lock (_sync)
+        {
+            if (_subPortfolios.TryGetValue(strategyId, out var mutable))
+            {
+                sp = Snapshot(mutable);
+                return true;
+            }
+            sp = null;
+            return false;
+        }
+    }
 
     public void CreateSubPortfolio(string strategyId, decimal allocatedCapital)
     {
-        var sub = new SubPortfolio(strategyId, allocatedCapital);
-        _subPortfolios[strategyId] = sub;
+        lock (_sync)
+        {
+            var sub = new SubPortfolio(strategyId, allocatedCapital);
+            _subPortfolios[strategyId] = sub;
+        }
     }
+
+    /// <summary>把可变 SubPortfolio 投影为不可变 SubPortfolioState 快照。调用方须已持 _sync 锁。</summary>
+    private static SubPortfolioState Snapshot(SubPortfolio sp) => new()
+    {
+        StrategyId = sp.StrategyId,
+        AllocatedCapital = sp.AllocatedCapital,
+        Equity = sp.Equity,
+        PeakEquity = sp.PeakEquity,
+        TodayPnL = sp.TodayPnL,
+    };
 
     /// <summary>按 Bar 收盘价更新持仓未实现盈亏（线程安全）</summary>
     public void UpdateMarketPrice(Bar bar, Future future)
@@ -146,16 +235,19 @@ public class PortfolioManager : IPortfolioState
         lock (_sync)
         {
             var price = (decimal)bar.CloseDouble;
-            if (!_positions.TryGetValue(bar.InstrumentId, out var pos)) return;
             var mult = future.TradingUnit;
-            pos.MarketPrice = (double)price;
-            if (pos.Quantity > 0)
-                pos.UnrealizedPnl = (double)((price - pos.AvgPrice) * pos.Quantity * mult);
-            else if (pos.Quantity < 0)
-                pos.UnrealizedPnl = (double)((pos.AvgPrice - price) * Math.Abs(pos.Quantity) * mult);
-            else
-                pos.UnrealizedPnl = 0;
-            _positions[bar.InstrumentId] = pos;
+            // 同一合约下可能有多策略各自的持仓（复合键），逐一更新其未实现盈亏。
+            foreach (var (key, pos) in _positions)
+            {
+                if (key.InstrumentId != bar.InstrumentId) continue;
+                pos.MarketPrice = (double)price;
+                if (pos.Quantity > 0)
+                    pos.UnrealizedPnl = (double)((price - pos.AvgPrice) * pos.Quantity * mult);
+                else if (pos.Quantity < 0)
+                    pos.UnrealizedPnl = (double)((pos.AvgPrice - price) * Math.Abs(pos.Quantity) * mult);
+                else
+                    pos.UnrealizedPnl = 0;
+            }
             Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
         }
     }
@@ -173,11 +265,12 @@ public class PortfolioManager : IPortfolioState
     {
         lock (_sync)
         {
-            foreach (var (instId, pos) in _positions
+            foreach (var (key, pos) in _positions
                 .Where(kv => kv.Value.Quantity != 0)
                 .Select(kv => (kv.Key, kv.Value))
                 .ToList())
             {
+                var instId = key.InstrumentId;
                 var future = registry.Resolve(instId);
                 if (future == null) continue;
 
@@ -210,7 +303,13 @@ public class PortfolioManager : IPortfolioState
                 pos.Margin = newMargin;
                 pos.MarketPrice = (double)settle;
                 pos.UnrealizedPnl = 0;
-                _positions[instId] = pos;
+
+                // 今仓 → 昨仓滚存（次日这些手数即「昨仓」，平今/平昨判定与 CTP 对齐）
+                pos.QuantityYesterday += pos.QuantityToday;
+                pos.QuantityToday = 0;
+                pos.PositionDate = '2';
+
+                _positions[key] = pos;
             }
 
             Equity = Cash + MarginUsed + _positions.Values.Sum(p => (decimal)p.UnrealizedPnl);
@@ -227,7 +326,7 @@ public class PortfolioManager : IPortfolioState
     {
         var closes = new List<OrderEvent>();
         List<(string instId, Position pos)> snapshot;
-        lock (_sync) { snapshot = _positions.Select(kv => (kv.Key, kv.Value)).ToList(); }
+        lock (_sync) { snapshot = _positions.Select(kv => (kv.Key.InstrumentId, kv.Value)).ToList(); }
 
         foreach (var (instId, pos) in snapshot)
         {
@@ -288,7 +387,7 @@ public class PortfolioManager : IPortfolioState
             var fills = new List<OrderEvent>();
             foreach (var (instId, pos) in _positions
                 .Where(kv => kv.Value.Quantity != 0)
-                .Select(kv => (kv.Key, kv.Value))
+                .Select(kv => (kv.Key.InstrumentId, kv.Value))
                 .ToList())
             {
                 var px = instId == bar.InstrumentId && bar.CloseDouble > 0
@@ -318,6 +417,17 @@ public class PortfolioManager : IPortfolioState
     }
 
     /// <summary>
+    /// 判断本次平仓是否属「平今」。优先用 CTP OffsetFlag（实盘权威来源），
+    /// 回测/未设置时回退到建仓日期 == 成交日期比较。
+    /// </summary>
+    private static bool IsCloseToday(OrderEvent fill, Position pos)
+    {
+        if (fill.OffsetFlag == "CloseToday") return true;
+        if (fill.OffsetFlag == "CloseYesterday") return false;
+        return pos.CreatedTime.Date == fill.Time.Date;
+    }
+
+    /// <summary>
     /// 处理成交。更新持仓/资金/分账，产生 Trade 记录。（线程安全）
     /// 实盘中从 FillChannel 线程和事件循环线程并发调用，lock(_sync) 保护。
     /// </summary>
@@ -334,7 +444,7 @@ public class PortfolioManager : IPortfolioState
         var future = registry.Resolve(fill.InstrumentId);
         if (future == null) return null;
 
-        var key = fill.InstrumentId;
+        var key = (fill.StrategyId, fill.InstrumentId);
         var hasPosition = _positions.TryGetValue(key, out var pos);
 
         // 保证金 = 价格 × 交易单位 × 手数 × 保证金率（动态：基准+交割月+长假）
@@ -346,11 +456,11 @@ public class PortfolioManager : IPortfolioState
 
         if (!hasPosition)
         {
-            // 开仓
+            // 开仓：全部入今仓
             pos = new Position
             {
-                InstrumentId = key,
-                Quantity = fill.Direction == OrderDirection.Buy ? fill.Quantity : -fill.Quantity,
+                InstrumentId = fill.InstrumentId,
+                QuantityToday = fill.Direction == OrderDirection.Buy ? fill.Quantity : -fill.Quantity,
                 AvgPrice = fill.FillPrice,
                 Commission = fill.Fee,
                 Margin = margin,
@@ -368,15 +478,41 @@ public class PortfolioManager : IPortfolioState
 
             if (Math.Sign(newQty) == Math.Sign(pos.Quantity) || newQty == 0)
             {
-                // 加仓或平仓
+                // 加仓或减仓（部分平仓）
                 if (newQty != 0)
                 {
-                    // 加仓：加权平均价
-                    var totalQty = Math.Abs(pos.Quantity) + fill.Quantity;
-                    pos.AvgPrice = (pos.AvgPrice * Math.Abs(pos.Quantity) + fill.FillPrice * fill.Quantity)
-                        / totalQty;
-                    pos.Quantity = newQty;
-                    pos.Commission += fill.Fee;
+                    var delta = fill.Direction == OrderDirection.Buy ? fill.Quantity : -fill.Quantity;
+                    if (Math.Abs(newQty) > Math.Abs(pos.Quantity))
+                    {
+                        // 加仓（同向增量）：新开手数入今仓，加权平均价
+                        var totalQty = Math.Abs(pos.Quantity) + fill.Quantity;
+                        pos.AvgPrice = (pos.AvgPrice * Math.Abs(pos.Quantity) + fill.FillPrice * fill.Quantity)
+                            / totalQty;
+                        pos.QuantityToday += delta;
+                        pos.Commission += fill.Fee;
+                    }
+                    else
+                    {
+                        // 减仓（部分平仓）：按平今/平昨（IsCloseToday，优先 OffsetFlag）决定先减今仓还是昨仓；
+                        // 均价不变——部分平仓不改变剩余持仓的成本基。
+                        var sign = Math.Sign(pos.Quantity);
+                        var reduce = fill.Quantity;   // 本次平仓手数（正数）
+                        if (IsCloseToday(fill, pos))
+                        {
+                            var fromToday = Math.Min(reduce, Math.Abs(pos.QuantityToday));
+                            pos.QuantityToday -= sign * fromToday;
+                            var remaining = reduce - fromToday;
+                            if (remaining > 0) pos.QuantityYesterday -= sign * remaining;
+                        }
+                        else
+                        {
+                            var fromYesterday = Math.Min(reduce, Math.Abs(pos.QuantityYesterday));
+                            pos.QuantityYesterday -= sign * fromYesterday;
+                            var remaining = reduce - fromYesterday;
+                            if (remaining > 0) pos.QuantityToday -= sign * remaining;
+                        }
+                        pos.Commission += fill.Fee;
+                    }
                 }
                 else
                 {
@@ -385,14 +521,14 @@ public class PortfolioManager : IPortfolioState
 
                     // 平今手续费：当天开当天平且设置了区别平今费 → 用平今费（支持固定元/手）
                     var closeFee = fill.Fee;
-                    if (pos.CreatedTime.Date == fill.Time.Date && future.HasDistinctCloseTodayFee)
+                    if (IsCloseToday(fill, pos) && future.HasDistinctCloseTodayFee)
                         closeFee = future.CloseTodayFee(fill.FillPrice, Math.Abs(pos.Quantity));
 
                     var pnl = (fill.FillPrice - pos.AvgPrice) * Math.Abs(pos.Quantity) * mult
                         * (pos.Quantity > 0 ? 1 : -1);
                     var trade = new Trade
                     {
-                        InstrumentId = key,
+                        InstrumentId = fill.InstrumentId,
                         Quantity = Math.Abs(pos.Quantity),
                         EntryPrice = pos.AvgPrice,
                         ExitPrice = fill.FillPrice,
@@ -443,7 +579,7 @@ public class PortfolioManager : IPortfolioState
                 // 平仓记录
                 var trade = new Trade
                 {
-                    InstrumentId = key,
+                    InstrumentId = fill.InstrumentId,
                     Quantity = closeQty,
                     EntryPrice = pos.AvgPrice,
                     ExitPrice = fill.FillPrice,
@@ -467,8 +603,8 @@ public class PortfolioManager : IPortfolioState
                 var releasedMargin = pos.Margin;  // 保存旧仓保证金（pos 即将被新仓覆盖）
                 pos = new Position
                 {
-                    InstrumentId = key,
-                    Quantity = (fill.Direction == OrderDirection.Buy ? 1 : -1) * remainingQty,
+                    InstrumentId = fill.InstrumentId,
+                    QuantityToday = (fill.Direction == OrderDirection.Buy ? 1 : -1) * remainingQty,
                     AvgPrice = fill.FillPrice,
                     Commission = openFee,
                     Margin = newMargin,

@@ -42,8 +42,10 @@ public class ExecutionHandler : IExecutionHandler
     /// <summary>基础滑点跳数 (tick-based模型, 默认1跳)</summary>
     public int SlippageTicks { get; set; } = 1;
 
+    // 成交回报通道：改为 Unbounded，杜绝 256 容量满后 TryWrite 静默丢弃成交事件（P0-11）。
+    // 实盘成交回报必须全部送达 ProcessFill，否则持仓/资金账本与交易所脱节。
     public System.Threading.Channels.Channel<OrderEvent> FillChannel { get; }
-        = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
+        = System.Threading.Channels.Channel.CreateUnbounded<OrderEvent>();
 
     public System.Threading.Channels.Channel<OrderEvent> OrderOutbox { get; }
         = System.Threading.Channels.Channel.CreateBounded<OrderEvent>(256);
@@ -116,6 +118,9 @@ public class ExecutionHandler : IExecutionHandler
     public OrderTicket Submit(Order order, string strategyId, Core.Risk.IPortfolioState? portfolio = null)
     {
         var id = Interlocked.Increment(ref _nextOrderId);
+        // 审计链 TraceId：每笔订单一条贯穿全生命周期（Submitted→Accepted→Filled/Rejected）的追踪链，
+        // 落库 DuckDB order_events.trace_id，与 StrategyId/OrderRef/TradeId 一起支撑单笔回溯。
+        var traceId = order.TraceId is { Length: > 0 } t ? t : Guid.NewGuid().ToString("N");
         order = new Order
         {
             OrderId = id,
@@ -127,6 +132,7 @@ public class ExecutionHandler : IExecutionHandler
             StopPrice = order.StopPrice,
             Tag = order.Tag,
             StrategyId = strategyId,
+            TraceId = traceId,
             Status = OrderStatus.Submitted,
             CreatedTime = DateTimeOffset.UtcNow,
             IsCloseOrder = order.IsCloseOrder,
@@ -135,17 +141,41 @@ public class ExecutionHandler : IExecutionHandler
             ExitReason = order.ExitReason,
         };
 
+        // P0-10 幻成交防护：实盘只支持市价单（发往 CTP，成交由 OnRtnTrade 回报驱动）。
+        // 限价/止损单在实盘既不发 CTP（SendToExchange 仅对 Market 触发）又会被本地撮合成「幻成交」，
+        // 账本虚平/虚开而交易所实际仓位未变。这里直接拒绝，逼策略在实盘走市价单。
+        if (IsLive && order.Type != OrderType.Market)
+        {
+            order.Status = OrderStatus.Rejected;
+            lock (_sync) { _orderHistory.Add(new OrderEvent
+            {
+                OrderId = id, InstrumentId = order.InstrumentId,
+                StrategyId = strategyId, TraceId = traceId, Direction = order.Direction,
+                Quantity = order.Quantity, OrderQty = order.Quantity,
+                FilledQty = 0, Type = OrderEventType.Rejected,
+                Message = "实盘仅支持市价单（限价/止损单不发 CTP 会被本地幻成交），请改用市价单",
+                Time = DateTimeOffset.UtcNow,
+            }); }
+            _log.LogWarning("[Order] #{Id} {Type} {Inst} x{Qty} → REJECTED: 实盘禁止限价/止损单（幻成交防护）",
+                id, order.Type, order.InstrumentId, order.Quantity);
+            return new OrderTicket { OrderId = id, Status = OrderStatus.Rejected };
+        }
+
         // 风控检查
         if (portfolio != null)
         {
-            var riskResult = _risk.CheckPreOrder(order, portfolio);
+            // 在途订单计入风控/购买力：用「当前持仓 + 在途净敞口」作为有效仓位，
+            // 避免同 Tick 多笔订单各自通过、合计超限（P0-07/08）。
+            var effective = new InFlightPortfolio(portfolio, SnapshotActiveOrders());
+
+            var riskResult = _risk.CheckPreOrder(order, effective);
             if (!riskResult.Passed)
             {
                 order.Status = OrderStatus.Rejected;
                 lock (_sync) { _orderHistory.Add(new OrderEvent
                 {
                     OrderId = id, InstrumentId = order.InstrumentId,
-                    StrategyId = strategyId, Direction = order.Direction,
+                    StrategyId = strategyId, TraceId = traceId, Direction = order.Direction,
                     Quantity = order.Quantity, OrderQty = order.Quantity,
                     FilledQty = 0, Type = OrderEventType.Rejected,
                     Message = riskResult.Reason, Time = DateTimeOffset.UtcNow,
@@ -158,7 +188,7 @@ public class ExecutionHandler : IExecutionHandler
             // 反向开仓拦截：已有多头时不能开空，已有空头时不能开多。
             if (!order.IsCloseOrder)
             {
-                var existing = portfolio.GetPosition(order.InstrumentId);
+                var existing = portfolio.GetPosition(order.StrategyId, order.InstrumentId);
                 if (existing != null && existing.Quantity != 0)
                 {
                     var curSign = Math.Sign(existing.Quantity);
@@ -169,7 +199,7 @@ public class ExecutionHandler : IExecutionHandler
                         lock (_sync) { _orderHistory.Add(new OrderEvent
                         {
                             OrderId = id, InstrumentId = order.InstrumentId,
-                            StrategyId = strategyId, Direction = order.Direction,
+                            StrategyId = strategyId, TraceId = traceId, Direction = order.Direction,
                             Quantity = order.Quantity, OrderQty = order.Quantity,
                             FilledQty = 0, Type = OrderEventType.Rejected,
                             Message = $"反向开仓被拒: 当前持{existing.Quantity}手(方向{curSign:+0;-#}), 订单方向{ordSign:+0;-#}。请先平仓再反向。",
@@ -183,14 +213,14 @@ public class ExecutionHandler : IExecutionHandler
             }
 
             // 购买力硬闸门（与风控同层，任何经 Submit 的开仓单都无法绕过）：
-            // 估算开仓所需保证金+手续费，可用现金不足即拒。
-            if (!PassesBuyingPower(order, portfolio, out var bpReason))
+            // 估算开仓所需保证金+手续费，可用现金不足即拒。同样用含在途的有效仓位。
+            if (!PassesBuyingPower(order, effective, out var bpReason))
             {
                 order.Status = OrderStatus.Rejected;
                 lock (_sync) { _orderHistory.Add(new OrderEvent
                 {
                     OrderId = id, InstrumentId = order.InstrumentId,
-                    StrategyId = strategyId, Direction = order.Direction,
+                    StrategyId = strategyId, TraceId = traceId, Direction = order.Direction,
                     Quantity = order.Quantity, OrderQty = order.Quantity,
                     FilledQty = 0, Type = OrderEventType.Rejected,
                     Message = bpReason, Time = DateTimeOffset.UtcNow,
@@ -212,6 +242,7 @@ public class ExecutionHandler : IExecutionHandler
             OrderId = id,
             InstrumentId = order.InstrumentId,
             StrategyId = strategyId,
+            TraceId = traceId,
             Direction = order.Direction,
             Quantity = order.Quantity,
             OrderQty = order.Quantity,
@@ -247,10 +278,15 @@ public class ExecutionHandler : IExecutionHandler
         };
         if (estPrice <= 0) return true;   // 无法估价 → 放行
 
-        var cur = portfolio.GetPosition(order.InstrumentId)?.Quantity ?? 0;
-        var next = order.Direction == OrderDirection.Buy ? cur + order.Quantity : cur - order.Quantity;
-        var addedLots = Math.Abs(next) - Math.Abs(cur);
-        if (addedLots <= 0) return true;  // 减仓/平仓 → 放行
+        var cur = portfolio.GetPosition(order.StrategyId, order.InstrumentId)?.Quantity ?? 0;
+        // P0-09 净新增敞口：只计「开仓」部分。平仓释放保证金，反向开仓按新开计。
+        // 例：持多 2 手、卖 4 手 = 平 2 + 开空 2，新增敞口 = 2（旧公式 |−2|−|+2| 会误算成 0）。
+        var dir = order.Direction == OrderDirection.Buy ? 1 : -1;
+        var absCur = Math.Abs(cur);
+        var addedLots = (cur == 0 || Math.Sign(cur) == dir)
+            ? order.Quantity                                  // 空仓/同向：全部新开
+            : Math.Max(0, order.Quantity - absCur);           // 反向：扣除平仓部分后剩余即新开
+        if (addedLots <= 0) return true;  // 纯减仓/平仓 → 放行
 
         var marginRate = future.MarginRate > 0 ? future.MarginRate : 0.08m;
         var margin = estPrice * future.TradingUnit * addedLots * marginRate;
@@ -266,6 +302,88 @@ public class ExecutionHandler : IExecutionHandler
     {
         lock (_sync)
             return _limitRef.TryGetValue(instrumentId, out var r) ? r.LastClose : 0;
+    }
+
+    /// <summary>在途订单快照（线程安全），供 InFlightPortfolio 构建「含在途」的有效仓位。</summary>
+    private IReadOnlyList<Order> SnapshotActiveOrders()
+    {
+        lock (_sync) return _activeOrders.ToList();
+    }
+
+    /// <summary>
+    /// 含在途订单的有效仓位视图：把尚未成交的在途单净敞口并入 GetPosition/AllPositions，
+    /// 使风控持仓上限与购买力闸门按「当前持仓 + 在途」评估，而不是只算已成交持仓（P0-07/08）。
+    /// 其余状态（现金/权益/回撤等）原样转发，不改变语义。
+    /// </summary>
+    private sealed class InFlightPortfolio : Core.Risk.IPortfolioState
+    {
+        private readonly Core.Risk.IPortfolioState _inner;
+        private readonly Dictionary<(string StrategyId, string InstrumentId), int> _inFlight = new();
+
+        public InFlightPortfolio(Core.Risk.IPortfolioState inner, IReadOnlyList<Order> activeOrders)
+        {
+            _inner = inner;
+            foreach (var o in activeOrders)
+            {
+                var rem = o.Quantity - o.FilledQuantity;
+                if (rem <= 0) continue;
+                var delta = o.Direction == OrderDirection.Buy ? rem : -rem;
+                var k = (o.StrategyId, o.InstrumentId);
+                _inFlight[k] = _inFlight.GetValueOrDefault(k) + delta;
+            }
+        }
+
+        public decimal Cash => _inner.Cash;
+        public decimal Equity => _inner.Equity;
+        public decimal MarginUsed => _inner.MarginUsed;
+        public decimal StartingCapital => _inner.StartingCapital;
+        public decimal PeakEquity => _inner.PeakEquity;
+        public decimal TodayPnL => _inner.TodayPnL;
+        public decimal TotalPnL => _inner.TotalPnL;
+        public ReconcileStatus ReconcileStatus => _inner.ReconcileStatus;
+        public IReadOnlyList<Order> ActiveOrders => _inner.ActiveOrders;
+        public IReadOnlyList<Trade> TradeHistory => _inner.TradeHistory;
+        public IReadOnlyList<SubPortfolioState> SubPortfolios => _inner.SubPortfolios;
+
+        public PositionSnapshot? GetPosition(string strategyId, string instrumentId)
+        {
+            var pos = _inner.GetPosition(strategyId, instrumentId);
+            if (!_inFlight.TryGetValue((strategyId, instrumentId), out var delta) || delta == 0)
+                return pos;
+            return new PositionSnapshot
+            {
+                InstrumentId = instrumentId,
+                StrategyId = strategyId,
+                QuantityToday = (pos?.QuantityToday ?? 0) + delta,
+                QuantityYesterday = pos?.QuantityYesterday ?? 0,
+                AvgPrice = pos?.AvgPrice ?? 0,
+            };
+        }
+
+        public IReadOnlyList<PositionSnapshot> AllPositions
+        {
+            get
+            {
+                var merged = new Dictionary<(string, string), PositionSnapshot>();
+                foreach (var p in _inner.AllPositions)
+                    merged[(p.StrategyId, p.InstrumentId)] = p;
+                foreach (var (k, delta) in _inFlight)
+                {
+                    merged.TryGetValue(k, out var pos);
+                    var qty = (pos?.Quantity ?? 0) + delta;
+                    if (pos == null && qty == 0) continue;
+                    merged[k] = new PositionSnapshot
+                    {
+                        InstrumentId = k.InstrumentId,
+                        StrategyId = k.StrategyId,
+                        QuantityToday = (pos?.QuantityToday ?? 0) + delta,
+                        QuantityYesterday = pos?.QuantityYesterday ?? 0,
+                        AvgPrice = pos?.AvgPrice ?? 0,
+                    };
+                }
+                return merged.Values.ToList();
+            }
+        }
     }
 
     public bool Cancel(long orderId)
@@ -342,8 +460,9 @@ public class ExecutionHandler : IExecutionHandler
     /// <summary>用 Tick 撮合一个订单。Bid/Ask 价格 + 流动性约束。</summary>
     private OrderEvent? TryMatchTick(Order order, TickRecord tick, Future future, ref int remainingVolume)
     {
-        // 实盘模式：市价单已在 CTP 成交，本地不撮合
-        if (IsLive && order.Type == OrderType.Market) return null;
+        // 实盘模式：所有成交由 CTP 回报（OnRtnTrade→FillChannel）驱动，本地一律不撮合。
+        // 此前仅排除市价单，限价/止损单仍会被本地撮合成「幻成交」，账本与交易所脱节（P0-10）。
+        if (IsLive) return null;
 
         // 涨跌停锁定：涨停无法买入、跌停无法卖出（CTP 采集时按 UpperLimit/LowerLimitPrice 标记 Flags）
         if (tick.IsUpperLimit && order.Direction == OrderDirection.Buy) return null;
@@ -491,8 +610,9 @@ public class ExecutionHandler : IExecutionHandler
     /// <summary>用 Bar 撮合一个订单。前进偏差防护：用本 Bar Open 成交市价单。</summary>
     private OrderEvent? MatchBar(Order order, Bar bar, Future future, double limitRefPrice, double atrForSlippage)
     {
-        // 实盘模式：市价单已在 CTP 成交，本地不撮合
-        if (IsLive && order.Type == OrderType.Market) return null;
+        // 实盘模式：所有成交由 CTP 回报（OnRtnTrade→FillChannel）驱动，本地一律不撮合。
+        // 此前仅排除市价单，限价/止损单仍会被本地撮合成「幻成交」，账本与交易所脱节（P0-10）。
+        if (IsLive) return null;
 
         decimal fillPrice;
         var requestedQty = order.Quantity - order.FilledQuantity;

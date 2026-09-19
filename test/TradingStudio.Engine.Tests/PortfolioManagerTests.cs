@@ -39,7 +39,7 @@ public class PortfolioManagerTests
         pm.CreateSubPortfolio("s1", 1_000_000);
         pm.ProcessFill(Buy("rb", 5, 3500), Reg);
 
-        Assert.Equal(5, pm.GetPosition("rb")!.Quantity);
+        Assert.Equal(5, pm.GetPosition("s1", "rb")!.Quantity);
         Assert.Equal(1_000_000m - 50m, pm.Equity);
     }
 
@@ -51,7 +51,7 @@ public class PortfolioManagerTests
         pm.ProcessFill(Buy("rb", 5, 3500), Reg);
         pm.ProcessFill(Sell("rb", 5, 3600), Reg);
 
-        Assert.Null(pm.GetPosition("rb"));
+        Assert.Null(pm.GetPosition("s1", "rb"));
         Assert.True(pm.Equity > 1_000_000m);
         Assert.Equal(0m, pm.MarginUsed);
     }
@@ -64,7 +64,7 @@ public class PortfolioManagerTests
         pm.ProcessFill(Buy("rb", 5, 3500), Reg);
         pm.ProcessFill(Sell("rb", 5, 3400), Reg);
 
-        Assert.Null(pm.GetPosition("rb"));
+        Assert.Null(pm.GetPosition("s1", "rb"));
         Assert.True(pm.Equity < 1_000_000m);
     }
 
@@ -77,7 +77,7 @@ public class PortfolioManagerTests
         pm.CreateSubPortfolio("s1", 1_000_000);
         pm.ProcessFill(Sell("rb", 5, 3500), Reg);
 
-        var pos = pm.GetPosition("rb")!;
+        var pos = pm.GetPosition("s1", "rb")!;
         Assert.Equal(-5, pos.Quantity);
         Assert.Equal(3500m, pos.AvgPrice);
     }
@@ -90,7 +90,7 @@ public class PortfolioManagerTests
         pm.ProcessFill(Sell("rb", 5, 3500), Reg);
         pm.ProcessFill(Buy("rb", 5, 3400), Reg);
 
-        Assert.Null(pm.GetPosition("rb"));
+        Assert.Null(pm.GetPosition("s1", "rb"));
         Assert.True(pm.Equity > 1_000_000m);
     }
 
@@ -102,7 +102,7 @@ public class PortfolioManagerTests
         pm.ProcessFill(Sell("rb", 5, 3500), Reg);
         pm.ProcessFill(Buy("rb", 5, 3600), Reg);
 
-        Assert.Null(pm.GetPosition("rb"));
+        Assert.Null(pm.GetPosition("s1", "rb"));
         Assert.True(pm.Equity < 1_000_000m);
     }
 
@@ -116,7 +116,7 @@ public class PortfolioManagerTests
         pm.ProcessFill(Buy("rb", 5, 3500), Reg);
         pm.ProcessFill(Sell("rb", 10, 3600), Reg); // close 5 + open 5 short
 
-        var pos = pm.GetPosition("rb")!;
+        var pos = pm.GetPosition("s1", "rb")!;
         Assert.Equal(-5, pos.Quantity);
         Assert.Equal(3600m, pos.AvgPrice);
     }
@@ -131,7 +131,7 @@ public class PortfolioManagerTests
         pm.ProcessFill(Buy("rb", 5, 3500), Reg);
         pm.ProcessFill(Buy("rb", 5, 3600), Reg);
 
-        var pos = pm.GetPosition("rb")!;
+        var pos = pm.GetPosition("s1", "rb")!;
         Assert.Equal(10, pos.Quantity);
         Assert.Equal(3550m, pos.AvgPrice);
     }
@@ -146,8 +146,8 @@ public class PortfolioManagerTests
         pm.ProcessFill(Buy("rb", 3, 3500), Reg);
         pm.ProcessFill(Buy("ta", 5, 5000), Reg);
 
-        Assert.Equal(3, pm.GetPosition("rb")!.Quantity);
-        Assert.Equal(5, pm.GetPosition("ta")!.Quantity);
+        Assert.Equal(3, pm.GetPosition("s1", "rb")!.Quantity);
+        Assert.Equal(5, pm.GetPosition("s1", "ta")!.Quantity);
         Assert.True(pm.MarginUsed > 0);
     }
 
@@ -204,7 +204,7 @@ public class PortfolioManagerTests
         pm.ProcessFill(Sell("rb", 5, 3600, "s1"), Reg);
 
         Assert.True(pm.GetSubPortfolio("s1").Equity > 500_000m);
-        Assert.Equal(500_000m, pm.GetSubPortfolio("s2").Cash);
+        Assert.Equal(500_000m, pm.GetSubPortfolio("s2").Equity);  // s2 无持仓 → Equity == 未动用的分账资本
     }
 
     // ═══ 未实现盈亏 ═══
@@ -219,7 +219,7 @@ public class PortfolioManagerTests
         var bar = new Bar { InstrumentId = "rb", Close = (long)(3550 * TickRecord.PriceScale) };
         pm.UpdateMarketPrice(bar, Reg.Find("rb")!);
 
-        Assert.True(pm.GetPosition("rb")!.UnrealizedPnl > 0);
+        Assert.True(pm.GetPosition("s1", "rb")!.UnrealizedPnl > 0);
         Assert.True(pm.Equity > pm.Cash + pm.MarginUsed);
     }
 
@@ -230,7 +230,7 @@ public class PortfolioManagerTests
     {
         var pm = new PortfolioManager(1_000_000);
         // 模拟重启：CTP 返回动态权益 993,800（累计亏损 6,200），昨结算 1,000,000，无持仓
-        pm.ReconcileEquity(993_800m, 0m, 1_000_000m);
+        pm.ReconcileEquity(new BrokerAccountSnapshot { Balance = 993_800m, PositionProfit = 0m, PreBalance = 1_000_000m });
 
         Assert.Equal(993_800m, pm.Equity);
         Assert.Equal(993_800m, pm.Cash);        // 无持仓无保证金 → 现金 = 权益
@@ -243,11 +243,11 @@ public class PortfolioManagerTests
     {
         var pm = new PortfolioManager(1_000_000);
         pm.CreateSubPortfolio("s1", 1_000_000);
-        pm.RestorePosition("rb", "s1", 2, 15_000m, 45_000m, DateTime.Today, '2');
+        pm.RestorePosition("rb", "s1", 0, 2, 15_000m, 45_000m, DateTime.Today, '2');
         Assert.Equal(45_000m, pm.MarginUsed);
 
         // CTP 返回动态权益 1,000,000（含 45,000 占用保证金，无浮盈），重构后现金 = 权益 - 保证金
-        pm.ReconcileEquity(1_000_000m, 0m, 1_000_000m);
+        pm.ReconcileEquity(new BrokerAccountSnapshot { Balance = 1_000_000m, PositionProfit = 0m, PreBalance = 1_000_000m, CurrMargin = 45_000m });
 
         Assert.Equal(1_000_000m, pm.Equity);
         Assert.Equal(1_000_000m - 45_000m, pm.Cash);
@@ -258,10 +258,10 @@ public class PortfolioManagerTests
     {
         var pm = new PortfolioManager(1_000_000);
         pm.CreateSubPortfolio("s1", 1_000_000);
-        pm.RestorePosition("rb", "s1", 2, 15_000m, 45_000m, DateTime.Today, '2');
+        pm.RestorePosition("rb", "s1", 0, 2, 15_000m, 45_000m, DateTime.Today, '2');
 
-        // CTP 报告：动态权益 1,010,000（含 10,000 浮盈），持仓盈亏 10,000，昨结算 1,000,000
-        pm.ReconcileEquity(1_010_000m, 10_000m, 1_000_000m);
+        // CTP 报告：动态权益 1,010,000（含 10,000 浮盈），持仓盈亏 10,000，昨结算 1,000,000，占用保证金 45,000
+        pm.ReconcileEquity(new BrokerAccountSnapshot { Balance = 1_010_000m, PositionProfit = 10_000m, PreBalance = 1_000_000m, CurrMargin = 45_000m });
 
         // 现金基 = Balance - PositionProfit - Margin = 955,000（浮盈扣除，避免双重计算）
         Assert.Equal(955_000m, pm.Cash);
@@ -271,7 +271,153 @@ public class PortfolioManagerTests
         var bar = new Bar { InstrumentId = "rb", Close = (long)(15_500 * TickRecord.PriceScale) };
         pm.UpdateMarketPrice(bar, Reg.Find("rb")!);
 
-        Assert.Equal(10_000d, pm.GetPosition("rb")!.UnrealizedPnl, 1);
+        Assert.Equal(10_000d, pm.GetPosition("s1", "rb")!.UnrealizedPnl, 1);
         Assert.Equal(1_010_000m, pm.Equity);    // 收敛到 Balance，浮盈未双重计入
+    }
+
+    // ═══ 持仓对账（RestorePosition 本地账本 vs CTP 权威） ═══
+
+    [Fact]
+    public void RestorePosition_MismatchedQuantity_SetsReconcileMismatch()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 1_000_000);
+        pm.RestorePosition("rb", "s1", 0, 2, 15_000m, 45_000m, DateTime.Today, '2');
+
+        pm.BeginReconcile();
+        // CTP 报告 3 手，本地账本 2 手 → 数量不一致 → Mismatch
+        pm.RestorePosition("rb", "s1", 0, 3, 15_000m, 45_000m, DateTime.Today, '2');
+
+        Assert.Equal(ReconcileStatus.Mismatch, pm.ReconcileStatus);
+    }
+
+    [Fact]
+    public void RestorePosition_PriceDeviation_SetsReconcileMismatch()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 1_000_000);
+        pm.RestorePosition("rb", "s1", 0, 2, 15_000m, 45_000m, DateTime.Today, '2');
+
+        pm.BeginReconcile();
+        // 均价 15150 vs 15000，偏离 1% > 0.5% 阈值 → Mismatch
+        pm.RestorePosition("rb", "s1", 0, 2, 15_150m, 45_000m, DateTime.Today, '2');
+
+        Assert.Equal(ReconcileStatus.Mismatch, pm.ReconcileStatus);
+    }
+
+    [Fact]
+    public void RestorePosition_Matching_EndReconcile_Ok()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 1_000_000);
+        pm.RestorePosition("rb", "s1", 0, 2, 15_000m, 45_000m, DateTime.Today, '2');
+
+        pm.BeginReconcile();
+        pm.RestorePosition("rb", "s1", 0, 2, 15_000m, 45_000m, DateTime.Today, '2'); // 一致
+        pm.EndReconcile();
+
+        Assert.Equal(ReconcileStatus.Ok, pm.ReconcileStatus);
+    }
+
+    // ═══ P2 · 复合键 + 今昨拆分 + 不可变快照（黄金手算用例） ═══
+
+    [Fact]
+    public void TwoStrategies_SameInstrument_IsolatedPositions()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 500_000);
+        pm.CreateSubPortfolio("s2", 500_000);
+
+        pm.ProcessFill(Buy("rb", 5, 3500, "s1"), Reg);
+        pm.ProcessFill(Buy("rb", 3, 3600, "s2"), Reg);
+
+        // 复合键 (策略, 合约)：两策略同合约是两个独立仓位，不是撞成一个
+        Assert.Equal(5, pm.GetPosition("s1", "rb")!.Quantity);
+        Assert.Equal(3, pm.GetPosition("s2", "rb")!.Quantity);
+        Assert.Equal(2, pm.AllPositions.Count);
+
+        // 平掉 s2，s1 仓位不受影响
+        pm.ProcessFill(Sell("rb", 3, 3650, "s2"), Reg);
+        Assert.Null(pm.GetPosition("s2", "rb"));
+        Assert.Equal(5, pm.GetPosition("s1", "rb")!.Quantity);
+    }
+
+    [Fact]
+    public void SettleDaily_RollsTodayIntoYesterday()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 1_000_000);
+        pm.ProcessFill(Buy("rb", 5, 3500), Reg);
+
+        var before = pm.GetPosition("s1", "rb")!;
+        Assert.Equal(5, before.QuantityToday);
+        Assert.Equal(0, before.QuantityYesterday);
+
+        pm.SettleDaily(Reg);
+
+        var after = pm.GetPosition("s1", "rb")!;
+        Assert.Equal(0, after.QuantityToday);   // 今仓滚入昨仓
+        Assert.Equal(5, after.QuantityYesterday);
+        Assert.Equal(5, after.Quantity);        // 净手数不变
+    }
+
+    [Fact]
+    public void GetPosition_ReturnsImmutableSnapshot()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 1_000_000);
+        pm.ProcessFill(Buy("rb", 5, 3500), Reg);
+
+        var snap = pm.GetPosition("s1", "rb")!;
+        Assert.IsType<PositionSnapshot>(snap);
+        Assert.Equal(5, snap.Quantity);
+
+        // 后续加仓，之前拿到的快照仍反映旧数量（证明是拷贝而非内部引用）
+        pm.ProcessFill(Buy("rb", 5, 3600), Reg);
+        Assert.Equal(5, snap.Quantity);
+        Assert.Equal(10, pm.GetPosition("s1", "rb")!.Quantity);
+    }
+
+    [Fact]
+    public void Reduce_CloseYesterday_ReducesYesterdayFirst()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 1_000_000);
+        // 直接恢复混合仓：今 2 + 昨 3（共 5 手 @3500，保证金 3500×10×5×0.08 = 14,000）
+        pm.RestorePosition("rb", "s1", 2, 3, 3500m, 14_000m, DateTime.Today, '1');
+
+        // 平昨 1 手（OffsetFlag=CloseYesterday）→ 昨 3 → 2，今 2 不动
+        pm.ProcessFill(new OrderEvent
+        {
+            InstrumentId = "rb", Direction = OrderDirection.Sell, Quantity = 1,
+            Type = OrderEventType.Filled, FillPrice = 3600, Fee = 50,
+            StrategyId = "s1", Time = DateTimeOffset.Now, OffsetFlag = "CloseYesterday",
+        }, Reg);
+
+        var pos = pm.GetPosition("s1", "rb")!;
+        Assert.Equal(2, pos.QuantityToday);
+        Assert.Equal(2, pos.QuantityYesterday);
+        Assert.Equal(4, pos.Quantity);
+    }
+
+    [Fact]
+    public void Reduce_CloseToday_ReducesTodayFirst()
+    {
+        var pm = new PortfolioManager(1_000_000);
+        pm.CreateSubPortfolio("s1", 1_000_000);
+        pm.RestorePosition("rb", "s1", 2, 3, 3500m, 14_000m, DateTime.Today, '1');
+
+        // 平今 2 手（OffsetFlag=CloseToday）→ 今 2 → 0，昨 3 不动
+        pm.ProcessFill(new OrderEvent
+        {
+            InstrumentId = "rb", Direction = OrderDirection.Sell, Quantity = 2,
+            Type = OrderEventType.Filled, FillPrice = 3550, Fee = 50,
+            StrategyId = "s1", Time = DateTimeOffset.Now, OffsetFlag = "CloseToday",
+        }, Reg);
+
+        var pos = pm.GetPosition("s1", "rb")!;
+        Assert.Equal(0, pos.QuantityToday);
+        Assert.Equal(3, pos.QuantityYesterday);
+        Assert.Equal(3, pos.Quantity);
     }
 }

@@ -73,7 +73,7 @@ public class MarginCallTests
         foreach (var fill in pm.CheckMarginCall(RbBar(3440)))
             pm.ProcessFill(fill, Reg);
 
-        Assert.Null(pm.GetPosition("rb"));            // 持仓被强平清空
+        Assert.Null(pm.GetPosition("s1", "rb"));            // 持仓被强平清空
         Assert.Equal(0m, pm.MarginUsed);              // 保证金释放
         Assert.Single(pm.TradeHistory);
         Assert.True(pm.TradeHistory[0].PnL < 0);      // 强平亏损进入 Trade

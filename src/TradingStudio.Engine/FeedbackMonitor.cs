@@ -46,6 +46,8 @@ public class FeedbackMonitor
             case OrderEventType.Cancelled:
                 s.TotalCancels++;
                 break;
+            case OrderEventType.Accepted or OrderEventType.Unknown:
+                break;
         }
     }
 

@@ -6,6 +6,8 @@ public class Order
     public long OrderId { get; init; }
     public string InstrumentId { get; init; } = "";
     public string StrategyId { get; init; } = "";
+    /// <summary>审计链 TraceId：Submit 时生成，贯穿订单/事件/成交落库，用于单笔全链路回溯。</summary>
+    public string TraceId { get; init; } = "";
     public OrderDirection Direction { get; init; }
     public OrderType Type { get; init; }
     public int Quantity { get; init; }
@@ -38,4 +40,4 @@ public enum OrderType { Market, Limit, Stop }
 /// <summary>
 /// 订单状态枚举 — 可根据实际需求扩展，如新增 PendingCancel（撤单中）、Expired（过期）等状态。
 /// </summary>
-public enum OrderStatus { Submitted, PartiallyFilled, Filled, Cancelled, Rejected }
+public enum OrderStatus { Submitted, Accepted, PartiallyFilled, Filled, Cancelled, Rejected, Unknown }

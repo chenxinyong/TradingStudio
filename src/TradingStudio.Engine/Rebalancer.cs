@@ -35,13 +35,13 @@ public class Rebalancer
     /// <returns>需要提交的订单列表</returns>
     public List<Order> GenerateOrders(
         IReadOnlyList<PortfolioTarget> targets,
-        IReadOnlyList<Position> currentPositions,
+        IReadOnlyList<PositionSnapshot> currentPositions,
         string strategyId)
     {
         var orders = new List<Order>();
 
         // 构建当前持仓索引
-        var currentByInst = new Dictionary<string, Position>(StringComparer.OrdinalIgnoreCase);
+        var currentByInst = new Dictionary<string, PositionSnapshot>(StringComparer.OrdinalIgnoreCase);
         foreach (var pos in currentPositions)
         {
             if (pos.StrategyId == strategyId && pos.Quantity != 0)
@@ -71,7 +71,7 @@ public class Rebalancer
     private Order? GenerateDeltaOrder(
         string instrumentId,
         PortfolioTarget target,
-        Position? current,
+        PositionSnapshot? current,
         string strategyId)
     {
         int currentQty = current?.Quantity ?? 0;
@@ -132,7 +132,7 @@ public class Rebalancer
 
     private static Order CreateCloseOrder(
         string instrumentId,
-        Position current,
+        PositionSnapshot current,
         PortfolioTarget target,
         string strategyId)
     {

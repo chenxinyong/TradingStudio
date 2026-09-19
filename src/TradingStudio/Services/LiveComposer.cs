@@ -114,11 +114,12 @@ public static class LiveComposer
             // 订阅 CTP 持仓查询结果 → 恢复到 PortfolioManager（异步，登录完成后触发）
             // CTP 对同一品种返回两条记录（PositionDate='1'今仓 + '2'昨仓），Position 分别是各自日期的净持仓。
             // 正确做法：累加两条记录的 NetPosition 得到总净持仓，然后一次性恢复。
-            var ctpPosBuffer = new Dictionary<string, CtpPositionInfo>(StringComparer.OrdinalIgnoreCase);
+            var ctpPosToday = new Dictionary<string, CtpPositionInfo>(StringComparer.OrdinalIgnoreCase);     // 今仓
+            var ctpPosYesterday = new Dictionary<string, CtpPositionInfo>(StringComparer.OrdinalIgnoreCase);  // 昨仓
             var ctpPosFlushCts = new CancellationTokenSource();
             // 缓存最近一次 CTP 账户快照，供持仓恢复后二次对账（见 FlushCtpPositions）。
             // 修复：RestorePosition 恢复持仓时 UnrealizedPnl=0，浮亏蒸发 → Session 起始权益虚高 510。
-            (decimal Balance, decimal PositionProfit, decimal PreBalance)? lastAccountSnapshot = null;
+            BrokerAccountSnapshot? lastAccountSnapshot = null;
             bridge.OnPositionReceived += info =>
             {
                 try
@@ -128,8 +129,9 @@ public static class LiveComposer
                         !_pendingStrategyInstruments.Contains(info.InstrumentId, StringComparer.OrdinalIgnoreCase))
                         return;
 
-                    // 累加同品种多条记录（今仓+昨仓的 Position 各自独立）
-                    if (ctpPosBuffer.TryGetValue(info.InstrumentId, out var prev))
+                    // 按 PositionDate 分桶保留今/昨仓拆分（不再求和成一条净仓，避免丢失平今/平昨依据）
+                    var bucket = info.PositionDate == '2' ? ctpPosYesterday : ctpPosToday;
+                    if (bucket.TryGetValue(info.InstrumentId, out var prev))
                     {
                         var sumPos = prev.NetPosition + info.NetPosition;
                         // 均价加权平均
@@ -137,19 +139,16 @@ public static class LiveComposer
                         var weightedCost = totalAbs > 0
                             ? (Math.Abs(prev.NetPosition) * prev.OpenCost + Math.Abs(info.NetPosition) * info.OpenCost) / totalAbs
                             : info.OpenCost;
-                        // PositionDate: 取持仓量更大的日期（今仓多→用今仓日期，昨仓多→用昨仓日期）
-                        var dominantDate = Math.Abs(info.NetPosition) >= Math.Abs(prev.NetPosition)
-                            ? info.PositionDate : prev.PositionDate;
-                        ctpPosBuffer[info.InstrumentId] = new CtpPositionInfo
+                        bucket[info.InstrumentId] = new CtpPositionInfo
                         {
                             InstrumentId = info.InstrumentId,
                             NetPosition = sumPos,
                             OpenCost = weightedCost,
                             UseMargin = prev.UseMargin + info.UseMargin,
-                            PositionDate = dominantDate,
+                            PositionDate = info.PositionDate,
                         };
                     }
-                    else ctpPosBuffer[info.InstrumentId] = info;
+                    else bucket[info.InstrumentId] = info;
 
                     // 延迟刷入：CTP 查询回调同步快速返回，2秒后所有记录到齐再一次性恢复
                     ctpPosFlushCts.Cancel();
@@ -160,7 +159,7 @@ public static class LiveComposer
                         try
                         {
                             await Task.Delay(2000, flushToken);
-                            FlushCtpPositions(ctpPosBuffer, portfolio, instrumentStrategyMap, lastAccountSnapshot);
+                            FlushCtpPositions(ctpPosToday, ctpPosYesterday, portfolio, instrumentStrategyMap, lastAccountSnapshot);
                         }
                         catch (OperationCanceledException) { }
                     }, flushToken);
@@ -177,10 +176,18 @@ public static class LiveComposer
             {
                 try
                 {
-                    var accSnap = (Balance: (decimal)acc.Balance, PositionProfit: (decimal)acc.PositionProfit, PreBalance: (decimal)acc.PreBalance);
+                    var accSnap = new BrokerAccountSnapshot
+                    {
+                        Balance = (decimal)acc.Balance,
+                        PreBalance = (decimal)acc.PreBalance,
+                        PositionProfit = (decimal)acc.PositionProfit,
+                        CloseProfit = (decimal)acc.CloseProfit,
+                        Available = (decimal)acc.Available,
+                        CurrMargin = (decimal)acc.CurrMargin,
+                    };
                     lastAccountSnapshot = accSnap;
-                    portfolio.ReconcileEquity(accSnap.Balance, accSnap.PositionProfit, accSnap.PreBalance);
-                    Console.Error.WriteLine($"[LiveComposer] CTP账户权益已恢复: Balance={acc.Balance:F2} PosProfit={acc.PositionProfit:F2} PreBalance={acc.PreBalance:F2} → Equity={portfolio.Equity:F2}");
+                    portfolio.ReconcileEquity(accSnap);
+                    Console.Error.WriteLine($"[LiveComposer] CTP账户权益已恢复: Balance={acc.Balance:F2} PosProfit={acc.PositionProfit:F2} PreBalance={acc.PreBalance:F2} CurrMargin={acc.CurrMargin:F2} → Equity={portfolio.Equity:F2}");
                 }
                 catch (Exception ex)
                 {
@@ -315,40 +322,63 @@ public static class LiveComposer
         services.AddHostedService<PeriodMaintainer>();
     }
 
-    private static void FlushCtpPositions(Dictionary<string, CtpPositionInfo> buffer,
+    private static void FlushCtpPositions(Dictionary<string, CtpPositionInfo> todayBuffer,
+        Dictionary<string, CtpPositionInfo> yesterdayBuffer,
         PortfolioManager portfolio, Dictionary<string, string> instrumentStrategyMap,
-        (decimal Balance, decimal PositionProfit, decimal PreBalance)? lastAccountSnapshot)
+        BrokerAccountSnapshot? lastAccountSnapshot)
     {
-        foreach (var (instId, info) in buffer)
+        // 对账生命周期：本轮 CTP 持仓快照开始（重置 NotReconciled），期间 RestorePosition
+        // 发现本地账本与 CTP 不一致会置 Mismatch（阻断新开仓），全部一致则结束时置 Ok。
+        portfolio.BeginReconcile();
+        foreach (var instId in todayBuffer.Keys.Union(yesterdayBuffer.Keys, StringComparer.OrdinalIgnoreCase))
         {
             try
             {
-                if (info.NetPosition == 0) continue;
+                todayBuffer.TryGetValue(instId, out var today);
+                yesterdayBuffer.TryGetValue(instId, out var yesterday);
+                var quantityToday = today?.NetPosition ?? 0;
+                var quantityYesterday = yesterday?.NetPosition ?? 0;
+                if (quantityToday == 0 && quantityYesterday == 0) continue;
+
                 var sid = instrumentStrategyMap.TryGetValue(instId, out var m) ? m : "live-test";
-                // createdDate 仅用于显示/审计（平今/平昨判断走 Position.CTPPositionDate）
-                var createdDate = DateTime.Today;
-                var restored = portfolio.RestorePosition(instId, sid,
-                    info.NetPosition, (decimal)info.OpenCost, (decimal)info.UseMargin,
-                    createdDate, info.PositionDate);
+                // 今/昨均价加权合并成整体成本基，保证金取两条之和（分桶只为保留手数拆分）
+                var absToday = Math.Abs(quantityToday);
+                var absYesterday = Math.Abs(quantityYesterday);
+                var totalAbs = absToday + absYesterday;
+                var avgPrice = totalAbs > 0
+                    ? (absToday * (today?.OpenCost ?? 0) + absYesterday * (yesterday?.OpenCost ?? 0)) / totalAbs
+                    : 0;
+                var margin = (today?.UseMargin ?? 0) + (yesterday?.UseMargin ?? 0);
+                var positionDate = quantityToday != 0 ? '1' : '2';
+
+                var restored = portfolio.RestorePosition(instId, sid, quantityToday, quantityYesterday,
+                    (decimal)avgPrice, (decimal)margin, DateTime.Today, positionDate);
                 if (restored)
-                    Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {instId} x{info.NetPosition} @{info.OpenCost:F4} Margin={info.UseMargin:F2} PosDate={info.PositionDate} ({(info.PositionDate == '1' ? "今仓" : "昨仓")})");
+                    Console.Error.WriteLine($"[LiveComposer] CTP持仓已恢复: {instId} 今={quantityToday} 昨={quantityYesterday} @{avgPrice:F4} Margin={margin:F2}");
                 else
-                    Console.Error.WriteLine($"[LiveComposer] CTP持仓更新PosDate: {instId} PosDate={info.PositionDate} (已存在)");
+                    Console.Error.WriteLine($"[LiveComposer] CTP持仓更新: {instId} 今={quantityToday} 昨={quantityYesterday} (已存在)");
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[LiveComposer] CTP持仓恢复失败: {instId}: {ex.Message}");
             }
         }
-        buffer.Clear();
+        todayBuffer.Clear();
+        yesterdayBuffer.Clear();
+        portfolio.EndReconcile();
 
-        // 二次对账：持仓已恢复（_marginUsed 正确），用账户快照重算现金基与权益。
+        // 对账不一致必须显式告警（不静默）：Mismatch 已由 RiskController 阻断新开仓，
+        // 但操作者需要看到这条，才能去核对本地账本与 CTP 持仓的差异。
+        if (portfolio.ReconcileStatus == ReconcileStatus.Mismatch)
+            Console.Error.WriteLine($"[LiveComposer] ⚠️ 持仓对账不一致（本地账本 vs CTP），风控已阻断新开仓。请核对持仓账本后再开仓。");
+
+        // 二次对账：持仓已恢复，用账户快照重算现金基与权益。
         // 修复「RestorePosition 恢复持仓时 UnrealizedPnl=0 → 浮亏蒸发 → Session 起始权益虚高」：
-        // 首次 ReconcileEquity（账户回调先于持仓恢复）用 _marginUsed=0 算现金基，浮亏被多加回；
-        // 此处用正确的 _marginUsed 重算，使 _equity=Balance 且 _cash=Balance−Margin 精确吻合 CTP。
+        // 首次 ReconcileEquity（账户回调先于持仓恢复）时持仓尚未恢复，本地保证金不完整；
+        // 此处用 CTP 权威 CurrMargin 重算，使 _equity=Balance 且 _cash=Balance−PositionProfit−CurrMargin 精确吻合 CTP。
         if (lastAccountSnapshot is { } acc)
         {
-            portfolio.ReconcileEquity(acc.Balance, acc.PositionProfit, acc.PreBalance);
+            portfolio.ReconcileEquity(acc);
             Console.Error.WriteLine($"[LiveComposer] 持仓恢复后二次对账: Balance={acc.Balance:F2} → Equity={portfolio.Equity:F2} Cash={portfolio.Cash:F2} Margin={portfolio.MarginUsed:F2}");
         }
     }

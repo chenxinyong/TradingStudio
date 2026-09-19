@@ -57,8 +57,8 @@ public class StrategyContext
     public virtual bool CancelOrder(long orderId) => false;
 
     // ═══ 仓位与资金（只看到自己的分账） ═══
-    public virtual Position? GetPosition(string instrumentId) => null;
-    public virtual IReadOnlyList<Position> Positions => [];
+    public virtual PositionSnapshot? GetPosition(string instrumentId) => null;
+    public virtual IReadOnlyList<PositionSnapshot> Positions => [];
     public virtual decimal Equity => 0;
     public virtual decimal AvailableCash => 0;
     public virtual decimal AllocatedCapital => 0;

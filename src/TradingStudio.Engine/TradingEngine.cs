@@ -183,12 +183,23 @@ public class TradingEngine
             {
                 var reader = fillChannel.Reader;
                 var outboxWriter = (_execution is ExecutionHandler exec2) ? exec2.OrderOutbox.Writer : null;
+                var dedup = new TradeDeduplicator();
                 while (await reader.WaitToReadAsync(cts.Token))
                 {
                     while (reader.TryRead(out var fill))
                     {
                         // 仅真实成交事件更新持仓/资金 — Submitted/Cancelled/Rejected 不产生持仓变更
                         bool isFill = fill.Type is OrderEventType.Filled or OrderEventType.PartiallyFilled;
+
+                        // 成交幂等：同一 (TradeDate, ExchangeId, TradeId) 只处理一次，防止重复成交
+                        // 重复计入持仓/资金（CTP 重复回调或消费端重放时兜底）。
+                        if (isFill && dedup.IsDuplicate(fill))
+                        {
+                            _log.LogWarning("[Engine] Duplicate trade fill skipped: {TradeId} {Inst} x{Qty}",
+                                fill.TradeId, fill.InstrumentId, fill.Quantity);
+                            continue;
+                        }
+
                         Trade? trade = null;
                         if (isFill)
                         {

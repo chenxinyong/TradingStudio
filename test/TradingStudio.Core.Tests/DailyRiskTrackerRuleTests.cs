@@ -93,8 +93,8 @@ public class DailyRiskTrackerRuleTests
         public decimal PeakEquity => 100_000;
         public decimal TodayPnL => 0;
         public decimal TotalPnL => 0;
-        public Position? GetPosition(string i) => null;
-        public IReadOnlyList<Position> AllPositions => [];
+        public PositionSnapshot? GetPosition(string strategyId, string instrumentId) => null;
+        public IReadOnlyList<PositionSnapshot> AllPositions => [];
         public IReadOnlyList<Order> ActiveOrders => [];
         public IReadOnlyList<Trade> TradeHistory => [];
         public IReadOnlyList<SubPortfolioState> SubPortfolios => [];

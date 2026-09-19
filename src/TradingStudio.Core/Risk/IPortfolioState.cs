@@ -14,8 +14,10 @@ public interface IPortfolioState
     decimal PeakEquity { get; }
     decimal TodayPnL { get; }
     decimal TotalPnL { get; }
-    Position? GetPosition(string instrumentId);
-    IReadOnlyList<Position> AllPositions { get; }
+    PositionSnapshot? GetPosition(string strategyId, string instrumentId);
+    IReadOnlyList<PositionSnapshot> AllPositions { get; }
+    /// <summary>持仓对账状态。Mismatch 时风控拒绝新开仓（平仓放行）。默认实现供轻量 Mock 不强制实现。</summary>
+    ReconcileStatus ReconcileStatus => ReconcileStatus.NotReconciled;
     IReadOnlyList<Order> ActiveOrders { get; }
     IReadOnlyList<Trade> TradeHistory { get; }
     IReadOnlyList<SubPortfolioState> SubPortfolios { get; }

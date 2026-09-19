@@ -31,6 +31,12 @@ public class RiskController
     /// <summary>下单前检查。任一规则 Reject → 拒绝整个订单。</summary>
     public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
     {
+        // 持仓对账闸门（横切层第一道闸）：本地账本与 CTP 权威持仓不一致时拒绝新开仓，
+        // 平仓放行（避免账本失联后关不掉仓位）。原则2：任何订单在到达 CTP 之前必须过风控。
+        if (portfolio.ReconcileStatus == ReconcileStatus.Mismatch && !order.IsCloseOrder)
+            return RiskCheckResult.Reject("ReconcileMismatch",
+                $"持仓对账不一致（本地账本 vs CTP），已阻断新开仓 {order.InstrumentId}。请核对持仓账本后再开仓。");
+
         foreach (var rule in _rules)
         {
             var result = rule.CheckPreOrder(order, portfolio);
@@ -80,7 +86,7 @@ public class RiskController
 
         public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
         {
-            var existing = portfolio.GetPosition(order.InstrumentId);
+            var existing = portfolio.GetPosition(order.StrategyId, order.InstrumentId);
             var currentQty = existing?.Quantity ?? 0;
             // 区分买卖方向：买加仓、卖减仓 / 开空加负仓、平空减负仓
             var newQty = order.Direction == OrderDirection.Buy
@@ -127,7 +133,7 @@ public class RiskController
         public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
         {
             // 允许减仓/平仓（风险降低类订单），避免回撤超限后关不掉仓位
-            var existing = portfolio.GetPosition(order.InstrumentId);
+            var existing = portfolio.GetPosition(order.StrategyId, order.InstrumentId);
             if (existing != null)
             {
                 if (order.Direction == OrderDirection.Buy && existing.Quantity < 0) return RiskCheckResult.Pass;
@@ -159,7 +165,7 @@ public class RiskController
         public RiskCheckResult CheckPreOrder(Order order, IPortfolioState portfolio)
         {
             // 允许减仓/平仓 — 风险降低类订单不受策略回撤限制
-            var existing = portfolio.GetPosition(order.InstrumentId);
+            var existing = portfolio.GetPosition(order.StrategyId, order.InstrumentId);
             if (existing != null)
             {
                 if (order.Direction == OrderDirection.Buy && existing.Quantity < 0) return RiskCheckResult.Pass;

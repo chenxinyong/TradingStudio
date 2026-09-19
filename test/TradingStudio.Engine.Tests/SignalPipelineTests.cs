@@ -263,10 +263,10 @@ public class SignalPipelineTests
         Timestamp = DateTime.UtcNow,
     };
 
-    private static Position MakePosition(string inst, int qty, OrderDirection dir) => new()
+    private static PositionSnapshot MakePosition(string inst, int qty, OrderDirection dir) => new()
     {
         InstrumentId = inst,
-        Quantity = dir == OrderDirection.Buy ? qty : -qty,
+        QuantityToday = dir == OrderDirection.Buy ? qty : -qty,
         AvgPrice = 3500,
         StrategyId = "s",
         CreatedTime = DateTimeOffset.UtcNow,
@@ -282,8 +282,8 @@ public class SignalPipelineTests
         public decimal PeakEquity => Equity;
         public decimal TodayPnL => 0;
         public decimal TotalPnL => 0;
-        public Position? GetPosition(string id) => null;
-        public IReadOnlyList<Position> AllPositions => [];
+        public PositionSnapshot? GetPosition(string strategyId, string instrumentId) => null;
+        public IReadOnlyList<PositionSnapshot> AllPositions => [];
         public IReadOnlyList<Order> ActiveOrders => [];
         public IReadOnlyList<Trade> TradeHistory => [];
         public IReadOnlyList<SubPortfolioState> SubPortfolios => [];

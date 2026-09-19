@@ -8,7 +8,8 @@ namespace TradingStudio.Engine;
 /// 多策略容器。管理策略注册、事件路由、生命周期、参数热更新。
 ///
 /// 线程安全：Register/Unregister/Pause/Resume/UpdateParameter 使用 _mutex 保护
-/// _allSlots 的修改。Dispatch* 方法无需锁（只读遍历，Slot 替换时旧 Slot 不会被修改）。
+/// _allSlots 与 _subscriptions 的修改。Dispatch* 方法锁内取 List&lt;T&gt; 的 .ToList() 快照后
+/// 再在锁外遍历——避免 API 线程并发 Register/Unregister 时对 List 的枚举被修改而抛异常。
 ///
 /// StrategyParam&lt;T&gt;.Value 更新是最终一致性：API 线程写入后，下次 DispatchBar/Tick
 /// 时自动读取新值（通过 implicit operator T 每次解引用）。
@@ -19,32 +20,34 @@ public class StrategyContainer
     private readonly List<StrategySlot> _allSlots = new();
     private readonly object _mutex = new();
 
-    public IReadOnlyList<StrategySlot> AllSlots => _allSlots;
+    public IReadOnlyList<StrategySlot> AllSlots { get { lock (_mutex) return _allSlots.ToList(); } }
 
     public void Register(IStrategy strategy, StrategyConfig config, StrategyContext context)
     {
         var slot = new StrategySlot(strategy, config, context);
-        lock (_mutex) { _allSlots.Add(slot); }
-        foreach (var inst in config.Instruments)
+        lock (_mutex)
         {
-            if (!_subscriptions.ContainsKey(inst))
-                _subscriptions[inst] = new List<StrategySlot>();
-            _subscriptions[inst].Add(slot);
+            _allSlots.Add(slot);
+            foreach (var inst in config.Instruments)
+            {
+                if (!_subscriptions.TryGetValue(inst, out var list))
+                    _subscriptions[inst] = list = new List<StrategySlot>();
+                list.Add(slot);
+            }
         }
     }
 
     public void Unregister(string strategyId)
     {
-        StrategySlot? slot;
         lock (_mutex)
         {
-            slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == strategyId);
+            var slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == strategyId);
             if (slot == null) return;
             _allSlots.Remove(slot);
+            foreach (var inst in slot.Config.Instruments)
+                if (_subscriptions.TryGetValue(inst, out var list))
+                    list.Remove(slot);
         }
-        foreach (var inst in slot.Config.Instruments)
-            if (_subscriptions.TryGetValue(inst, out var list))
-                list.Remove(slot);
     }
 
     /// <summary>
@@ -80,8 +83,10 @@ public class StrategyContainer
         }
     }
 
-    public bool IsActive(string strategyId) =>
-        _allSlots.FirstOrDefault(s => s.Config.StrategyId == strategyId)?.IsActive ?? false;
+    public bool IsActive(string strategyId)
+    {
+        lock (_mutex) return _allSlots.FirstOrDefault(s => s.Config.StrategyId == strategyId)?.IsActive ?? false;
+    }
 
     /// <summary>
     /// 热更新策略参数 — 不停机修改 StrategyParam&lt;T&gt;.Value。
@@ -151,7 +156,12 @@ public class StrategyContainer
 
     public void DispatchTick(TickEvent tickEvt)
     {
-        if (!_subscriptions.TryGetValue(tickEvt.InstrumentId, out var slots)) return;
+        List<StrategySlot> slots;
+        lock (_mutex)
+        {
+            if (!_subscriptions.TryGetValue(tickEvt.InstrumentId, out var list)) return;
+            slots = list.ToList();
+        }
         foreach (var slot in slots)
         {
             if (slot.IsActive)
@@ -162,7 +172,12 @@ public class StrategyContainer
     public void DispatchBar(BarEvent barEvt)
     {
         var inst = barEvt.Bar.InstrumentId;
-        if (!_subscriptions.TryGetValue(inst, out var slots)) return;
+        List<StrategySlot> slots;
+        lock (_mutex)
+        {
+            if (!_subscriptions.TryGetValue(inst, out var list)) return;
+            slots = list.ToList();
+        }
         foreach (var slot in slots)
         {
             if (slot.IsActive)
@@ -175,7 +190,8 @@ public class StrategyContainer
 
     public void DispatchOrderEvent(OrderEvent evt)
     {
-        var slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == evt.StrategyId);
+        StrategySlot? slot;
+        lock (_mutex) slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == evt.StrategyId);
         if (slot != null && slot.IsActive)
         {
             try { slot.Strategy.OnOrderEvent(evt); }
@@ -185,9 +201,11 @@ public class StrategyContainer
 
     public void DispatchAlert(IReadOnlyList<MonitorAlert> alerts)
     {
+        List<StrategySlot> slots;
+        lock (_mutex) slots = _allSlots.ToList();
         foreach (var alert in alerts)
         {
-            var slot = _allSlots.FirstOrDefault(s => s.Config.StrategyId == alert.StrategyId);
+            var slot = slots.FirstOrDefault(s => s.Config.StrategyId == alert.StrategyId);
             if (slot != null && slot.IsActive)
                 slot.Strategy.OnAlert(alert);
         }
@@ -195,7 +213,9 @@ public class StrategyContainer
 
     public void DispatchEndOfAlgorithm()
     {
-        foreach (var slot in _allSlots)
+        List<StrategySlot> slots;
+        lock (_mutex) slots = _allSlots.ToList();
+        foreach (var slot in slots)
         {
             if (slot.IsActive)
             {
@@ -205,8 +225,11 @@ public class StrategyContainer
         }
     }
 
-    public IReadOnlyList<StrategySnapshot> GetAllSnapshots() =>
-        _allSlots.Select(s => new StrategySnapshot
+    public IReadOnlyList<StrategySnapshot> GetAllSnapshots()
+    {
+        List<StrategySlot> slots;
+        lock (_mutex) slots = _allSlots.ToList();
+        return slots.Select(s => new StrategySnapshot
         {
             StrategyId = s.Config.StrategyId,
             StrategyType = s.Config.StrategyType,
@@ -219,6 +242,7 @@ public class StrategyContainer
             Parameters = s.Config.Parameters
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value?.ToString() ?? ""),
         }).ToList();
+    }
 
     public StrategySnapshot? GetSnapshot(string strategyId) =>
         GetAllSnapshots().FirstOrDefault(s => s.StrategyId == strategyId);

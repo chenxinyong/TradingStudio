@@ -15,12 +15,13 @@ public class RiskControllerTests
         public decimal PeakEquity { get; set; } = 100_000;
         public decimal TodayPnL { get; set; }
         public decimal TotalPnL { get; set; }
-        public Position? Position { get; set; }
-        public Position? GetPosition(string instrumentId) => Position;
-        public IReadOnlyList<Position> AllPositions => Position is null ? [] : [Position];
+        public PositionSnapshot? Position { get; set; }
+        public PositionSnapshot? GetPosition(string strategyId, string instrumentId) => Position;
+        public IReadOnlyList<PositionSnapshot> AllPositions => Position is null ? [] : [Position];
         public IReadOnlyList<Order> ActiveOrders => [];
         public IReadOnlyList<Trade> TradeHistory => [];
         public IReadOnlyList<SubPortfolioState> SubPortfolios { get; set; } = [];
+        public ReconcileStatus ReconcileStatus { get; set; } = ReconcileStatus.NotReconciled;
     }
 
     private static Order Buy(string inst = "rb", int qty = 1, string sid = "s1")
@@ -57,7 +58,7 @@ public class RiskControllerTests
         var rc = new RiskController(maxPosition: 5);
         var pf = new MockPortfolio
         {
-            Position = new Position { InstrumentId = "rb", Quantity = 3, AvgPrice = 3500 }
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = 3, AvgPrice = 3500 }
         };
         var result = rc.CheckPreOrder(Buy(qty: 2), pf);
         Assert.True(result.Passed); // 3 + 2 = 5 ≤ 5
@@ -69,7 +70,7 @@ public class RiskControllerTests
         var rc = new RiskController(maxPosition: 5);
         var pf = new MockPortfolio
         {
-            Position = new Position { InstrumentId = "rb", Quantity = 3, AvgPrice = 3500 }
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = 3, AvgPrice = 3500 }
         };
         var result = rc.CheckPreOrder(Buy(qty: 3), pf);
         Assert.False(result.Passed); // 3 + 3 = 6 > 5
@@ -81,7 +82,7 @@ public class RiskControllerTests
         var rc = new RiskController(maxPosition: 5);
         var pf = new MockPortfolio
         {
-            Position = new Position { InstrumentId = "rb", Quantity = 5, AvgPrice = 3500 }
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = 5, AvgPrice = 3500 }
         };
         var result = rc.CheckPreOrder(Sell(qty: 3), pf);
         Assert.True(result.Passed); // 5 - 3 = 2 ≤ 5 (方向感知!)
@@ -111,7 +112,7 @@ public class RiskControllerTests
         var rc = new RiskController(maxPosition: 5);
         var pf = new MockPortfolio
         {
-            Position = new Position { InstrumentId = "rb", Quantity = -3, AvgPrice = 3500 }
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = -3, AvgPrice = 3500 }
         };
         var result = rc.CheckPreOrder(Sell(qty: 3), pf);
         Assert.False(result.Passed); // -3 - 3 = -6, abs = 6 > 5
@@ -123,7 +124,7 @@ public class RiskControllerTests
         var rc = new RiskController(maxPosition: 5);
         var pf = new MockPortfolio
         {
-            Position = new Position { InstrumentId = "rb", Quantity = -3, AvgPrice = 3500 }
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = -3, AvgPrice = 3500 }
         };
         var result = rc.CheckPreOrder(Buy(qty: 3), pf);
         Assert.True(result.Passed); // -3 + 3 = 0 ≤ 5 (平仓!)
@@ -176,7 +177,7 @@ public class RiskControllerTests
         var pf = new MockPortfolio
         {
             Equity = 70_000, StartingCapital = 100_000,
-            Position = new Position { InstrumentId = "rb", Quantity = 2, AvgPrice = 3500 }
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = 2, AvgPrice = 3500 }
         };
         var result = rc.CheckPreOrder(Sell(qty: 2), pf);
         Assert.True(result.Passed); // 平多 = 减仓，允许穿透
@@ -189,7 +190,7 @@ public class RiskControllerTests
         var pf = new MockPortfolio
         {
             Equity = 70_000, StartingCapital = 100_000,
-            Position = new Position { InstrumentId = "rb", Quantity = -2, AvgPrice = 3500 }
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = -2, AvgPrice = 3500 }
         };
         var result = rc.CheckPreOrder(Buy(qty: 2), pf);
         Assert.True(result.Passed); // 平空 = 减仓，允许穿透
@@ -202,7 +203,7 @@ public class RiskControllerTests
         var pf = new MockPortfolio
         {
             Equity = 70_000, StartingCapital = 100_000,
-            Position = new Position { InstrumentId = "rb", Quantity = -1, AvgPrice = 3500 }
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = -1, AvgPrice = 3500 }
         };
         var result = rc.CheckPreOrder(Sell(qty: 2), pf);
         Assert.False(result.Passed); // 加空 = 风险增加，仍然拦截
@@ -300,7 +301,7 @@ public class RiskControllerTests
         var rc = new RiskController(maxStrategyDrawdown: 0.20m);
         var pf = new MockPortfolio
         {
-            Position = new Position { InstrumentId = "rb", Quantity = 2, AvgPrice = 3500 },
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = 2, AvgPrice = 3500 },
             SubPortfolios = [new SubPortfolioState { StrategyId = "s1", PeakEquity = 100_000, Equity = 70_000 }]
         };
         var result = rc.CheckPreOrder(Sell(qty: 2), pf);
@@ -313,7 +314,7 @@ public class RiskControllerTests
         var rc = new RiskController(maxStrategyDrawdown: 0.20m);
         var pf = new MockPortfolio
         {
-            Position = new Position { InstrumentId = "rb", Quantity = 1, AvgPrice = 3500 },
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = 1, AvgPrice = 3500 },
             SubPortfolios = [new SubPortfolioState { StrategyId = "s1", PeakEquity = 100_000, Equity = 70_000 }]
         };
         var result = rc.CheckPreOrder(Buy(qty: 2), pf);
@@ -375,5 +376,45 @@ public class RiskControllerTests
         tracker.RecordPnl(-1000, 100_000); // -1%
         var result = rc.CheckPreOrder(Buy(qty: 2), new MockPortfolio { Equity = 99_000 });
         Assert.True(result.Passed);
+    }
+
+    // ═══════════════════════════════════════════
+    // 持仓对账闸门（ReconcileStatus）
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public void ReconcileMismatch_BlocksNewOpen()
+    {
+        var rc = new RiskController(maxPosition: 100, maxOrderQty: 100, maxDrawdown: 1.0m);
+        var pf = new MockPortfolio { ReconcileStatus = ReconcileStatus.Mismatch };
+        var result = rc.CheckPreOrder(Buy(qty: 1), pf);
+        Assert.False(result.Passed);
+        Assert.Equal("ReconcileMismatch", result.RuleName);
+    }
+
+    [Fact]
+    public void ReconcileMismatch_AllowsClose()
+    {
+        var rc = new RiskController(maxPosition: 100, maxOrderQty: 100, maxDrawdown: 1.0m);
+        var pf = new MockPortfolio
+        {
+            ReconcileStatus = ReconcileStatus.Mismatch,
+            Position = new PositionSnapshot { InstrumentId = "rb", QuantityToday = 2, AvgPrice = 3500 }
+        };
+        // 平多单（IsCloseOrder=true）→ 即使 Mismatch 也放行，避免账本失联后关不掉仓位
+        var close = new Order { InstrumentId = "rb", Direction = OrderDirection.Sell, Quantity = 2, IsCloseOrder = true };
+        var result = rc.CheckPreOrder(close, pf);
+        Assert.True(result.Passed);
+    }
+
+    [Fact]
+    public void ReconcileOkOrNotReconciled_DoesNotBlock()
+    {
+        var rc = new RiskController(maxPosition: 100, maxOrderQty: 100, maxDrawdown: 1.0m);
+        foreach (var status in new[] { ReconcileStatus.NotReconciled, ReconcileStatus.Ok })
+        {
+            var pf = new MockPortfolio { ReconcileStatus = status };
+            Assert.True(rc.CheckPreOrder(Buy(qty: 1), pf).Passed);
+        }
     }
 }

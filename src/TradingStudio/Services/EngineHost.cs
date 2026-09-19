@@ -61,7 +61,21 @@ public class EngineHost : BackgroundService
             // 盘中重启时 Trader 未就绪、_portfolio.Equity 仍是默认值（策略资本之和），
             // 若先取快照会把 PnL 基准算错（8/26 盘中重启误报 +1178 虚假盈利，实为 -70）。
             _trader?.EnsureConnected();
-            await WaitForEquityReconciledAsync(ct);
+            if (!await WaitForEquityReconciledAsync(ct))
+            {
+                // 40s 内未从 CTP 恢复权益 → 本时段阻断：绝不以错误权益基准交易。
+                // 8/26 盘中重启时权益未恢复、_portfolio.Equity 仍是策略资本之和，误报 +1178 虚假盈利。
+                // 阻断整个时段，等待下个会话重新连接并恢复权益，宁可错过也不带着错误基准下单。
+                _log.Error("⚠️ 账户权益对账超时（40s 内未恢复 Equity），本时段阻断启动。断开交易通道并等待下个时段，避免以错误权益基准交易。");
+                _health.Update("ReconcileTimeout", 0, 0, 0, 0, sessionName, null, null, DateTime.Now);
+                if (_trader != null) await _trader.DisconnectAsync();
+                while (_session.IsInSession() && !ct.IsCancellationRequested)
+                {
+                    try { await Task.Delay(TimeSpan.FromSeconds(30), ct); }
+                    catch (OperationCanceledException) { break; }
+                }
+                continue;
+            }
 
             var sessionStartEquity = GetPortfolioEquity();
             _health.SetSessionStartEquity(sessionStartEquity);
@@ -113,16 +127,16 @@ public class EngineHost : BackgroundService
                 _log.Information("══════════════════════════════════");
                 _health.Update("Idle", 0, 0, 0, 0, "休市", null, null, null,
                     equity: endEquity, positions: GetPositionCount());
-                _trader?.Disconnect();  // 收盘断开交易通道并挂起重连
+                if (_trader != null) await _trader.DisconnectAsync();  // 收盘清场并断开交易通道、挂起重连
             }
             catch (OperationCanceledException) when (sessionCts.IsCancellationRequested && !ct.IsCancellationRequested)
             {
                 _log.Information("Session ended [{Session}]: scheduled close", sessionName);
                 LogSessionEnd(sessionName, sessionStartEquity);
                 _health.Update("Idle", 0, 0, 0, 0, "休市", null, null, null);
-                // 收盘断开交易通道并挂起重连，避免前置机稍后踢线后 ScheduleReconnect 无限重连
+                // 收盘清场并断开交易通道、挂起重连，避免前置机稍后踢线后 ScheduleReconnect 无限重连
                 // （9/17 实盘 16:06 起 0x1001 连续 40+ 次重连刷屏 3 小时的根因）。
-                _trader?.Disconnect();
+                if (_trader != null) await _trader.DisconnectAsync();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (Exception ex)
@@ -193,18 +207,20 @@ public class EngineHost : BackgroundService
     /// <summary>
     /// 等待账户权益从 CTP 恢复到位（ReconcileEquity 至少调用过一次），带超时兜底。
     /// 盘中重启时 EnsureConnected 触发的重连最多约 30s、登录后 QueryAccount 回调约 2s，总超时给 40s。
-    /// 无交易通道（回测/纯行情）或权益已恢复时立即返回，避免卡住 session 启动。
+    /// 无交易通道（回测/纯行情）或权益已恢复时立即返回 true，避免卡住 session 启动。
+    /// 返回 false 表示对账超时：调用方必须阻断本时段，不得以未恢复的权益基准交易。
     /// </summary>
-    private async Task WaitForEquityReconciledAsync(CancellationToken ct)
+    private async Task<bool> WaitForEquityReconciledAsync(CancellationToken ct)
     {
-        if (_trader == null || _portfolio.EquityReconciled) return;
+        if (_trader == null || _portfolio.EquityReconciled) return true;
 
         var deadline = DateTime.UtcNow.AddSeconds(40);
         while (!_portfolio.EquityReconciled && DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
         {
             try { await Task.Delay(500, ct); }
-            catch (OperationCanceledException) { return; }
+            catch (OperationCanceledException) { return false; }
         }
+        return _portfolio.EquityReconciled;
     }
 
     private decimal GetPortfolioEquity() => _portfolio.Equity;

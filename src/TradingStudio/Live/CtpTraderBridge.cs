@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using TradingStudio.Core.Engine;
 using TradingStudio.Core.Models;
@@ -27,8 +28,37 @@ public class CtpTraderBridge : IDisposable
     // 直到下个会话 EnsureConnected 清除。用 volatile 保证 CTP 回调线程/后台重连线程/宿主机线程可见。
     private volatile bool _suspended;
 
-    public bool IsReady { get { lock (_sync) return _isReady; } private set { lock (_sync) _isReady = value; } }
-    private bool _isReady;
+    /// <summary>交易通道是否已登录（传输层就绪）。看门狗/重连/EnsureConnected 以此为准。</summary>
+    public bool IsReady { get { lock (_sync) return _isLoggedIn; } private set { lock (_sync) _isLoggedIn = value; } }
+
+    /// <summary>
+    /// 是否允许下单。四个前置条件全部满足才为 true：①已登录 ②结算单已确认 ③持仓已查询 ④账户已查询。
+    /// 修复「IsReady 在登录后过早为 true，结算单未确认/持仓未查询就放行下单」的结构性债（P0-12）。
+    /// </summary>
+    public bool CanTrade { get { lock (_sync) return _isLoggedIn && _settlementConfirmed && _positionsQueried && _accountQueried; } }
+
+    private bool _isLoggedIn;
+    private bool _settlementConfirmed;
+    private bool _positionsQueried;
+    private bool _accountQueried;
+
+    private bool SettlementConfirmed { get { lock (_sync) return _settlementConfirmed; } set { lock (_sync) _settlementConfirmed = value; } }
+    private bool PositionsQueried { get { lock (_sync) return _positionsQueried; } set { lock (_sync) _positionsQueried = value; } }
+    private bool AccountQueried { get { lock (_sync) return _accountQueried; } set { lock (_sync) _accountQueried = value; } }
+
+    /// <summary>
+    /// OrderId → StrategyId 映射：下单时写入、成交回报时回填。不能复用 _pendingOrders——
+    /// 后者在订单进入终态（全部成交/撤单）时即被移除，而成交回报可能在此之后到达。
+    /// 不在运行期移除（OrderId 单调递增、进程内唯一），会话结束 Disconnect 时整体清空。
+    /// </summary>
+    private readonly ConcurrentDictionary<long, string> _orderStrategy = new();
+
+    /// <summary>OrderId → TraceId 映射：下单时写入、成交/拒单回报时回填审计链，Disconnect 时整体清空。</summary>
+    private readonly ConcurrentDictionary<long, string> _orderTrace = new();
+
+    /// <summary>成交/事件回报写入 FillChannel 失败的计数（通道已关闭等），暴露给健康监控，杜绝静默丢事件。</summary>
+    private int _droppedEvents;
+    public int DroppedEvents => Volatile.Read(ref _droppedEvents);
 
     /// <summary>CTP 持仓查询回调：每次扫描到一个品种的持仓时触发。</summary>
     public event Action<CtpPositionInfo>? OnPositionReceived;
@@ -99,8 +129,11 @@ public class CtpTraderBridge : IDisposable
             else if (e.EventType == CTP.EnumOnFrontType.OnFrontDisconnected)
             {
                 IsReady = false;
+                SettlementConfirmed = false;
+                PositionsQueried = false;
+                AccountQueried = false;
                 _log.Warning("CTP Trader disconnected (0x{Reason:X})", e.Reason);
-                _fillWriter.TryWrite(new OrderEvent { Type = OrderEventType.Rejected, Message = "CTP交易连接断开", Time = DateTimeOffset.UtcNow });
+                TryWriteEvent(new OrderEvent { Type = OrderEventType.Rejected, Message = "CTP交易连接断开", Time = DateTimeOffset.UtcNow });
                 // 不能在 CTP 回调线程里同步 Release 旧 API（会死锁/阻塞，9/15 实盘 09:19 断开后
                 // 交易通道 370 分钟未重连的根因），改用后台线程触发重连，让 Release/ConnectInternal
                 // 在回调线程之外执行（与 CtpLiveFeed 行情侧「回调只设标志、循环里重连」同理）。
@@ -152,6 +185,10 @@ public class CtpTraderBridge : IDisposable
                         _log.Warning("CTP TradingDay not available from login, using local date: {Day}", _tradingDay);
                     }
                     IsReady = true;
+                    // 重新登录后必须重走「结算确认 → 持仓查询 → 账户查询」序列，四个状态复位。
+                    SettlementConfirmed = false;
+                    PositionsQueried = false;
+                    AccountQueried = false;
                     _reconnectDelay = 0;  // 登录成功，复位退避
                     _reconnectAttempts = 0;  // 复位重连计数
                     _pendingReconnect = false;
@@ -171,6 +208,7 @@ public class CtpTraderBridge : IDisposable
                 // 确认结算单成功 → 此时才发持仓/账户查询（正确时序，避免查询被 CTP 拒绝）
                 if (e.RspInfo == null || e.RspInfo.ErrorID == 0)
                 {
+                    SettlementConfirmed = true;
                     _log.Information("CTP SettlementInfo confirm OK → QueryPositions");
                     QueryPositions();
                     // 注意：QueryAccount 不在此处发。CTP 一次只能有一个未处理查询，
@@ -186,6 +224,7 @@ public class CtpTraderBridge : IDisposable
                 // （CTP 一次只能有一个未处理查询，否则 ReqQryTradingAccount 返回 -2）
                 if (e.IsLast)
                 {
+                    PositionsQueried = true;
                     _log.Information("CTP QueryPositions done (IsLast) → QueryAccount");
                     QueryAccount();
                 }
@@ -257,6 +296,7 @@ public class CtpTraderBridge : IDisposable
                         Available = acc.Available,
                         CurrMargin = acc.CurrMargin,
                     };
+                    AccountQueried = true;
                     _log.Information("[CTP-Account] Balance={Balance:F2} PreBalance={Pre:F2} PosProfit={Pos:F2} CloseProfit={Close:F2} Available={Avail:F2} Margin={Margin:F2}",
                         info.Balance, info.PreBalance, info.PositionProfit, info.CloseProfit, info.Available, info.CurrMargin);
                     OnAccountReceived?.Invoke(info);
@@ -307,7 +347,7 @@ public class CtpTraderBridge : IDisposable
                 {
                     _log.Information("[CTP-Trader] OnRtnOrder: {Inst} Status={Status} Ref={Ref} VolTraded={Vol} Msg={Msg}",
                         ord.InstrumentID, ord.OrderStatus, ord.OrderRef, ord.VolumeTraded, ord.StatusMsg);
-                    _fillWriter.TryWrite(evt);
+                    TryWriteEvent(evt);
                 }
             }
             else if (e.EventType == CTP.EnumOnRtnType.OnRtnTrade && e.Param != IntPtr.Zero)
@@ -315,12 +355,50 @@ public class CtpTraderBridge : IDisposable
                 var trd = CTP.Conv.P2S<CTP.ThostFtdcTradeField>(e.Param);
                 _log.Information("[CTP-Trader] OnRtnTrade: {Inst} Price={Price} Vol={Vol}",
                     trd.InstrumentID, trd.Price, trd.Volume);
-                var evt = ConvertTrade(trd); if (evt != null) _fillWriter.TryWrite(evt);
+                var evt = ConvertTrade(trd); if (evt != null) TryWriteEvent(evt);
             }
         };
 
         _api.OnErrRtnEvent += (_, e) =>
+        {
             _log.Warning("[CTP-Trader] ErrRtn: [{Code}] {Msg}", e.RspInfo?.ErrorID, e.RspInfo?.ErrorMsg);
+
+            // P1-18 拒单进状态机：报单被交易所/前置机拒绝（OnErrRtnOrderInsert）时，Param 指向被拒的
+            // 报单字段（ThostFtdcOrderField），据此解析 OrderRef 并回填 StrategyId，发一条 Rejected 事件。
+            // 连接/系统级错误（无 OrderRef）保持仅日志，避免把非订单错误伪造成拒单。
+            if (e.EventType == CTP.EnumOnErrRtnType.OnErrRtnOrderInsert && e.Param != IntPtr.Zero)
+            {
+                try
+                {
+                    var ord = CTP.Conv.P2S<CTP.ThostFtdcOrderField>(e.Param);
+                    var refId = ParseOrderRef(ord.OrderRef);
+                    if (refId >= 0 && _orderStrategy.TryGetValue(refId, out var strategyId))
+                    {
+                        var msg = e.RspInfo != null
+                            ? $"[{e.RspInfo.ErrorID}] {e.RspInfo.ErrorMsg}"
+                            : "CTP报单被拒";
+                        TryWriteEvent(new OrderEvent
+                        {
+                            OrderId = refId,
+                            InstrumentId = ord.InstrumentID ?? "",
+                            StrategyId = strategyId,
+                            TraceId = _orderTrace.TryGetValue(refId, out var tr) ? tr : "",
+                            Direction = ord.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell,
+                            Quantity = ord.VolumeTotalOriginal,
+                            OrderQty = ord.VolumeTotalOriginal,
+                            FilledQty = 0,
+                            Type = OrderEventType.Rejected,
+                            Message = msg,
+                            Time = DateTimeOffset.UtcNow,
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log.Error(ex, "CTP ErrRtn mapping error");
+                }
+            }
+        };
 
         // ── 连接序列 ──
         _api.SubscribePublicTopic(CTP.EnumTeResumeType.THOST_TERT_QUICK);
@@ -335,26 +413,49 @@ public class CtpTraderBridge : IDisposable
         { BrokerID = _opts.BrokerId, UserID = _opts.UserId, Password = _opts.Password }, ++_requestId);
     }
 
+    /// <summary>
+    /// 把 CTP 回报写入 FillChannel，绝不静默丢事件：写入失败（通道已关闭）时计数并告警。
+    /// 下游 TradingEngine.fillReadTask 是唯一消费者，通道在此桥内保持打开，正常不会失败；
+    /// 失败意味着引擎已停而 CTP 仍在回调，属于必须暴露的异常而非可忽略的丢单。
+    /// </summary>
+    private void TryWriteEvent(OrderEvent evt)
+    {
+        if (!_fillWriter.TryWrite(evt))
+        {
+            Interlocked.Increment(ref _droppedEvents);
+            _log.Warning("CTP event dropped (channel closed): {Type} {Inst} Ref={Ref}",
+                evt.Type, evt.InstrumentId, evt.OrderId);
+        }
+    }
+
     public void SendOrder(Order order)
     {
-        CTP.FtdcTdAdapter? api; bool ready;
-        lock (_sync) { api = _api; ready = _isReady; }
-
-        if (!ready || api == null)
+        CTP.FtdcTdAdapter? api; bool canTrade; bool loggedIn, settlement, positions, account;
+        lock (_sync)
         {
-            _log.Warning("Order rejected — CTP not ready");
-            _fillWriter.TryWrite(new OrderEvent { OrderId = order.OrderId, InstrumentId = order.InstrumentId, Direction = order.Direction, Quantity = order.Quantity, Type = OrderEventType.Rejected, Message = "CTP交易未就绪", Time = DateTimeOffset.UtcNow });
+            api = _api;
+            loggedIn = _isLoggedIn;
+            settlement = _settlementConfirmed;
+            positions = _positionsQueried;
+            account = _accountQueried;
+            canTrade = loggedIn && settlement && positions && account;
+        }
+
+        if (!canTrade || api == null)
+        {
+            _log.Warning("Order rejected — CTP not ready (LoggedIn={LoggedIn} Settlement={Settlement} Positions={Positions} Account={Account})",
+                loggedIn, settlement, positions, account);
+            TryWriteEvent(new OrderEvent { OrderId = order.OrderId, InstrumentId = order.InstrumentId, StrategyId = order.StrategyId, TraceId = order.TraceId, Direction = order.Direction, Quantity = order.Quantity, OrderQty = order.Quantity, FilledQty = 0, Type = OrderEventType.Rejected, Message = "CTP交易未就绪", Time = DateTimeOffset.UtcNow });
             return;
         }
 
         // 开平标志：上期所/上能所必须区分平今/平昨，不能使用泛型 Close ('1')
         var offsetFlag = ResolveOffsetFlag(order);
 
-        // 上期所/上能所不支持市价单(AnyPrice)，转为限价单
-        // 用当前快照价格 ± 3跳点，确保成交
-        var orderType = order.Type == OrderType.Market
-            ? CTP.EnumOrderPriceTypeType.LimitPrice
-            : CTP.EnumOrderPriceTypeType.LimitPrice; // SHFE一律限价
+        // 市价单在 CTP 无 AnyPrice 直发（上期所/上能所明确不支持，其余所也不可靠），统一以
+        // AggressiveLimit（激进限价单）发单：订单类型恒为限价，价格在下方按
+        // 「开仓 = 对盘快照价 ±3 跳；平仓 = 交易所权威涨跌停价」计算，确保吃单成交。
+        var orderType = CTP.EnumOrderPriceTypeType.LimitPrice; // AggressiveLimit：一律限价
         var futures = _registry?.Resolve(order.InstrumentId);
         bool isShfe = futures != null && RequiresExplicitClose(futures.Exchange);
         var limitPrice = (double)(order.LimitPrice ?? 0m);
@@ -408,6 +509,9 @@ public class CtpTraderBridge : IDisposable
         int result = api.ReqOrderInsert(req, ++_requestId);
         if (result == 0)
         {
+            // 记录 OrderId → StrategyId / TraceId 映射，供成交回报 ConvertOrder/ConvertTrade 回填（P0-03 / P2 审计链）。
+            _orderStrategy[order.OrderId] = order.StrategyId;
+            _orderTrace[order.OrderId] = order.TraceId;
             lock (_sync)
             {
                 _pendingOrders[order.OrderId] = new PendingOrder
@@ -487,26 +591,36 @@ public class CtpTraderBridge : IDisposable
         return DateTimeOffset.UtcNow;
     }
 
-    private static OrderEvent? ConvertOrder(CTP.ThostFtdcOrderField o)
+    private OrderEvent? ConvertOrder(CTP.ThostFtdcOrderField o)
     {
         // OnRtnOrder 仅输出状态变更通知，成交事件由 OnRtnTrade→ConvertTrade 独立产生。
         // 否则同一笔成交会产生两份 Filled 事件，导致 PortfolioManager 重复处理。
         var t = o.VolumeTraded > 0;
         var type = o.OrderStatus switch
         {
-            CTP.EnumOrderStatusType.AllTraded => OrderEventType.Submitted,  // 成交由 OnRtnTrade 处理
+            // 红线：AllTraded/PartTraded* 保持 Submitted，绝不能映射成 Filled/PartiallyFilled ——
+            // 真实成交由 OnRtnTrade → Filled 独立产生，若这里也发成交事件会触发 ProcessFill 二次记账。
+            CTP.EnumOrderStatusType.AllTraded => OrderEventType.Submitted,
             CTP.EnumOrderStatusType.PartTradedQueueing or CTP.EnumOrderStatusType.PartTradedNotQueueing => OrderEventType.Submitted,
-            CTP.EnumOrderStatusType.NoTradeQueueing or CTP.EnumOrderStatusType.NoTradeNotQueueing => OrderEventType.Submitted,
+            // 报单已受理、未成交 → 真实 Accepted 状态进领域（此前被拍平成 Submitted）
+            CTP.EnumOrderStatusType.NoTradeQueueing or CTP.EnumOrderStatusType.NoTradeNotQueueing => OrderEventType.Accepted,
             CTP.EnumOrderStatusType.Canceled => OrderEventType.Cancelled,
-            _ => OrderEventType.Submitted,
+            // 无法映射的 CTP 状态（Unknown/NotTouched/Touched）→ Unknown 进领域，供策略/UI 感知
+            _ => OrderEventType.Unknown,
         };
-        return new OrderEvent { OrderId = ParseOrderRef(o.OrderRef), InstrumentId = o.InstrumentID ?? "", Direction = o.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t ? o.VolumeTraded : o.VolumeTotalOriginal, OrderQty = o.VolumeTotalOriginal, FilledQty = o.VolumeTraded, FillPrice = (decimal)(o.LimitPrice > 0 ? o.LimitPrice : 0), Type = type, Message = o.StatusMsg, Time = ParseCtpTime(o.InsertDate, o.InsertTime) };
+        var refId = ParseOrderRef(o.OrderRef);
+        var strategyId = _orderStrategy.TryGetValue(refId, out var s) ? s : "";
+        var traceId = _orderTrace.TryGetValue(refId, out var tr) ? tr : "";
+        return new OrderEvent { OrderId = refId, InstrumentId = o.InstrumentID ?? "", StrategyId = strategyId, TraceId = traceId, Direction = o.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t ? o.VolumeTraded : o.VolumeTotalOriginal, OrderQty = o.VolumeTotalOriginal, FilledQty = o.VolumeTraded, FillPrice = (decimal)(o.LimitPrice > 0 ? o.LimitPrice : 0), Type = type, OrderSysId = o.OrderSysID ?? "", ExchangeId = o.ExchangeID ?? "", Message = o.StatusMsg, Time = ParseCtpTime(o.InsertDate, o.InsertTime) };
     }
 
-    private static OrderEvent? ConvertTrade(CTP.ThostFtdcTradeField t)
+    private OrderEvent? ConvertTrade(CTP.ThostFtdcTradeField t)
     {
         if (t.Volume <= 0) return null;
-        return new OrderEvent { OrderId = ParseOrderRef(t.OrderRef), InstrumentId = t.InstrumentID ?? "", Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, Time = ParseCtpTime(t.TradeDate, t.TradeTime) };
+        var refId = ParseOrderRef(t.OrderRef);
+        var strategyId = _orderStrategy.TryGetValue(refId, out var s) ? s : "";
+        var traceId = _orderTrace.TryGetValue(refId, out var tr) ? tr : "";
+        return new OrderEvent { OrderId = refId, InstrumentId = t.InstrumentID ?? "", StrategyId = strategyId, TraceId = traceId, Direction = t.Direction == CTP.EnumDirectionType.Buy ? OrderDirection.Buy : OrderDirection.Sell, Quantity = t.Volume, OrderQty = t.Volume, FilledQty = t.Volume, Type = OrderEventType.Filled, FillPrice = (decimal)t.Price, TradeId = t.TradeID ?? "", OrderSysId = t.OrderSysID ?? "", ExchangeId = t.ExchangeID ?? "", TradeDate = t.TradeDate ?? "", OffsetFlag = t.OffsetFlag.ToString(), Time = ParseCtpTime(t.TradeDate, t.TradeTime) };
     }
 
     /// <summary>查询 CTP 所有持仓（启动登录后 / 重连登录后调用）。</summary>
@@ -736,23 +850,78 @@ public class CtpTraderBridge : IDisposable
     }
 
     /// <summary>
-    /// 会话结束时调用：主动断开交易通道并挂起重连。
+    /// 会话结束时调用：收盘清场后主动断开交易通道并挂起重连。
+    /// 清场顺序：撤所有在途单 → 等撤单确认 → 查持仓（自动串发账户查询）→ 终账户 → 断开。
     /// 收盘后交易前置机不接收交易连接，若不断开，前置机稍后（如 9/17 实盘 16:06）把连接踢下线，
     /// ScheduleReconnect 会以 0x1001 无限重连刷屏数小时。断开后 IsReady=false、_suspended=true，
     /// 重连被彻底挂起，直到下个会话 EnsureConnected 清除标志并重新连接。
     /// 注意：本方法从 EngineHost 的会话线程调用，不在 CTP 回调线程内，同步 Release 是安全的。
     /// </summary>
-    public void Disconnect()
+    public async Task DisconnectAsync()
+    {
+        lock (_sync)
+        {
+            if (_disposed) return;
+            _suspended = true;   // 先挂起重连：清场期间不触发重连
+        }
+
+        // 1. 撤所有在途单，等撤单确认（OnRtnOrder Canceled → UpdatePendingOrder 移除）。
+        //    收盘时若有未成交的挂单残留，直接断开会留下「幽灵挂单」在下个交易日开盘被撮合。
+        List<PendingOrder> pending;
+        lock (_sync) pending = _pendingOrders.Values.ToList();
+        foreach (var p in pending) CancelPendingOrder(p);
+        if (pending.Count > 0)
+        {
+            _log.Information("[CloseOut] 撤销 {Count} 笔在途单，等待撤单确认...", pending.Count);
+            var cancelDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < cancelDeadline)
+            {
+                lock (_sync) { if (_pendingOrders.Count == 0) break; }
+                await Task.Delay(200);
+            }
+            lock (_sync)
+            {
+                if (_pendingOrders.Count > 0)
+                    _log.Warning("[CloseOut] 仍有 {Count} 笔在途单未确认撤单，强制断开", _pendingOrders.Count);
+            }
+        }
+
+        // 2. 终持仓 + 终账户快照：收盘时点的权威状态（供审计/日志），下个会话登录时会重新查询并对账。
+        //    仅当通道仍活着才查询（_api 已被释放时跳过）。
+        CTP.FtdcTdAdapter? api;
+        lock (_sync) api = _api;
+        if (api != null)
+        {
+            PositionsQueried = false;
+            AccountQueried = false;
+            QueryPositions();   // OnRspQryInvestorPosition IsLast=true 时自动串发 QueryAccount
+            var queryDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < queryDeadline)
+            {
+                lock (_sync) { if (_positionsQueried && _accountQueried) break; }
+                await Task.Delay(200);
+            }
+        }
+
+        DisconnectCore();
+    }
+
+    private void DisconnectCore()
     {
         lock (_sync)
         {
             if (_disposed) return;
             _suspended = true;
-            _isReady = false;
+            IsReady = false;
+            SettlementConfirmed = false;
+            PositionsQueried = false;
+            AccountQueried = false;
             _reconnectCts?.Cancel();
             try { _api?.Release(); } catch { }
             _api = null;
         }
+        _orderStrategy.Clear();
+        _orderTrace.Clear();
         _log.Information("CTP Trader disconnected (session end, reconnect suspended)");
     }
 

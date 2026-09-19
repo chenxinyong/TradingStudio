@@ -485,14 +485,15 @@ public class DuckDBStore : IBarStore, ITickStore
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
                 INSERT OR IGNORE INTO order_events
-                (order_id, instrument_id, strategy_id, direction, quantity, order_qty, filled_qty, type, fill_price, fee, slippage, message, event_time)
-                VALUES ($order_id, $instrument_id, $strategy_id, $direction, $quantity, $order_qty, $filled_qty, $type, $fill_price, $fee, $slippage, $message, $event_time)";
+                (order_id, instrument_id, strategy_id, trace_id, direction, quantity, order_qty, filled_qty, type, fill_price, fee, slippage, message, event_time)
+                VALUES ($order_id, $instrument_id, $strategy_id, $trace_id, $direction, $quantity, $order_qty, $filled_qty, $type, $fill_price, $fee, $slippage, $message, $event_time)";
             foreach (var e in events)
             {
                 cmd.Parameters.Clear();
                 cmd.Parameters.Add(new DuckDBParameter("order_id", e.OrderId));
                 cmd.Parameters.Add(new DuckDBParameter("instrument_id", e.InstrumentId));
                 cmd.Parameters.Add(new DuckDBParameter("strategy_id", e.StrategyId));
+                cmd.Parameters.Add(new DuckDBParameter("trace_id", e.TraceId ?? ""));
                 cmd.Parameters.Add(new DuckDBParameter("direction", e.Direction.ToString()));
                 cmd.Parameters.Add(new DuckDBParameter("quantity", e.Quantity));
                 cmd.Parameters.Add(new DuckDBParameter("order_qty", e.OrderQty));
@@ -645,6 +646,7 @@ public class DuckDBStore : IBarStore, ITickStore
                 order_id    BIGINT NOT NULL,
                 instrument_id VARCHAR NOT NULL,
                 strategy_id VARCHAR NOT NULL,
+                trace_id    VARCHAR,
                 direction   VARCHAR NOT NULL,
                 quantity    INTEGER NOT NULL,
                 order_qty   INTEGER NOT NULL,
@@ -657,6 +659,8 @@ public class DuckDBStore : IBarStore, ITickStore
                 event_time  TIMESTAMP NOT NULL,
                 PRIMARY KEY (order_id, type, event_time)
             );
+            -- P2 审计链：幂等迁移，为存量 order_events 补 trace_id 列（新库建表已含，此句对旧库生效）。
+            ALTER TABLE order_events ADD COLUMN IF NOT EXISTS trace_id VARCHAR;
 
             -- 成交记录表
             CREATE TABLE IF NOT EXISTS trades (

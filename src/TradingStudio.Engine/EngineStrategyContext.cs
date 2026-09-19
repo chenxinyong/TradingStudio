@@ -117,7 +117,7 @@ internal class EngineStrategyContext : StrategyContext
     private OrderTicket ClosePositionCore(string instrumentId, OrderType type, decimal? limitPrice, string exitReason)
     {
         if (IsWarmup) return new OrderTicket { OrderId = 0, Status = OrderStatus.Rejected };
-        var pos = _portfolio.GetPosition(instrumentId);
+        var pos = _portfolio.GetPosition(StrategyId, instrumentId);
         if (pos == null || pos.Quantity == 0)
             throw new InvalidOperationException($"No position to close: {instrumentId}");
         var direction = pos.Quantity > 0 ? OrderDirection.Sell : OrderDirection.Buy;
@@ -197,10 +197,10 @@ internal class EngineStrategyContext : StrategyContext
     // ═══ 购买力硬闸门已下沉至 ExecutionHandler.Submit（与 CheckPreOrder 同层，杜绝绕过）═══
 
     // ═══ 仓位 ═══
-    public override Position? GetPosition(string instrumentId) =>
-        _portfolio.GetPosition(instrumentId);
+    public override PositionSnapshot? GetPosition(string instrumentId) =>
+        _portfolio.GetPosition(StrategyId, instrumentId);
 
-    public override IReadOnlyList<Position> Positions => _portfolio.AllPositions;
+    public override IReadOnlyList<PositionSnapshot> Positions => _portfolio.AllPositions;
     public override decimal Equity => _portfolio.Equity;
     public override decimal AvailableCash => _portfolio.Cash;
 

@@ -1,4 +1,5 @@
 using TradingStudio.Core.Engine;
+using TradingStudio.Core.Risk;
 
 namespace TradingStudio.Engine.Statistics;
 
@@ -30,7 +31,7 @@ public class PerformanceReport
 
     public static PerformanceReport Generate(
         string strategyId,
-        SubPortfolio subPortfolio,
+        SubPortfolioState subPortfolio,
         IReadOnlyList<Trade> trades,
         IReadOnlyList<(DateTimeOffset, decimal)> equityCurve,
         int totalOrders = 0)
