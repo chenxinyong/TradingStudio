@@ -19,6 +19,7 @@ using TradingStudio.Services;
 //   TradingStudio walkforward [opts]   Walk-Forward 参数优化
 //   TradingStudio collect [options]    行情采集
 //   TradingStudio factor-eval [opts]   因子IC评估 (Parquet/DuckDB)
+//   TradingStudio carry-eval [opts]    Carry反转因子复现评估
 //
 // 数据导入已迁移至: TradingStudio.ToolBox
 // ================================================================
@@ -49,6 +50,7 @@ try
         case "walkforward": await RunWalkForwardAsync(args[1..], config); break;
         case "collect":     await RunCollectAsync(args[1..], config);     break;
         case "factor-eval":  await FactorEvalCommand.RunAsync(args[1..]);  break;
+        case "carry-eval":   await CarryEvalCommand.RunAsync(args[1..]);   break;
         case "param-scan":  await ParamScanCommand.RunAsync(args[1..]);  break;
         default:            PrintUsage(); break;
     }
