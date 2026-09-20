@@ -1,4 +1,4 @@
-Full Instrument Scan — 2026-09-17 19:39 — 80 contracts found
+Full Instrument Scan — 2026-09-19 23:03 — 80 contracts found
 
 Code     Days From         To               AvgVol    AvgPx   ATR%  Liq  Vol Status   
 ------------------------------------------------------------------------------------------
