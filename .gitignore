@@ -474,6 +474,9 @@ scripts/factor_research/*.csv
 # 缠论分析输出（大文件，不提交）
 scripts/chanlun/output/
 
+# 研究复核输出与行情缓存（每次重跑时间戳都变，不提交）
+scripts/daily/output/
+
 # Local dev certificates
 **/certs/
 
